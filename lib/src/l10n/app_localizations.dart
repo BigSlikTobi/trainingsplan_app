@@ -859,6 +859,24 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Exchange folder wird geladen...'**
   String get exchangeFolderLoading;
+
+  /// Nutrition page: title of placeholder when no fuel guidance is available
+  ///
+  /// In de, this message translates to:
+  /// **'Warte auf Fuel Guidance vom Coach'**
+  String get noGuidanceTitle;
+
+  /// Nutrition page: hint when guidance is from a previous day
+  ///
+  /// In de, this message translates to:
+  /// **'Guidance vom letzten Tag — warte auf neue Einschätzung vom Coach.'**
+  String get noGuidanceHintStale;
+
+  /// Nutrition page: hint when no guidance has been received yet
+  ///
+  /// In de, this message translates to:
+  /// **'Coach-Analyse noch nicht eingetroffen. Exportiere den Tageskontext und warte auf die Antwort.'**
+  String get noGuidanceHintMissing;
 }
 
 class _AppLocalizationsDelegate

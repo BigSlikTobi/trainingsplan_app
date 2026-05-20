@@ -855,9 +855,8 @@ class _NoGuidancePlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hint = isStale
-        ? 'Guidance vom letzten Tag — warte auf neue Einschätzung vom Coach.'
-        : 'Coach-Analyse noch nicht eingetroffen. Exportiere den Tageskontext und warte auf die Antwort.';
+    final l = AppLocalizations.of(context)!;
+    final hint = isStale ? l.noGuidanceHintStale : l.noGuidanceHintMissing;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
       decoration: BoxDecoration(
@@ -869,7 +868,7 @@ class _NoGuidancePlaceholder extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Warte auf Fuel Guidance vom Coach',
+            l.noGuidanceTitle,
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,

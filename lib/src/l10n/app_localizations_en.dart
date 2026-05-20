@@ -423,4 +423,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get exchangeFolderLoading => 'Loading exchange folder...';
+
+  @override
+  String get noGuidanceTitle => 'Waiting for fuel guidance from the coach';
+
+  @override
+  String get noGuidanceHintStale =>
+      'Guidance is from a previous day — waiting for a fresh read from the coach.';
+
+  @override
+  String get noGuidanceHintMissing =>
+      'Coach analysis hasn\'t arrived yet. Export today\'s context and wait for the response.';
 }

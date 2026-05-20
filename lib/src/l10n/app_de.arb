@@ -450,5 +450,14 @@
   "@snackbarKopiert": { "description": "Snackbar: copied to clipboard" },
 
   "exchangeFolderLoading": "Exchange folder wird geladen...",
-  "@exchangeFolderLoading": { "description": "Settings: exchange folder loading placeholder" }
+  "@exchangeFolderLoading": { "description": "Settings: exchange folder loading placeholder" },
+
+  "noGuidanceTitle": "Warte auf Fuel Guidance vom Coach",
+  "@noGuidanceTitle": { "description": "Nutrition page: title of placeholder when no fuel guidance is available" },
+
+  "noGuidanceHintStale": "Guidance vom letzten Tag — warte auf neue Einschätzung vom Coach.",
+  "@noGuidanceHintStale": { "description": "Nutrition page: hint when guidance is from a previous day" },
+
+  "noGuidanceHintMissing": "Coach-Analyse noch nicht eingetroffen. Exportiere den Tageskontext und warte auf die Antwort.",
+  "@noGuidanceHintMissing": { "description": "Nutrition page: hint when no guidance has been received yet" }
 }

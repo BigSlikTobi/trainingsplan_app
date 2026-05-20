@@ -425,4 +425,15 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get exchangeFolderLoading => 'Exchange folder wird geladen...';
+
+  @override
+  String get noGuidanceTitle => 'Warte auf Fuel Guidance vom Coach';
+
+  @override
+  String get noGuidanceHintStale =>
+      'Guidance vom letzten Tag — warte auf neue Einschätzung vom Coach.';
+
+  @override
+  String get noGuidanceHintMissing =>
+      'Coach-Analyse noch nicht eingetroffen. Exportiere den Tageskontext und warte auf die Antwort.';
 }

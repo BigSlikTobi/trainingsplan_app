@@ -171,5 +171,9 @@
   "tooltipKopieren": "Copy",
   "snackbarKopiert": "Copied",
 
-  "exchangeFolderLoading": "Loading exchange folder..."
+  "exchangeFolderLoading": "Loading exchange folder...",
+
+  "noGuidanceTitle": "Waiting for fuel guidance from the coach",
+  "noGuidanceHintStale": "Guidance is from a previous day — waiting for a fresh read from the coach.",
+  "noGuidanceHintMissing": "Coach analysis hasn't arrived yet. Export today's context and wait for the response."
 }
