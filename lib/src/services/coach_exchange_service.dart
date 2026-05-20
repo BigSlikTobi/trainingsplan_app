@@ -13,6 +13,7 @@ class CoachExchangeService {
   static const _nutritionRequestFile = 'nutrition_analysis_request.json';
   static const _nutritionResultFile = 'nutrition_analysis_result.json';
   static const _dayContextFile = 'day_context.json';
+  static const _fuelGuidanceFile = 'fuel_guidance.json';
 
   Future<String> exportDailySnapshot(FitnessData data) async {
     final recentLogs = [...data.logs]..sort(_compareWorkoutLogsNewestFirst);
@@ -220,6 +221,20 @@ class CoachExchangeService {
 
   Future<void> clearNutritionAnalysisRequest() {
     return _store.deleteExchangeJson(_nutritionRequestFile);
+  }
+
+  Future<FuelGuidance?> readFuelGuidance() async {
+    final json = await _store.readExchangeJson(_fuelGuidanceFile);
+    if (json == null) return null;
+    return FuelGuidance.fromJson(json);
+  }
+
+  Future<bool> hasFuelGuidance() {
+    return _store.exchangeJsonExists(_fuelGuidanceFile);
+  }
+
+  Future<void> clearFuelGuidance() {
+    return _store.deleteExchangeJson(_fuelGuidanceFile);
   }
 
   Future<String?> _copyMealImage(String? imagePath) async {

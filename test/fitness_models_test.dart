@@ -251,4 +251,96 @@ void main() {
   test('unknown exercise ids do not fall back to goblet squat', () {
     expect(exerciseById('ankle_rockers'), isNull);
   });
-}
+
+  test('FuelGuidance round-trips through toJson / fromJson', () {
+    final guidance = FuelGuidance(
+      issuedAt: DateTime.utc(2026, 5, 20, 7),
+      validFor: '2026-05-20',
+      signal: FuelSignal.green,
+      signalLabel: 'GREEN LIGHT',
+      signalSub: 'Fuel und Readiness im Einklang.',
+      todayAdvice: 'Protein ist heute der Hebel — 30–40g pro Hauptmahlzeit.',
+      mealSuggestion: const MealSuggestion(
+        name: 'Spaghetti Carbonara',
+        rationale: 'Pasta füllt Glykogen, Eier liefern Protein.',
+        timing: 'post-training',
+      ),
+      yesterdayRead: 'Solide Basis — passt zum heutigen Krafttraining.',
+      mealIdeas: const [
+        MealIdea(
+          tag: 'pre-training',
+          name: 'Haferflocken + Banane',
+          why: 'Schnelle Kohlenhydrate vor der Session.',
+        ),
+        MealIdea(
+          tag: 'post-training',
+          name: 'Chicken Rice Bowl',
+          why: 'Sauberes Protein und Kohlenhydrat-Basis.',
+        ),
+        MealIdea(
+          tag: 'any-time',
+          name: 'Joghurt + Beeren',
+          why: 'Leicht und proteinreich.',
+        ),
+      ],
+    );
+
+    final decoded = FuelGuidance.fromJson(guidance.toJson());
+
+    expect(decoded.validFor, '2026-05-20');
+    expect(decoded.signal, FuelSignal.green);
+    expect(decoded.signalLabel, 'GREEN LIGHT');
+    expect(decoded.signalSub, 'Fuel und Readiness im Einklang.');
+    expect(decoded.todayAdvice, contains('Protein'));
+    expect(decoded.mealSuggestion.name, 'Spaghetti Carbonara');
+    expect(decoded.mealSuggestion.timing, 'post-training');
+    expect(decoded.yesterdayRead, 'Solide Basis — passt zum heutigen Krafttraining.');
+    expect(decoded.mealIdeas, hasLength(3));
+    expect(decoded.mealIdeas.first.tag, 'pre-training');
+    expect(decoded.mealIdeas.first.name, 'Haferflocken + Banane');
+  });
+
+  test('FuelGuidance unknown signal falls back to hold', () {
+    final json = {
+      'schema': 'fuel_guidance.v1',
+      'issuedAt': '2026-05-20T07:00:00Z',
+      'validFor': '2026-05-20',
+      'signal': 'totally_unknown_value',
+      'signalLabel': 'UNKNOWN',
+      'signalSub': '',
+      'todayAdvice': '',
+      'mealSuggestion': <String, dynamic>{},
+      'yesterdayRead': '',
+      'mealIdeas': <dynamic>[],
+    };
+
+    final decoded = FuelGuidance.fromJson(json);
+    expect(decoded.signal, FuelSignal.hold);
+  });
+
+  test('FuelGuidance round-trips through FitnessData toJson / fromJson', () {
+    final data = createSeedFitnessData();
+    final guidance2 = FuelGuidance(
+      issuedAt: DateTime.utc(2026, 5, 20, 7),
+      validFor: '2026-05-20',
+      signal: FuelSignal.fuel,
+      signalLabel: 'FUEL FIRST',
+      signalSub: 'Heute vor dem Training auftanken.',
+      todayAdvice: 'Kohlenhydratreiche Mahlzeit 2–3h vor der Session.',
+      mealSuggestion: const MealSuggestion(
+        name: 'Haferflocken + Banane',
+        rationale: 'Schnelle Kohlenhydrate.',
+        timing: 'pre-training',
+      ),
+      yesterdayRead: 'Niedrig auf ganzer Linie.',
+      mealIdeas: const [],
+    );
+
+    final withGuidance = data.copyWith(fuelGuidance: guidance2);
+    final decoded = FitnessData.fromJson(withGuidance.toJson());
+
+    expect(decoded.fuelGuidance?.signal, FuelSignal.fuel);
+    expect(decoded.fuelGuidance?.validFor, '2026-05-20');
+    expect(decoded.fuelGuidance?.mealSuggestion.name, 'Haferflocken + Banane');
+    expect(decoded.fuelGuidance?.mealIdeas, isEmpty);
+  });}

@@ -336,3 +336,89 @@ The helper validates the minimum app schema and atomically writes:
 ```text
 nutrition_analysis_result.json
 ```
+
+## Fuel guidance workflow
+
+The app's Nutrition tab renders signal-based fuel guidance authored by the
+agent. This keeps coaching content out of the app binary and lets the agent
+use the full day context — training block, body metrics, recent logs,
+preferences, and equipment — to generate actionable advice.
+
+### Artifact schema
+
+```json
+{
+  "schema": "fuel_guidance.v1",
+  "issuedAt": "2026-05-20T07:00:00+02:00",
+  "validFor": "2026-05-20",
+  "signal": "green",
+  "signalLabel": "GREEN LIGHT",
+  "signalSub": "Fuel und Readiness im Einklang — heute Vollgas.",
+  "todayAdvice": "Protein ist heute der Hebel — 30–40g pro Hauptmahlzeit. ...",
+  "mealSuggestion": {
+    "name": "Spaghetti Carbonara",
+    "rationale": "Pasta füllt Glykogen, Eier und Guanciale liefern Protein...",
+    "timing": "post-training"
+  },
+  "yesterdayRead": "Solide Basis — passt zum heutigen Krafttraining.",
+  "mealIdeas": [
+    { "tag": "pre-training",  "name": "...", "why": "..." },
+    { "tag": "post-training", "name": "...", "why": "..." },
+    { "tag": "any-time",      "name": "...", "why": "..." }
+  ]
+}
+```
+
+**Required fields:** `issuedAt`, `validFor`, `signal`, `signalLabel`,
+`signalSub`, `todayAdvice`, `mealSuggestion` (with `name`, `rationale`,
+`timing`), `yesterdayRead`, `mealIdeas`.
+
+**Valid `signal` values:** `green`, `hold`, `fuel`, `deload`.
+
+**Valid `mealIdeas[].tag` values:** `pre-training`, `post-training`,
+`any-time`, `custom`.
+
+`validFor` must be a date string in `YYYY-MM-DD` format matching the
+device-local calendar day for which the guidance applies. The app shows a
+neutral fallback state ("Warte auf Fuel Guidance vom Coach") when no
+guidance is present or when `validFor` is older than today.
+
+### Agent-side write command
+
+```bash
+python3 tools/write_fuel_guidance.py guidance.json
+```
+
+Or override the exchange directory:
+
+```bash
+TRAININGSPLAN_EXCHANGE_DIR="/absolute/path/to/CodexFitnessExchange" \
+  python3 tools/write_fuel_guidance.py guidance.json
+```
+
+To inspect the resolved folder:
+
+```bash
+python3 tools/write_fuel_guidance.py --print-dir
+```
+
+The helper validates the schema, hard-fails with a clear error on invalid
+input, and atomically writes:
+
+```text
+fuel_guidance.json
+```
+
+### How the app reacts
+
+1. On foreground and on `load()`, `checkForCodexUpdates()` checks whether
+   `fuel_guidance.json` is present in the exchange folder.
+2. If present, the file is parsed into `FuelGuidance`, stored in
+   `FitnessData.fuelGuidance`, persisted locally, and the exchange file is
+   deleted.
+3. The Nutrition tab checks `validFor` against today's date. If the guidance
+   is fresh, the signal badge, Today's Fuel card, Yesterday's Signal card,
+   and Meal Ideas section all render from the guidance. If the guidance is
+   absent or stale, a muted placeholder is shown in place of those sections.
+4. The Meal Analysis section at the bottom of the tab is independent and
+   always shown regardless of fuel guidance state.

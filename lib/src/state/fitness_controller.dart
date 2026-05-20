@@ -47,6 +47,7 @@ class FitnessController extends ChangeNotifier {
   WorkoutLog? get activeWorkoutLog => _activeWorkoutLog();
   MealAnalysisRequest? get pendingMealRequest => _data.pendingMealRequest;
   MealAnalysisResult? get pendingMealResult => _data.pendingMealResult;
+  FuelGuidance? get fuelGuidance => _data.fuelGuidance;
 
   Future<void> addMemory({
     required MemoryCategory category,
@@ -211,6 +212,22 @@ class FitnessController extends ChangeNotifier {
   Future<void> checkForCodexUpdates() async {
     await checkForCodexBlockPlan();
     await checkForNutritionAnalysisResult();
+    await importFuelGuidance();
+  }
+
+  Future<void> importFuelGuidance() async {
+    final hasFuel = await _coach.hasFuelGuidance();
+    if (!hasFuel) return;
+    try {
+      final guidance = await _coach.readFuelGuidance();
+      if (guidance == null) return;
+      _data = _data.copyWith(fuelGuidance: guidance);
+      await _coach.clearFuelGuidance();
+      await _persist('Imported fuel guidance from coach');
+    } on Object catch (error) {
+      _status = 'Fuel guidance import failed: $error';
+      notifyListeners();
+    }
   }
 
   Future<void> importNextDayPlan() async {

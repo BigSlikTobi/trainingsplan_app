@@ -921,6 +921,116 @@ class MealAnalysisResult {
   }
 }
 
+enum FuelSignal { green, hold, fuel, deload }
+
+class MealSuggestion {
+  const MealSuggestion({
+    required this.name,
+    required this.rationale,
+    required this.timing,
+  });
+
+  final String name;
+  final String rationale;
+  final String timing;
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'rationale': rationale,
+    'timing': timing,
+  };
+
+  factory MealSuggestion.fromJson(Map<String, dynamic> json) {
+    return MealSuggestion(
+      name: json['name'] as String? ?? '',
+      rationale: json['rationale'] as String? ?? '',
+      timing: json['timing'] as String? ?? '',
+    );
+  }
+}
+
+class MealIdea {
+  const MealIdea({
+    required this.tag,
+    required this.name,
+    required this.why,
+  });
+
+  final String tag;
+  final String name;
+  final String why;
+
+  Map<String, dynamic> toJson() => {
+    'tag': tag,
+    'name': name,
+    'why': why,
+  };
+
+  factory MealIdea.fromJson(Map<String, dynamic> json) {
+    return MealIdea(
+      tag: json['tag'] as String? ?? 'any-time',
+      name: json['name'] as String? ?? '',
+      why: json['why'] as String? ?? '',
+    );
+  }
+}
+
+class FuelGuidance {
+  const FuelGuidance({
+    required this.issuedAt,
+    required this.validFor,
+    required this.signal,
+    required this.signalLabel,
+    required this.signalSub,
+    required this.todayAdvice,
+    required this.mealSuggestion,
+    required this.yesterdayRead,
+    required this.mealIdeas,
+  });
+
+  final DateTime issuedAt;
+  final String validFor;
+  final FuelSignal signal;
+  final String signalLabel;
+  final String signalSub;
+  final String todayAdvice;
+  final MealSuggestion mealSuggestion;
+  final String yesterdayRead;
+  final List<MealIdea> mealIdeas;
+
+  Map<String, dynamic> toJson() => {
+    'schema': 'fuel_guidance.v1',
+    'issuedAt': issuedAt.toIso8601String(),
+    'validFor': validFor,
+    'signal': signal.name,
+    'signalLabel': signalLabel,
+    'signalSub': signalSub,
+    'todayAdvice': todayAdvice,
+    'mealSuggestion': mealSuggestion.toJson(),
+    'yesterdayRead': yesterdayRead,
+    'mealIdeas': mealIdeas.map((item) => item.toJson()).toList(),
+  };
+
+  factory FuelGuidance.fromJson(Map<String, dynamic> json) {
+    final suggestionJson =
+        (json['mealSuggestion'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return FuelGuidance(
+      issuedAt:
+          DateTime.tryParse(json['issuedAt'] as String? ?? '') ??
+          DateTime.now(),
+      validFor: json['validFor'] as String? ?? '',
+      signal: _enumValue(json['signal'], FuelSignal.values, FuelSignal.hold),
+      signalLabel: json['signalLabel'] as String? ?? '',
+      signalSub: json['signalSub'] as String? ?? '',
+      todayAdvice: json['todayAdvice'] as String? ?? '',
+      mealSuggestion: MealSuggestion.fromJson(suggestionJson),
+      yesterdayRead: json['yesterdayRead'] as String? ?? '',
+      mealIdeas: _objectList(json['mealIdeas'], MealIdea.fromJson),
+    );
+  }
+}
+
 class CoachDecision {
   const CoachDecision({
     required this.id,
@@ -1065,6 +1175,7 @@ class FitnessData {
     required this.pendingMealResult,
     required this.coachDecisions,
     required this.memories,
+    this.fuelGuidance,
   });
 
   final AthleteProfile profile;
@@ -1076,6 +1187,7 @@ class FitnessData {
   final MealAnalysisResult? pendingMealResult;
   final List<CoachDecision> coachDecisions;
   final List<MemoryEntry> memories;
+  final FuelGuidance? fuelGuidance;
 
   TrainingBlock? get activeBlock {
     for (final block in blocks) {
@@ -1109,6 +1221,7 @@ class FitnessData {
     Object? pendingMealResult = _sentinel,
     List<CoachDecision>? coachDecisions,
     List<MemoryEntry>? memories,
+    Object? fuelGuidance = _sentinel,
   }) {
     return FitnessData(
       profile: profile ?? this.profile,
@@ -1124,6 +1237,9 @@ class FitnessData {
           : pendingMealResult as MealAnalysisResult?,
       coachDecisions: coachDecisions ?? this.coachDecisions,
       memories: memories ?? this.memories,
+      fuelGuidance: fuelGuidance == _sentinel
+          ? this.fuelGuidance
+          : fuelGuidance as FuelGuidance?,
     );
   }
 
@@ -1138,6 +1254,7 @@ class FitnessData {
     'pendingMealResult': pendingMealResult?.toJson(),
     'coachDecisions': coachDecisions.map((item) => item.toJson()).toList(),
     'memories': memories.map((item) => item.toJson()).toList(),
+    if (fuelGuidance != null) 'fuelGuidance': fuelGuidance!.toJson(),
   };
 
   factory FitnessData.fromJson(Map<String, dynamic> json) {
@@ -1156,6 +1273,7 @@ class FitnessData {
         CoachDecision.fromJson,
       ),
       memories: _objectList(json['memories'], MemoryEntry.fromJson),
+      fuelGuidance: _fuelGuidanceValue(json['fuelGuidance']),
     );
   }
 }
@@ -1273,4 +1391,9 @@ MealAnalysisRequest? _mealAnalysisRequestValue(Object? value) {
 MealAnalysisResult? _mealAnalysisResultValue(Object? value) {
   if (value is! Map) return null;
   return MealAnalysisResult.fromJson(value.cast<String, dynamic>());
+}
+
+FuelGuidance? _fuelGuidanceValue(Object? value) {
+  if (value is! Map) return null;
+  return FuelGuidance.fromJson(value.cast<String, dynamic>());
 }

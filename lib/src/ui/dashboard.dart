@@ -760,8 +760,10 @@ class _NutritionPage extends StatelessWidget {
     final target = profile.nutritionTarget;
     final workout = controller.nextWorkout as PlannedWorkout?;
     final latest = data.nutrition.isEmpty ? null : data.nutrition.first;
-    final signal = _signalFor(latest);
-    final scenario = _scenarioFor(signal);
+    final guidance = controller.fuelGuidance as FuelGuidance?;
+    final today = _todayDateKey();
+    final isGuidanceFresh =
+        guidance != null && guidance.validFor == today;
 
     return ColoredBox(
       color: AppColors.bg,
@@ -775,22 +777,33 @@ class _NutritionPage extends StatelessWidget {
                 _showProfileDialog(context, controller, profile),
           ),
           const SizedBox(height: 10),
-          _SignalBadge(signal: signal),
-          const SizedBox(height: 10),
-          _FuelAdviceCard(
-            day: workout?.title ?? '',
-            text: scenario.advice,
-            mealName: scenario.mealName,
-            mealRationale: scenario.mealRationale,
-          ),
-          const SizedBox(height: 10),
-          _YesterdayCard(log: latest, signal: signal, target: target),
-          const SizedBox(height: 14),
-          _SectionLabel(
-            label: AppLocalizations.of(context)!.sectionMealIdeas,
-          ),
-          const SizedBox(height: 8),
-          const _MealIdeasRow(),
+          if (!isGuidanceFresh) ...[
+            _NoGuidancePlaceholder(isStale: guidance != null),
+          ] else ...[
+            _SignalBadge(signal: guidance.signal),
+            const SizedBox(height: 10),
+            _FuelAdviceCard(
+              day: workout?.title ?? '',
+              text: guidance.todayAdvice,
+              mealName: guidance.mealSuggestion.name,
+              mealRationale: guidance.mealSuggestion.rationale,
+            ),
+            const SizedBox(height: 10),
+            _YesterdayCard(
+              log: latest,
+              signal: guidance.signal,
+              yesterdayRead: guidance.yesterdayRead,
+              target: target,
+            ),
+            if (guidance.mealIdeas.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _SectionLabel(
+                label: AppLocalizations.of(context)!.sectionMealIdeas,
+              ),
+              const SizedBox(height: 8),
+              _MealIdeasRow(ideas: guidance.mealIdeas),
+            ],
+          ],
           const SizedBox(height: 14),
           _SectionLabel(
             label: AppLocalizations.of(context)!.sectionMealAnalysis,
@@ -822,6 +835,56 @@ class _NutritionPage extends StatelessWidget {
             _MealAnalysisCta(
               onTap: () => _showMealAnalysisDialog(context, controller),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+String _todayDateKey() {
+  final now = DateTime.now();
+  final month = now.month.toString().padLeft(2, '0');
+  final day = now.day.toString().padLeft(2, '0');
+  return '${now.year}-$month-$day';
+}
+
+class _NoGuidancePlaceholder extends StatelessWidget {
+  const _NoGuidancePlaceholder({required this.isStale});
+
+  final bool isStale;
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = isStale
+        ? 'Guidance vom letzten Tag — warte auf neue Einschätzung vom Coach.'
+        : 'Coach-Analyse noch nicht eingetroffen. Exportiere den Tageskontext und warte auf die Antwort.';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
+      decoration: BoxDecoration(
+        color: AppColors.ink.withValues(alpha: 0.04),
+        border: Border.all(color: AppColors.ink.withValues(alpha: 0.10)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Warte auf Fuel Guidance vom Coach',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.ink.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            hint,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: AppColors.ink.withValues(alpha: 0.40),
+            ),
+          ),
         ],
       ),
     );
@@ -897,65 +960,6 @@ class _NutritionHeader extends StatelessWidget {
   }
 }
 
-enum _NutritionSignal { green, hold, fuel, deload }
-
-_NutritionSignal _signalFor(NutritionLog? log) {
-  if (log == null) return _NutritionSignal.hold;
-  final s = log.adherenceScore;
-  if (s >= 80) return _NutritionSignal.green;
-  if (s >= 60) return _NutritionSignal.hold;
-  if (s >= 40) return _NutritionSignal.fuel;
-  return _NutritionSignal.deload;
-}
-
-class _SignalScenario {
-  const _SignalScenario({
-    required this.advice,
-    required this.mealName,
-    required this.mealRationale,
-  });
-
-  final String advice;
-  final String mealName;
-  final String mealRationale;
-}
-
-_SignalScenario _scenarioFor(_NutritionSignal s) {
-  switch (s) {
-    case _NutritionSignal.green:
-      return const _SignalScenario(
-        advice:
-            'Fuel und Readiness passen. Protein ist heute der Hebel — 30–40g pro Hauptmahlzeit. Bei Abendtraining Kohlenhydrate um die Session legen.',
-        mealName: 'Spaghetti Carbonara',
-        mealRationale:
-            'Pasta füllt Glykogen, Eier und Guanciale liefern Protein und Fett. Ideal im 60–90 Min Fenster nach der Session.',
-      );
-    case _NutritionSignal.hold:
-      return const _SignalScenario(
-        advice:
-            'Signale ausgeglichen — normal weiter essen, weder pushen noch restriktiv. Moderates Protein über den Tag hält die Erholung in Gang.',
-        mealName: 'Chicken Rice Bowl',
-        mealRationale:
-            'Sauberes Protein und stabile Kohlenhydrate. Funktioniert jederzeit, keine schwere Verdauung vor oder nach dem Training.',
-      );
-    case _NutritionSignal.fuel:
-      return const _SignalScenario(
-        advice:
-            'Zufuhr war gestern niedrig — heute vor dem Training auftanken, nicht erst danach. Kohlenhydratreiche Mahlzeit 2–3h vor der Session priorisieren.',
-        mealName: 'Haferflocken + Banane + Protein',
-        mealRationale:
-            'Schnelle Kohlenhydrate aus Haferflocken und Banane, Protein für die Muskelreparatur. Leicht verdaulich vor harter Arbeit.',
-      );
-    case _NutritionSignal.deload:
-      return const _SignalScenario(
-        advice:
-            'Erholungssignale sind schwach. Session kürzen oder leichter fahren. Normal essen — keine Restriktion, aber auch kein extra Loading.',
-        mealName: 'Joghurt + Beeren',
-        mealRationale:
-            'Leicht, entzündungshemmend, proteinreich. Unterstützt Erholung ohne den Verdauungstrakt zu belasten.',
-      );
-  }
-}
 
 class _SignalConfig {
   const _SignalConfig({
@@ -971,30 +975,30 @@ class _SignalConfig {
   final bool pulse;
 }
 
-_SignalConfig _signalConfig(_NutritionSignal s, AppLocalizations l) {
+_SignalConfig _signalConfig(FuelSignal s, AppLocalizations l) {
   switch (s) {
-    case _NutritionSignal.green:
+    case FuelSignal.green:
       return _SignalConfig(
         label: l.signalGreenLight,
         sub: l.signalGreenLightSub,
         color: AppColors.sage,
         pulse: true,
       );
-    case _NutritionSignal.hold:
+    case FuelSignal.hold:
       return _SignalConfig(
         label: l.signalHold,
         sub: l.signalHoldSub,
         color: AppColors.gold,
         pulse: false,
       );
-    case _NutritionSignal.fuel:
+    case FuelSignal.fuel:
       return _SignalConfig(
         label: l.signalFuelFirst,
         sub: l.signalFuelFirstSub,
         color: AppColors.coral,
         pulse: false,
       );
-    case _NutritionSignal.deload:
+    case FuelSignal.deload:
       return _SignalConfig(
         label: l.signalDeloadBias,
         sub: l.signalDeloadBiasSub,
@@ -1007,7 +1011,7 @@ _SignalConfig _signalConfig(_NutritionSignal s, AppLocalizations l) {
 class _SignalBadge extends StatefulWidget {
   const _SignalBadge({required this.signal});
 
-  final _NutritionSignal signal;
+  final FuelSignal signal;
 
   @override
   State<_SignalBadge> createState() => _SignalBadgeState();
@@ -1311,11 +1315,13 @@ class _YesterdayCard extends StatelessWidget {
   const _YesterdayCard({
     required this.log,
     required this.signal,
+    required this.yesterdayRead,
     required this.target,
   });
 
   final NutritionLog? log;
-  final _NutritionSignal signal;
+  final FuelSignal signal;
+  final String yesterdayRead;
   final NutritionTarget target;
 
   @override
@@ -1337,7 +1343,6 @@ class _YesterdayCard extends StatelessWidget {
         ? _Level.moderate
         : _Level.low;
     const hydrationLevel = _Level.moderate;
-    final read = _yesterdayRead(signal);
 
     final l = AppLocalizations.of(context)!;
     return _WhiteCard(
@@ -1385,7 +1390,7 @@ class _YesterdayCard extends StatelessWidget {
             ),
             const SizedBox(height: 9),
             Text(
-              read,
+              yesterdayRead,
               style: TextStyle(
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
@@ -1397,19 +1402,6 @@ class _YesterdayCard extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-String _yesterdayRead(_NutritionSignal s) {
-  switch (s) {
-    case _NutritionSignal.green:
-      return 'Solide Basis — passt zum heutigen Krafttraining.';
-    case _NutritionSignal.hold:
-      return 'Ausgeglichen, aber nichts Besonderes. Reicht zum Trainieren.';
-    case _NutritionSignal.fuel:
-      return 'Niedrig auf ganzer Linie. Heute Morgen auftanken, bevor du trainierst.';
-    case _NutritionSignal.deload:
-      return 'Sehr niedrige Zufuhr plus schwache Erholung. Klares Signal zum Zurücknehmen.';
   }
 }
 
@@ -1478,43 +1470,21 @@ class _SignalChip extends StatelessWidget {
   }
 }
 
-class _MealIdea {
-  const _MealIdea({
-    required this.tag,
-    required this.tagColor,
-    required this.name,
-    required this.why,
-  });
-
-  final String tag;
-  final Color tagColor;
-  final String name;
-  final String why;
+Color _mealIdeaTagColor(String tag) {
+  switch (tag) {
+    case 'post-training':
+      return AppColors.sage;
+    case 'pre-training':
+      return AppColors.gold;
+    default:
+      return AppColors.coral;
+  }
 }
 
-const List<_MealIdea> _kMealIdeas = [
-  _MealIdea(
-    tag: 'POST-TRAINING',
-    tagColor: AppColors.sage,
-    name: 'Spaghetti Carbonara',
-    why: 'Glykogen aus Pasta, Protein aus Eiern. Sättigt nach harter Arbeit.',
-  ),
-  _MealIdea(
-    tag: 'PRE-TRAINING',
-    tagColor: AppColors.gold,
-    name: 'Joghurt + Haferflocken',
-    why: 'Schnelles Protein. Leicht für die Verdauung vor der Session.',
-  ),
-  _MealIdea(
-    tag: 'ANY TIME',
-    tagColor: AppColors.coral,
-    name: 'Chicken Rice Bowl',
-    why: 'Sauberes Protein und Kohlenhydrat-Basis. Funktioniert jederzeit.',
-  ),
-];
-
 class _MealIdeasRow extends StatelessWidget {
-  const _MealIdeasRow();
+  const _MealIdeasRow({required this.ideas});
+
+  final List<MealIdea> ideas;
 
   @override
   Widget build(BuildContext context) {
@@ -1522,9 +1492,9 @@ class _MealIdeasRow extends StatelessWidget {
       height: 168,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _kMealIdeas.length,
+        itemCount: ideas.length,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => _MealIdeaCard(idea: _kMealIdeas[i]),
+        itemBuilder: (_, i) => _MealIdeaCard(idea: ideas[i]),
       ),
     );
   }
@@ -1533,10 +1503,11 @@ class _MealIdeasRow extends StatelessWidget {
 class _MealIdeaCard extends StatelessWidget {
   const _MealIdeaCard({required this.idea});
 
-  final _MealIdea idea;
+  final MealIdea idea;
 
   @override
   Widget build(BuildContext context) {
+    final tagColor = _mealIdeaTagColor(idea.tag);
     return Container(
       width: 150,
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
@@ -1556,12 +1527,12 @@ class _MealIdeaCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            idea.tag,
+            idea.tag.toUpperCase().replaceAll('-', ' '),
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.0,
-              color: idea.tagColor,
+              color: tagColor,
             ),
           ),
           const SizedBox(height: 5),
