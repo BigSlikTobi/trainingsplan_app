@@ -1,0 +1,175 @@
+{
+  "@@locale": "en",
+
+  "navHeute": "Today",
+  "navBlocks": "Blocks",
+  "navErnaehrung": "Nutrition",
+  "navCoach": "Coach",
+  "navProgress": "Progress",
+  "navSetup": "Setup",
+
+  "tooltipHealthKit": "Connect HealthKit",
+  "tooltipExport": "Export snapshot",
+
+  "sectionUebungen": "Exercises",
+
+  "btnStarten": "Start",
+  "btnBlockErstellen": "+ Create Block",
+  "btnCodexPlanImportieren": "Import Codex Plan",
+
+  "keinAktiverBlock": "No active block",
+  "keinAktiverBlockSubtitle": "Start with a template or import your Codex Plan.",
+
+  "labelCoach": "COACH",
+  "labelProfil": "Profile",
+
+  "nutritionHeaderTitle": "Fuel + Recovery",
+
+  "weekDay": "W{week} · D{day}",
+
+  "woche": "Week {week}",
+
+  "signalGreenLight": "GREEN LIGHT",
+  "signalGreenLightSub": "Fuel and readiness aligned — full throttle today.",
+
+  "signalHold": "HOLD",
+  "signalHoldSub": "Signals neutral — keep intensity steady.",
+
+  "signalFuelFirst": "FUEL FIRST",
+  "signalFuelFirstSub": "Low intake — refuel before training.",
+
+  "signalDeloadBias": "DELOAD BIAS",
+  "signalDeloadBiasSub": "Weak fuel and recovery — reduce load.",
+
+  "chipProtein": "PROTEIN",
+  "chipCarbs": "CARBS",
+  "chipHydration": "HYDRATION",
+
+  "levelHigh": "HIGH",
+  "levelModerate": "MODERATE",
+  "levelLow": "LOW",
+
+  "sectionYesterdaysSignal": "YESTERDAY'S SIGNAL",
+  "sectionTodaysFuel": "TODAY'S FUEL",
+  "sectionMealSuggestion": "MEAL SUGGESTION",
+  "sectionMealIdeas": "Meal Ideas",
+  "sectionMealAnalysis": "Meal Analysis",
+  "sectionTrainingImpact": "TRAINING IMPACT",
+
+  "btnSpeichern": "Save",
+  "btnVerwerfen": "Discard",
+  "btnAbbrechen": "Cancel",
+  "btnMakrosAusblenden": "Hide macros",
+  "btnDetails": "Details",
+
+  "mahlzeitAnalysieren": "Analyse meal",
+  "codexBewertetTrainingsauswirkung": "Codex evaluates training impact",
+
+  "mahlzeit": "Meal",
+
+  "coachPageTitle": "Training",
+
+  "uebungProgress": "EXERCISE {idx} / {total}",
+
+  "statSaetze": "Sets",
+  "statWdhl": "Reps",
+  "statLast": "Load",
+  "statRpe": "RPE",
+  "statPause": "Rest",
+
+  "sectionAlleUebungen": "All Exercises",
+  "erklaervideo": "Tutorial",
+
+  "coachEmptyState": "No active workout. Select a block to start the Coach.",
+
+  "pendingMealTitle": "Codex Meal Analysis pending",
+
+  "neuerCodexBlock": "New Codex training block available",
+  "btnImport": "Import",
+
+  "dialogSetTitle": "Log {exerciseName}",
+  "dialogSetWeight": "Weight kg",
+  "dialogSetReps": "Reps",
+  "dialogSetRpe": "RPE",
+
+  "dialogCompleteTitle": "Complete workout",
+  "dialogCompleteReadiness": "Readiness {value}",
+  "dialogCompleteSoreness": "Soreness {value}",
+  "dialogCompleteNotes": "Notes for Codex",
+
+  "btnFertig": "Done",
+
+  "dialogMealAnalysisTitle": "Analyse meal",
+  "dialogMealAnalysisWhat": "What did you eat?",
+  "dialogMealAnalysisHint": "e.g. bowl with rice, chicken, avocado, sauce",
+
+  "btnFoto": "Photo",
+  "btnKamera": "Camera",
+  "btnAnCodexSenden": "Send to Codex",
+
+  "dialogMealResultTitle": "Review Codex analysis",
+  "dialogMealResultKalorien": "Calories",
+  "dialogMealResultProtein": "Protein g",
+  "dialogMealResultCarbs": "Carbs g",
+  "dialogMealResultFett": "Fat g",
+  "dialogMealResultKoerpergewicht": "Body weight kg",
+  "dialogMealResultKorrektur": "Correction / Notes",
+
+  "dialogProfileTitle": "Nutrition Profile",
+  "dialogProfileTrainingsziel": "Training goal",
+  "dialogProfileGroesse": "Height cm",
+  "dialogProfileGewicht": "Weight kg",
+  "dialogProfileAlter": "Age",
+  "dialogProfileSex": "Sex",
+
+  "memoryWikiTitle": "Memory Wiki",
+  "memoryWikiAktiv": "{count} active",
+  "memoryWikiSubtitle": "Active memories are included in Codex snapshots and meal analyses.",
+  "memoryWikiEmpty": "No memories saved yet.",
+
+  "tooltipMemoryHinzufuegen": "Add memory",
+  "tooltipBearbeiten": "Edit",
+  "tooltipLoeschen": "Delete",
+
+  "dialogMemoryAddTitle": "Add memory",
+  "dialogMemoryEditTitle": "Edit memory",
+  "dialogMemoryKategorie": "Category",
+  "dialogMemoryTitel": "Title",
+  "dialogMemoryKurzMemory": "Short memory",
+  "dialogMemoryMarkdown": "Markdown details",
+  "dialogMemoryAktivFuerCodex": "Active for Codex",
+
+  "blocksHeroTitle": "8-Week Training Blocks",
+  "blocksHeroSubtitle": "Codex plans, the app executes",
+  "blocksHeroBody": "Start locally with a sport template or import the block Codex provides in iCloud.",
+
+  "blocksCount": "{count} Blocks",
+
+  "btnImportTrainingJson": "Import training_block_plan.json",
+
+  "blockCardWeeks": "{weeks} weeks · {createdBy}",
+  "blockCardTargets": "Targets: {targets}",
+  "blockCardWorkouts": "{count} planned workouts",
+
+  "progressHeroTitle": "Progress",
+  "progressHeroBody": "These metrics go into the next Codex snapshot.",
+  "progressDone": "{count} done",
+  "progressLogSets": "{sets} Sets · {volume} kg · {status}",
+
+  "settingsHeroTitle": "Agent Setup",
+  "settingsHeroSubtitle": "Codex, Claude or other coach",
+  "settingsHeroBody": "Everything a new agent needs: iCloud folder, start prompt, daily routine and write commands.",
+  "settingsHeroReady": "Ready",
+  "settingsHeroLoading": "Loading",
+
+  "settingsExchangeFolder": "iCloud Exchange Folder",
+  "settingsBootstrapUrl": "Agent Bootstrap URL",
+  "settingsStartprompt": "Agent Start Prompt",
+  "settingsWriteCommands": "Validated Write Commands",
+  "settingsChecklist": "Daily Agent Checklist",
+
+  "tooltipKopieren": "Copy",
+  "snackbarKopiert": "Copied",
+
+  "exchangeFolderLoading": "Loading exchange folder..."
+}

@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app.dart';
 import '../design/design_tokens.dart';
+import '../l10n/app_localizations.dart';
 import '../models/fitness_models.dart';
 
 const _agentBootstrapUrl =
@@ -37,15 +39,25 @@ class _CoachDashboardState extends State<CoachDashboard> {
       appBar: AppBar(
         title: const _BrandTitle(),
         actions: [
-          IconButton(
-            tooltip: 'HealthKit verbinden',
-            onPressed: controller.connectHealth,
-            icon: const Icon(CupertinoIcons.heart),
+          Builder(
+            builder: (context) {
+              final l = AppLocalizations.of(context)!;
+              return IconButton(
+                tooltip: l.tooltipHealthKit,
+                onPressed: controller.connectHealth,
+                icon: const Icon(CupertinoIcons.heart),
+              );
+            },
           ),
-          IconButton(
-            tooltip: 'Snapshot exportieren',
-            onPressed: controller.exportDailySnapshot,
-            icon: const Icon(CupertinoIcons.square_arrow_up),
+          Builder(
+            builder: (context) {
+              final l = AppLocalizations.of(context)!;
+              return IconButton(
+                tooltip: l.tooltipExport,
+                onPressed: controller.exportDailySnapshot,
+                icon: const Icon(CupertinoIcons.square_arrow_up),
+              );
+            },
           ),
         ],
       ),
@@ -61,35 +73,40 @@ class _CoachDashboardState extends State<CoachDashboard> {
                 ],
               ),
             ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (value) => setState(() => index = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(CupertinoIcons.today),
-            label: 'Heute',
-          ),
-          NavigationDestination(
-            icon: Icon(CupertinoIcons.calendar),
-            label: 'Blocks',
-          ),
-          NavigationDestination(
-            icon: Icon(CupertinoIcons.chart_pie),
-            label: 'Ernaehrung',
-          ),
-          NavigationDestination(
-            icon: Icon(CupertinoIcons.sparkles),
-            label: 'Coach',
-          ),
-          NavigationDestination(
-            icon: Icon(CupertinoIcons.chart_bar),
-            label: 'Progress',
-          ),
-          NavigationDestination(
-            icon: Icon(CupertinoIcons.gear),
-            label: 'Setup',
-          ),
-        ],
+      bottomNavigationBar: Builder(
+        builder: (context) {
+          final l = AppLocalizations.of(context)!;
+          return NavigationBar(
+            selectedIndex: index,
+            onDestinationSelected: (value) => setState(() => index = value),
+            destinations: [
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.today),
+                label: l.navHeute,
+              ),
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.calendar),
+                label: l.navBlocks,
+              ),
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.chart_pie),
+                label: l.navErnaehrung,
+              ),
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.sparkles),
+                label: l.navCoach,
+              ),
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.chart_bar),
+                label: l.navProgress,
+              ),
+              NavigationDestination(
+                icon: const Icon(CupertinoIcons.gear),
+                label: l.navSetup,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -128,7 +145,7 @@ class _TodayPage extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
         children: [
-          _TodayDateLine(text: _formatToday()),
+          _TodayDateLine(text: _formatToday(context)),
           const SizedBox(height: AppSpacing.medium),
           _OneCard(
             week: workout.week,
@@ -141,7 +158,7 @@ class _TodayPage extends StatelessWidget {
             onComplete: () => _showCompleteDialog(context, controller),
           ),
           const SizedBox(height: AppSpacing.page),
-          const _SectionLabel(label: 'Übungen'),
+          _SectionLabel(label: AppLocalizations.of(context)!.sectionUebungen),
           const SizedBox(height: AppSpacing.small),
           for (var i = 0; i < workout.exercises.length; i++)
             _ExerciseRow(
@@ -160,24 +177,10 @@ class _TodayPage extends StatelessWidget {
     );
   }
 
-  static String _formatToday() {
+  static String _formatToday(BuildContext context) {
+    final locale = Localizations.localeOf(context).toLanguageTag();
     final now = DateTime.now();
-    const weekdays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-    const months = [
-      'Jan',
-      'Feb',
-      'Mrz',
-      'Apr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Dez',
-    ];
-    return '${weekdays[now.weekday - 1]}, ${now.day}. ${months[now.month - 1]}';
+    return DateFormat('EEE, d. MMM', locale).format(now);
   }
 }
 
@@ -300,9 +303,9 @@ class _OneCard extends StatelessWidget {
                       ),
                     ),
                     icon: const Icon(CupertinoIcons.play_fill, size: 14),
-                    label: const Text(
-                      'Starten',
-                      style: TextStyle(
+                    label: Text(
+                      AppLocalizations.of(context)!.btnStarten,
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
                       ),
@@ -482,13 +485,15 @@ class _CoachNote extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'COACH',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.0,
-              color: AppColors.sage,
+          Builder(
+            builder: (context) => Text(
+              AppLocalizations.of(context)!.labelCoach,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+                color: AppColors.sage,
+              ),
             ),
           ),
           const SizedBox(height: 2),
@@ -550,9 +555,9 @@ class _TodayEmptyState extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Kein aktiver Block',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context)!.keinAktiverBlock,
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                     color: AppColors.ink,
@@ -560,7 +565,7 @@ class _TodayEmptyState extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Starte mit einer Vorlage oder importiere deinen Codex Plan.',
+                  AppLocalizations.of(context)!.keinAktiverBlockSubtitle,
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.5,
@@ -583,9 +588,9 @@ class _TodayEmptyState extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    child: const Text(
-                      '+ Block erstellen',
-                      style: TextStyle(
+                    child: Text(
+                      AppLocalizations.of(context)!.btnBlockErstellen,
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
                       ),
@@ -598,7 +603,7 @@ class _TodayEmptyState extends StatelessWidget {
                   enabled: true,
                   onTap: controller.importCodexBlockPlan,
                   child: Text(
-                    'Codex Plan importieren',
+                    AppLocalizations.of(context)!.btnCodexPlanImportieren,
                     style: TextStyle(
                       fontSize: 14,
                       color: AppColors.ink.withValues(
@@ -708,15 +713,15 @@ class _BlocksPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = controller.data as FitnessData;
+    final l = AppLocalizations.of(context)!;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _HeroPanel(
-          title: '8-Week Training Blocks',
-          subtitle: 'Codex plant, die App fuehrt aus',
-          body:
-              'Starte lokal mit einer Sport-Vorlage oder importiere den Block, den Codex in iCloud bereitstellt.',
-          trailing: '${data.blocks.length} Blocks',
+          title: l.blocksHeroTitle,
+          subtitle: l.blocksHeroSubtitle,
+          body: l.blocksHeroBody,
+          trailing: l.blocksCount(data.blocks.length),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -734,7 +739,7 @@ class _BlocksPage extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: controller.importCodexBlockPlan,
           icon: const Icon(CupertinoIcons.arrow_down_doc),
-          label: const Text('training_block_plan.json importieren'),
+          label: Text(l.btnImportTrainingJson),
         ),
         const SizedBox(height: 16),
         for (final block in data.blocks) _BlockCard(block: block),
@@ -773,7 +778,7 @@ class _NutritionPage extends StatelessWidget {
           _SignalBadge(signal: signal),
           const SizedBox(height: 10),
           _FuelAdviceCard(
-            day: workout?.title ?? 'Erholung',
+            day: workout?.title ?? '',
             text: scenario.advice,
             mealName: scenario.mealName,
             mealRationale: scenario.mealRationale,
@@ -781,11 +786,15 @@ class _NutritionPage extends StatelessWidget {
           const SizedBox(height: 10),
           _YesterdayCard(log: latest, signal: signal, target: target),
           const SizedBox(height: 14),
-          const _SectionLabel(label: 'Meal Ideas'),
+          _SectionLabel(
+            label: AppLocalizations.of(context)!.sectionMealIdeas,
+          ),
           const SizedBox(height: 8),
           const _MealIdeasRow(),
           const SizedBox(height: 14),
-          const _SectionLabel(label: 'Meal Analysis'),
+          _SectionLabel(
+            label: AppLocalizations.of(context)!.sectionMealAnalysis,
+          ),
           const SizedBox(height: 8),
           if (data.pendingMealResult != null)
             _MealResultCardV2(
@@ -832,7 +841,9 @@ class _NutritionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final right = (week != null && day != null) ? 'W$week · T$day' : '';
+    final l = AppLocalizations.of(context)!;
+    final right =
+        (week != null && day != null) ? l.weekDay(week!, day!) : '';
     return Row(
       children: [
         Expanded(
@@ -848,9 +859,9 @@ class _NutritionHeader extends StatelessWidget {
                     color: AppColors.sage,
                   ),
                   const SizedBox(width: 4),
-                  const Text(
-                    'Profil',
-                    style: TextStyle(
+                  Text(
+                    l.labelProfil,
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppColors.sage,
@@ -861,9 +872,9 @@ class _NutritionHeader extends StatelessWidget {
             ),
           ),
         ),
-        const Text(
-          'Fuel + Recovery',
-          style: TextStyle(
+        Text(
+          l.nutritionHeaderTitle,
+          style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w900,
             color: AppColors.ink,
@@ -960,33 +971,33 @@ class _SignalConfig {
   final bool pulse;
 }
 
-_SignalConfig _signalConfig(_NutritionSignal s) {
+_SignalConfig _signalConfig(_NutritionSignal s, AppLocalizations l) {
   switch (s) {
     case _NutritionSignal.green:
-      return const _SignalConfig(
-        label: 'GREEN LIGHT',
-        sub: 'Fuel und Readiness im Einklang — heute Vollgas.',
+      return _SignalConfig(
+        label: l.signalGreenLight,
+        sub: l.signalGreenLightSub,
         color: AppColors.sage,
         pulse: true,
       );
     case _NutritionSignal.hold:
-      return const _SignalConfig(
-        label: 'HOLD',
-        sub: 'Signale neutral — Intensität stabil halten.',
+      return _SignalConfig(
+        label: l.signalHold,
+        sub: l.signalHoldSub,
         color: AppColors.gold,
         pulse: false,
       );
     case _NutritionSignal.fuel:
-      return const _SignalConfig(
-        label: 'FUEL FIRST',
-        sub: 'Wenig gegessen — vor dem Training auffüllen.',
+      return _SignalConfig(
+        label: l.signalFuelFirst,
+        sub: l.signalFuelFirstSub,
         color: AppColors.coral,
         pulse: false,
       );
     case _NutritionSignal.deload:
-      return const _SignalConfig(
-        label: 'DELOAD BIAS',
-        sub: 'Schwaches Fuel und Erholung — Last reduzieren.',
+      return _SignalConfig(
+        label: l.signalDeloadBias,
+        sub: l.signalDeloadBiasSub,
         color: AppColors.ink,
         pulse: false,
       );
@@ -1017,7 +1028,7 @@ class _SignalBadgeState extends State<_SignalBadge>
 
   @override
   Widget build(BuildContext context) {
-    final cfg = _signalConfig(widget.signal);
+    final cfg = _signalConfig(widget.signal, AppLocalizations.of(context)!);
     final color = cfg.color;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -1197,12 +1208,13 @@ class _FuelAdviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return _WhiteCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardHeaderRow(
-            label: "TODAY'S FUEL",
+            label: l.sectionTodaysFuel,
             trailing: day.toUpperCase(),
             trailingColor: AppColors.sage,
           ),
@@ -1249,9 +1261,9 @@ class _FuelAdviceCard extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'MEAL SUGGESTION',
-                                style: TextStyle(
+                              Text(
+                                l.sectionMealSuggestion,
+                                style: const TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 1.2,
@@ -1327,6 +1339,7 @@ class _YesterdayCard extends StatelessWidget {
     const hydrationLevel = _Level.moderate;
     final read = _yesterdayRead(signal);
 
+    final l = AppLocalizations.of(context)!;
     return _WhiteCard(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
@@ -1334,7 +1347,7 @@ class _YesterdayCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "YESTERDAY'S SIGNAL",
+              l.sectionYesterdaysSignal,
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w900,
@@ -1347,7 +1360,7 @@ class _YesterdayCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _SignalChip(
-                    label: 'PROTEIN',
+                    label: l.chipProtein,
                     level: proteinLevel,
                     value: log == null ? '—' : '${p}g',
                   ),
@@ -1355,7 +1368,7 @@ class _YesterdayCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: _SignalChip(
-                    label: 'CARBS',
+                    label: l.chipCarbs,
                     level: carbsLevel,
                     value: log == null ? '—' : '${c}g',
                   ),
@@ -1363,7 +1376,7 @@ class _YesterdayCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: _SignalChip(
-                    label: 'HYDRATION',
+                    label: l.chipHydration,
                     level: hydrationLevel,
                     value: '—',
                   ),
@@ -1413,10 +1426,11 @@ class _SignalChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final (color, levelLabel) = switch (level) {
-      _Level.high => (AppColors.sage, 'HIGH'),
-      _Level.moderate => (AppColors.gold, 'MODERATE'),
-      _Level.low => (AppColors.coral, 'LOW'),
+      _Level.high => (AppColors.sage, l.levelHigh),
+      _Level.moderate => (AppColors.gold, l.levelModerate),
+      _Level.low => (AppColors.coral, l.levelLow),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
@@ -1599,13 +1613,14 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final r = widget.result;
     final time = _hhmm(r.analyzedAt);
     return _WhiteCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardHeaderRow(label: 'MEAL ANALYSIS', trailing: time),
+          _CardHeaderRow(label: l.sectionMealAnalysis, trailing: time),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
             child: Column(
@@ -1615,7 +1630,7 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                   onTap: widget.onReview,
                   child: Text(
                     r.mealDescription.isEmpty
-                        ? 'Mahlzeit'
+                        ? l.mahlzeit
                         : r.mealDescription.toUpperCase(),
                     style: const TextStyle(
                       fontSize: 16,
@@ -1637,9 +1652,9 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'TRAINING IMPACT',
-                          style: TextStyle(
+                        Text(
+                          l.sectionTrainingImpact,
+                          style: const TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.0,
@@ -1679,8 +1694,8 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                         const SizedBox(width: 5),
                         Text(
                           _expanded
-                              ? 'Makros ausblenden'
-                              : '${r.calories} kcal · ${r.protein}g Protein · Details',
+                              ? l.btnMakrosAusblenden
+                              : '${r.calories} kcal · ${r.protein}g Protein · ${l.btnDetails}',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -1746,9 +1761,9 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                               borderRadius: BorderRadius.circular(9),
                             ),
                           ),
-                          child: const Text(
-                            'Speichern',
-                            style: TextStyle(
+                          child: Text(
+                            l.btnSpeichern,
+                            style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
                             ),
@@ -1776,9 +1791,9 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                               borderRadius: BorderRadius.circular(9),
                             ),
                           ),
-                          child: const Text(
-                            'Verwerfen',
-                            style: TextStyle(
+                          child: Text(
+                            l.btnVerwerfen,
+                            style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
@@ -1900,12 +1915,15 @@ class _MealAnalysisCta extends StatelessWidget {
               ),
               const SizedBox(width: 11),
               Expanded(
-                child: Column(
+                child: Builder(
+                  builder: (context) {
+                    final l = AppLocalizations.of(context)!;
+                    return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Mahlzeit analysieren',
-                      style: TextStyle(
+                    Text(
+                      l.mahlzeitAnalysieren,
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w900,
                         color: AppColors.ink,
@@ -1913,7 +1931,7 @@ class _MealAnalysisCta extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Codex bewertet Trainingsauswirkung',
+                      l.codexBewertetTrainingsauswirkung,
                       style: TextStyle(
                         fontSize: 11,
                         color: AppColors.ink.withValues(
@@ -1922,6 +1940,8 @@ class _MealAnalysisCta extends StatelessWidget {
                       ),
                     ),
                   ],
+                    );
+                  },
                 ),
               ),
             ],
@@ -1997,7 +2017,9 @@ class _CoachPageState extends State<_CoachPage> {
             }),
           ),
           const SizedBox(height: 10),
-          const _SectionLabel(label: 'Alle Übungen'),
+          _SectionLabel(
+            label: AppLocalizations.of(context)!.sectionAlleUebungen,
+          ),
           const SizedBox(height: 4),
           for (var j = 0; j < exercises.length; j++)
             _CoachExerciseRow(
@@ -2034,7 +2056,7 @@ class _CoachEmptyState extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Text(
-              'Kein aktives Workout. Wähle einen Block, um den Coach zu starten.',
+              AppLocalizations.of(context)!.coachEmptyState,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
@@ -2058,12 +2080,13 @@ class _CoachHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Row(
       children: [
         const Expanded(child: SizedBox()),
-        const Text(
-          'Training',
-          style: TextStyle(
+        Text(
+          l.coachPageTitle,
+          style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w900,
             color: AppColors.ink,
@@ -2073,7 +2096,7 @@ class _CoachHeader extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerRight,
             child: Text(
-              'W$week · T$day',
+              l.weekDay(week, day),
               style: TextStyle(
                 fontSize: 12,
                 color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
@@ -2146,6 +2169,7 @@ class _FocusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final media = exercise.media;
     final setup = media?.setup ?? '';
     final cues = media?.cues ?? const <String>[];
@@ -2184,7 +2208,7 @@ class _FocusCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'ÜBUNG ${idx + 1} / $total',
+                l.uebungProgress(idx + 1, total),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
@@ -2214,19 +2238,19 @@ class _FocusCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              _StatChip(label: 'Sätze', value: '${exercise.sets}'),
+              _StatChip(label: l.statSaetze, value: '${exercise.sets}'),
               const SizedBox(width: 5),
-              _StatChip(label: 'Wdhl.', value: exercise.reps),
+              _StatChip(label: l.statWdhl, value: exercise.reps),
               const SizedBox(width: 5),
               _StatChip(
-                label: 'Last',
+                label: l.statLast,
                 value: exercise.targetLoad.isEmpty ? '—' : exercise.targetLoad,
               ),
               const SizedBox(width: 5),
-              _StatChip(label: 'RPE', value: rpeText, accent: true),
+              _StatChip(label: l.statRpe, value: rpeText, accent: true),
               if (restLabel != null) ...[
                 const SizedBox(width: 5),
-                _StatChip(label: 'Pause', value: restLabel),
+                _StatChip(label: l.statPause, value: restLabel),
               ],
             ],
           ),
@@ -2401,14 +2425,14 @@ class _VideoPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(99),
           border: Border.all(color: AppColors.sage.withValues(alpha: 0.33)),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(CupertinoIcons.play_fill, size: 11, color: AppColors.sage),
-            SizedBox(width: 7),
+            const Icon(CupertinoIcons.play_fill, size: 11, color: AppColors.sage),
+            const SizedBox(width: 7),
             Text(
-              'Erklärvideo',
-              style: TextStyle(
+              AppLocalizations.of(context)!.erklaervideo,
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppColors.sage,
@@ -2676,6 +2700,7 @@ class _MemoryWikiSection extends StatelessWidget {
     for (final memory in memories) {
       grouped.putIfAbsent(memory.category, () => []).add(memory);
     }
+    final l = AppLocalizations.of(context)!;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -2688,15 +2713,15 @@ class _MemoryWikiSection extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Memory Wiki',
+                    l.memoryWikiTitle,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
-                Text('$activeCount aktiv'),
+                Text(l.memoryWikiAktiv(activeCount)),
                 IconButton(
-                  tooltip: 'Memory hinzufuegen',
+                  tooltip: l.tooltipMemoryHinzufuegen,
                   onPressed: () => _showMemoryDialog(context, controller),
                   icon: const Icon(CupertinoIcons.add_circled),
                 ),
@@ -2704,7 +2729,7 @@ class _MemoryWikiSection extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Aktive Memories gehen in Codex Snapshots und Meal Analysen.',
+              l.memoryWikiSubtitle,
               style: TextStyle(
                 color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
               ),
@@ -2712,7 +2737,7 @@ class _MemoryWikiSection extends StatelessWidget {
             const SizedBox(height: 12),
             if (memories.isEmpty)
               Text(
-                'Noch keine Memories gespeichert.',
+                l.memoryWikiEmpty,
                 style: TextStyle(
                   color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
                 ),
@@ -2831,15 +2856,25 @@ class _MemoryCard extends StatelessWidget {
                   ),
                 ),
               ),
-              IconButton(
-                tooltip: 'Bearbeiten',
-                onPressed: onEdit,
-                icon: const Icon(CupertinoIcons.pencil, size: 18),
+              Builder(
+                builder: (context) {
+                  final l = AppLocalizations.of(context)!;
+                  return IconButton(
+                    tooltip: l.tooltipBearbeiten,
+                    onPressed: onEdit,
+                    icon: const Icon(CupertinoIcons.pencil, size: 18),
+                  );
+                },
               ),
-              IconButton(
-                tooltip: 'Loeschen',
-                onPressed: onDelete,
-                icon: const Icon(CupertinoIcons.trash, size: 18),
+              Builder(
+                builder: (context) {
+                  final l = AppLocalizations.of(context)!;
+                  return IconButton(
+                    tooltip: l.tooltipLoeschen,
+                    onPressed: onDelete,
+                    icon: const Icon(CupertinoIcons.trash, size: 18),
+                  );
+                },
               ),
             ],
           ),
@@ -2858,10 +2893,10 @@ class _PendingMealRequestCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: const Icon(CupertinoIcons.clock),
-        title: const Text('Codex Meal Analyse wartet'),
+        title: Text(AppLocalizations.of(context)!.pendingMealTitle),
         subtitle: Text(
           request.description.isEmpty
-              ? request.imagePath ?? 'Foto exportiert'
+              ? request.imagePath ?? AppLocalizations.of(context)!.btnFoto
               : request.description,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -2884,14 +2919,15 @@ class _ProgressPage extends StatelessWidget {
       0,
       (sum, log) => sum + log.totalVolume,
     );
+    final l = AppLocalizations.of(context)!;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _HeroPanel(
-          title: 'Progress',
+          title: l.progressHeroTitle,
           subtitle: data.activeBlock?.title ?? 'No active block',
-          body: 'Diese Kennzahlen gehen in den naechsten Codex Snapshot.',
-          trailing: '$completed done',
+          body: l.progressHeroBody,
+          trailing: l.progressDone(completed),
         ),
         const SizedBox(height: 12),
         _MetricGrid(
@@ -2908,7 +2944,11 @@ class _ProgressPage extends StatelessWidget {
             leading: const Icon(CupertinoIcons.flame),
             title: Text(log.title),
             subtitle: Text(
-              '${log.sets.length} Sets · ${log.totalVolume.toStringAsFixed(0)} kg · ${log.healthWriteStatus}',
+              l.progressLogSets(
+                log.sets.length,
+                log.totalVolume.toStringAsFixed(0),
+                log.healthWriteStatus,
+              ),
             ),
           ),
       ],
@@ -2939,22 +2979,23 @@ class _SettingsPageState extends State<_SettingsPage> {
     return FutureBuilder<String>(
       future: _exchangePath,
       builder: (context, snapshot) {
-        final exchangePath = snapshot.data ?? 'Exchange folder wird geladen...';
+        final l = AppLocalizations.of(context)!;
+        final exchangePath =
+            snapshot.data ?? l.exchangeFolderLoading;
         final agentPrompt = _agentSetupPrompt(exchangePath);
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
             _HeroPanel(
-              title: 'Agent Setup',
-              subtitle: 'Codex, Claude oder anderer Coach',
-              body:
-                  'Alle Infos, die ein neuer Agent braucht: iCloud Ordner, Startprompt, Tagesablauf und Schreibbefehle.',
-              trailing: snapshot.hasData ? 'Ready' : 'Loading',
+              title: l.settingsHeroTitle,
+              subtitle: l.settingsHeroSubtitle,
+              body: l.settingsHeroBody,
+              trailing: snapshot.hasData ? l.settingsHeroReady : l.settingsHeroLoading,
             ),
             const SizedBox(height: 12),
             _CopyCard(
               icon: CupertinoIcons.folder,
-              title: 'iCloud Exchange Folder',
+              title: l.settingsExchangeFolder,
               body: exchangePath,
               copyValue: exchangePath,
               enabled: snapshot.hasData,
@@ -2962,14 +3003,14 @@ class _SettingsPageState extends State<_SettingsPage> {
             const SizedBox(height: 12),
             _CopyCard(
               icon: CupertinoIcons.link,
-              title: 'Agent Bootstrap URL',
+              title: l.settingsBootstrapUrl,
               body: _agentBootstrapUrl,
               copyValue: _agentBootstrapUrl,
             ),
             const SizedBox(height: 12),
             _CopyCard(
               icon: CupertinoIcons.doc_text,
-              title: 'Agent Startprompt',
+              title: l.settingsStartprompt,
               body: agentPrompt,
               copyValue: agentPrompt,
               maxLines: 12,
@@ -2980,7 +3021,7 @@ class _SettingsPageState extends State<_SettingsPage> {
             const SizedBox(height: 12),
             _CopyCard(
               icon: CupertinoIcons.command,
-              title: 'Validated Write Commands',
+              title: l.settingsWriteCommands,
               body: _agentCommands(exchangePath),
               copyValue: _agentCommands(exchangePath),
               maxLines: 8,
@@ -3031,7 +3072,7 @@ class _CopyCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Kopieren',
+                  tooltip: AppLocalizations.of(context)!.tooltipKopieren,
                   onPressed: enabled
                       ? () => _copyToClipboard(context, copyValue)
                       : null,
@@ -3084,7 +3125,7 @@ class _SetupChecklistCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Daily Agent Checklist',
+                    AppLocalizations.of(context)!.settingsChecklist,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
@@ -3132,7 +3173,12 @@ class _BlockCard extends StatelessWidget {
           block.title,
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
-        subtitle: Text('${block.durationWeeks} Wochen · ${block.createdBy}'),
+        subtitle: Text(
+          AppLocalizations.of(context)!.blockCardWeeks(
+            block.durationWeeks,
+            block.createdBy,
+          ),
+        ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
           Align(
@@ -3142,12 +3188,20 @@ class _BlockCard extends StatelessWidget {
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text('Targets: ${block.measurableTargets.join(', ')}'),
+            child: Text(
+              AppLocalizations.of(context)!.blockCardTargets(
+                block.measurableTargets.join(', '),
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text('${block.workouts.length} geplante Workouts'),
+            child: Text(
+              AppLocalizations.of(context)!.blockCardWorkouts(
+                block.workouts.length,
+              ),
+            ),
           ),
         ],
       ),
@@ -3371,9 +3425,10 @@ python3 tools/write_nutrition_analysis_result.py --exchange-dir "$exchangePath" 
 Future<void> _copyToClipboard(BuildContext context, String value) async {
   await Clipboard.setData(ClipboardData(text: value));
   if (!context.mounted) return;
+  final l = AppLocalizations.of(context)!;
   ScaffoldMessenger.of(
     context,
-  ).showSnackBar(const SnackBar(content: Text('Kopiert')));
+  ).showSnackBar(SnackBar(content: Text(l.snackbarKopiert)));
 }
 
 class _CodexBlockAvailableBanner extends StatelessWidget {
@@ -3404,16 +3459,16 @@ class _CodexBlockAvailableBanner extends StatelessWidget {
         children: [
           Icon(CupertinoIcons.bell_fill, color: scheme.secondary),
           const SizedBox(width: AppSpacing.medium),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Neuer Codex Trainingsblock verfuegbar',
-              style: TextStyle(fontWeight: FontWeight.w800),
+              AppLocalizations.of(context)!.neuerCodexBlock,
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
           FilledButton.icon(
             onPressed: controller.importCodexBlockPlan,
             icon: const Icon(CupertinoIcons.arrow_down_doc),
-            label: const Text('Import'),
+            label: Text(AppLocalizations.of(context)!.btnImport),
           ),
         ],
       ),
@@ -3433,49 +3488,52 @@ Future<void> _showSetDialog(
   );
   await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text('${exercise.name} loggen'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: weight,
-            decoration: const InputDecoration(labelText: 'Gewicht kg'),
-            keyboardType: TextInputType.number,
+    builder: (context) {
+      final l = AppLocalizations.of(context)!;
+      return AlertDialog(
+        title: Text(l.dialogSetTitle(exercise.name)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: weight,
+              decoration: InputDecoration(labelText: l.dialogSetWeight),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: reps,
+              decoration: InputDecoration(labelText: l.dialogSetReps),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: rpe,
+              decoration: InputDecoration(labelText: l.dialogSetRpe),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l.btnAbbrechen),
           ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: reps,
-            decoration: const InputDecoration(labelText: 'Wiederholungen'),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: rpe,
-            decoration: const InputDecoration(labelText: 'RPE'),
-            keyboardType: TextInputType.number,
+          FilledButton(
+            onPressed: () {
+              controller.logSet(
+                exercise,
+                double.tryParse(weight.text) ?? 0,
+                int.tryParse(reps.text) ?? 0,
+                double.tryParse(rpe.text.replaceAll(',', '.')) ?? 7,
+              );
+              Navigator.pop(context);
+            },
+            child: Text(l.btnSpeichern),
           ),
         ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Abbrechen'),
-        ),
-        FilledButton(
-          onPressed: () {
-            controller.logSet(
-              exercise,
-              double.tryParse(weight.text) ?? 0,
-              int.tryParse(reps.text) ?? 0,
-              double.tryParse(rpe.text.replaceAll(',', '.')) ?? 7,
-            );
-            Navigator.pop(context);
-          },
-          child: const Text('Speichern'),
-        ),
-      ],
-    ),
+      );
+    },
   );
 }
 
@@ -3489,56 +3547,57 @@ Future<void> _showCompleteDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Workout abschliessen'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Readiness ${readiness.round()}'),
-            Slider(
-              value: readiness,
-              min: 1,
-              max: 5,
-              divisions: 4,
-              onChanged: (value) => setState(() => readiness = value),
-            ),
-            Text('Soreness ${soreness.round()}'),
-            Slider(
-              value: soreness,
-              min: 1,
-              max: 5,
-              divisions: 4,
-              onChanged: (value) => setState(() => soreness = value),
-            ),
-            TextField(
-              controller: notes,
-              decoration: const InputDecoration(
-                labelText: 'Notizen fuer Codex',
+      builder: (context, setState) {
+        final l = AppLocalizations.of(context)!;
+        return AlertDialog(
+          title: Text(l.dialogCompleteTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l.dialogCompleteReadiness(readiness.round())),
+              Slider(
+                value: readiness,
+                min: 1,
+                max: 5,
+                divisions: 4,
+                onChanged: (value) => setState(() => readiness = value),
               ),
-              minLines: 2,
-              maxLines: 3,
+              Text(l.dialogCompleteSoreness(soreness.round())),
+              Slider(
+                value: soreness,
+                min: 1,
+                max: 5,
+                divisions: 4,
+                onChanged: (value) => setState(() => soreness = value),
+              ),
+              TextField(
+                controller: notes,
+                decoration: InputDecoration(labelText: l.dialogCompleteNotes),
+                minLines: 2,
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l.btnAbbrechen),
+            ),
+            FilledButton(
+              onPressed: () async {
+                await controller.completeCurrentWorkout(
+                  notes: notes.text,
+                  readiness: readiness.round(),
+                  soreness: soreness.round(),
+                );
+                await controller.exportDailySnapshot();
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: Text(l.btnFertig),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await controller.completeCurrentWorkout(
-                notes: notes.text,
-                readiness: readiness.round(),
-                soreness: soreness.round(),
-              );
-              await controller.exportDailySnapshot();
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Fertig'),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
 }
@@ -3556,88 +3615,89 @@ Future<void> _showMemoryDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: Text(
-          existing == null ? 'Memory hinzufuegen' : 'Memory editieren',
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<MemoryCategory>(
-                initialValue: category,
-                decoration: const InputDecoration(labelText: 'Kategorie'),
-                items: [
-                  for (final item in MemoryCategory.values)
-                    DropdownMenuItem(value: item, child: Text(item.label)),
-                ],
-                onChanged: (value) {
-                  if (value != null) setState(() => category = value);
-                },
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: title,
-                decoration: const InputDecoration(labelText: 'Titel'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: summary,
-                decoration: const InputDecoration(labelText: 'Kurz-Memory'),
-                minLines: 2,
-                maxLines: 3,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: markdown,
-                decoration: const InputDecoration(
-                  labelText: 'Markdown Details',
+      builder: (context, setState) {
+        final l = AppLocalizations.of(context)!;
+        return AlertDialog(
+          title: Text(
+            existing == null ? l.dialogMemoryAddTitle : l.dialogMemoryEditTitle,
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<MemoryCategory>(
+                  initialValue: category,
+                  decoration: InputDecoration(labelText: l.dialogMemoryKategorie),
+                  items: [
+                    for (final item in MemoryCategory.values)
+                      DropdownMenuItem(value: item, child: Text(item.label)),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => category = value);
+                  },
                 ),
-                minLines: 3,
-                maxLines: 6,
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Aktiv fuer Codex'),
-                value: active,
-                onChanged: (value) => setState(() => active = value),
-              ),
-            ],
+                const SizedBox(height: 8),
+                TextField(
+                  controller: title,
+                  decoration: InputDecoration(labelText: l.dialogMemoryTitel),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: summary,
+                  decoration: InputDecoration(labelText: l.dialogMemoryKurzMemory),
+                  minLines: 2,
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: markdown,
+                  decoration: InputDecoration(labelText: l.dialogMemoryMarkdown),
+                  minLines: 3,
+                  maxLines: 6,
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l.dialogMemoryAktivFuerCodex),
+                  value: active,
+                  onChanged: (value) => setState(() => active = value),
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (existing == null) {
-                controller.addMemory(
-                  category: category,
-                  title: title.text,
-                  summary: summary.text,
-                  markdown: markdown.text,
-                  active: active,
-                );
-              } else {
-                controller.updateMemory(
-                  existing.copyWith(
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l.btnAbbrechen),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (existing == null) {
+                  controller.addMemory(
                     category: category,
                     title: title.text,
                     summary: summary.text,
                     markdown: markdown.text,
                     active: active,
-                  ),
-                );
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Speichern'),
-          ),
-        ],
-      ),
+                  );
+                } else {
+                  controller.updateMemory(
+                    existing.copyWith(
+                      category: category,
+                      title: title.text,
+                      summary: summary.text,
+                      markdown: markdown.text,
+                      active: active,
+                    ),
+                  );
+                }
+                Navigator.pop(context);
+              },
+              child: Text(l.btnSpeichern),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -3651,80 +3711,83 @@ Future<void> _showMealAnalysisDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Meal analysieren'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: description,
-                decoration: const InputDecoration(
-                  labelText: 'Was hast du gegessen?',
-                  hintText: 'z.B. Bowl mit Reis, Huhn, Avocado, Sauce',
-                ),
-                minLines: 3,
-                maxLines: 5,
-              ),
-              const SizedBox(height: 12),
-              if (imagePath != null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(imagePath!),
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
+      builder: (context, setState) {
+        final l = AppLocalizations.of(context)!;
+        return AlertDialog(
+          title: Text(l.dialogMealAnalysisTitle),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: description,
+                  decoration: InputDecoration(
+                    labelText: l.dialogMealAnalysisWhat,
+                    hintText: l.dialogMealAnalysisHint,
                   ),
+                  minLines: 3,
+                  maxLines: 5,
                 ),
-                const SizedBox(height: 8),
-              ],
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final path = await controller
-                            .pickMealImageFromGallery();
-                        if (path != null) setState(() => imagePath = path);
-                      },
-                      icon: const Icon(CupertinoIcons.photo),
-                      label: const Text('Foto'),
+                const SizedBox(height: 12),
+                if (imagePath != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(imagePath!),
+                      height: 160,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final path = await controller.pickMealImageFromCamera();
-                        if (path != null) setState(() => imagePath = path);
-                      },
-                      icon: const Icon(CupertinoIcons.camera),
-                      label: const Text('Kamera'),
-                    ),
-                  ),
+                  const SizedBox(height: 8),
                 ],
-              ),
-            ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final path = await controller
+                              .pickMealImageFromGallery();
+                          if (path != null) setState(() => imagePath = path);
+                        },
+                        icon: const Icon(CupertinoIcons.photo),
+                        label: Text(l.btnFoto),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final path = await controller.pickMealImageFromCamera();
+                          if (path != null) setState(() => imagePath = path);
+                        },
+                        icon: const Icon(CupertinoIcons.camera),
+                        label: Text(l.btnKamera),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () {
-              controller.exportNutritionAnalysisRequest(
-                description: description.text,
-                imagePath: imagePath,
-              );
-              Navigator.pop(context);
-            },
-            child: const Text('An Codex senden'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l.btnAbbrechen),
+            ),
+            FilledButton(
+              onPressed: () {
+                controller.exportNutritionAnalysisRequest(
+                  description: description.text,
+                  imagePath: imagePath,
+                );
+                Navigator.pop(context);
+              },
+              child: Text(l.btnAnCodexSenden),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -3744,84 +3807,91 @@ Future<void> _showMealResultDialog(
   final notes = TextEditingController(text: result.correctionNotes);
   await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Codex Analyse pruefen'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(result.mealDescription),
-            if (result.assumptions.isNotEmpty) ...[
+    builder: (context) {
+      final l = AppLocalizations.of(context)!;
+      return AlertDialog(
+        title: Text(l.dialogMealResultTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(result.mealDescription),
+              if (result.assumptions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('Assumptions: ${result.assumptions.join(', ')}'),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: calories,
+                decoration: InputDecoration(labelText: l.dialogMealResultKalorien),
+                keyboardType: TextInputType.number,
+              ),
               const SizedBox(height: 8),
-              Text('Assumptions: ${result.assumptions.join(', ')}'),
+              TextField(
+                controller: protein,
+                decoration: InputDecoration(labelText: l.dialogMealResultProtein),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: carbs,
+                decoration: InputDecoration(labelText: l.dialogMealResultCarbs),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fat,
+                decoration: InputDecoration(labelText: l.dialogMealResultFett),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: weight,
+                decoration: InputDecoration(
+                  labelText: l.dialogMealResultKoerpergewicht,
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: notes,
+                decoration: InputDecoration(
+                  labelText: l.dialogMealResultKorrektur,
+                ),
+                minLines: 2,
+                maxLines: 3,
+              ),
             ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: calories,
-              decoration: const InputDecoration(labelText: 'Kalorien'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: protein,
-              decoration: const InputDecoration(labelText: 'Protein g'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: carbs,
-              decoration: const InputDecoration(labelText: 'Carbs g'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: fat,
-              decoration: const InputDecoration(labelText: 'Fett g'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: weight,
-              decoration: const InputDecoration(labelText: 'Koerpergewicht kg'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: notes,
-              decoration: const InputDecoration(labelText: 'Korrektur/Notizen'),
-              minLines: 2,
-              maxLines: 3,
-            ),
-          ],
+          ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            controller.discardMealAnalysis();
-            Navigator.pop(context);
-          },
-          child: const Text('Verwerfen'),
-        ),
-        FilledButton(
-          onPressed: () {
-            controller.acceptMealAnalysis(
-              calories: int.tryParse(calories.text) ?? result.calories,
-              protein: int.tryParse(protein.text) ?? result.protein,
-              carbs: int.tryParse(carbs.text) ?? result.carbs,
-              fat: int.tryParse(fat.text) ?? result.fat,
-              bodyWeightKg:
-                  double.tryParse(weight.text.replaceAll(',', '.')) ??
-                  result.bodyWeightKg,
-              notes: notes.text,
-            );
-            Navigator.pop(context);
-          },
-          child: const Text('Speichern'),
-        ),
-      ],
-    ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              controller.discardMealAnalysis();
+              Navigator.pop(context);
+            },
+            child: Text(l.btnVerwerfen),
+          ),
+          FilledButton(
+            onPressed: () {
+              controller.acceptMealAnalysis(
+                calories: int.tryParse(calories.text) ?? result.calories,
+                protein: int.tryParse(protein.text) ?? result.protein,
+                carbs: int.tryParse(carbs.text) ?? result.carbs,
+                fat: int.tryParse(fat.text) ?? result.fat,
+                bodyWeightKg:
+                    double.tryParse(weight.text.replaceAll(',', '.')) ??
+                    result.bodyWeightKg,
+                notes: notes.text,
+              );
+              Navigator.pop(context);
+            },
+            child: Text(l.btnSpeichern),
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -3841,67 +3911,70 @@ Future<void> _showProfileDialog(
   final goal = TextEditingController(text: profile.goal);
   await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Nutrition Profil'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: goal,
-              decoration: const InputDecoration(labelText: 'Trainingsziel'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: height,
-              decoration: const InputDecoration(labelText: 'Groesse cm'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: weight,
-              decoration: const InputDecoration(labelText: 'Gewicht kg'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: age,
-              decoration: const InputDecoration(labelText: 'Alter'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: sex,
-              decoration: const InputDecoration(labelText: 'Sex'),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Abbrechen'),
-        ),
-        FilledButton(
-          onPressed: () {
-            controller.updateProfile(
-              profile.copyWith(
-                goal: goal.text,
-                heightCm:
-                    double.tryParse(height.text.replaceAll(',', '.')) ??
-                    profile.heightCm,
-                weightKg:
-                    double.tryParse(weight.text.replaceAll(',', '.')) ??
-                    profile.weightKg,
-                age: int.tryParse(age.text) ?? profile.age,
-                sex: sex.text,
+    builder: (context) {
+      final l = AppLocalizations.of(context)!;
+      return AlertDialog(
+        title: Text(l.dialogProfileTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: goal,
+                decoration: InputDecoration(labelText: l.dialogProfileTrainingsziel),
               ),
-            );
-            Navigator.pop(context);
-          },
-          child: const Text('Speichern'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: height,
+                decoration: InputDecoration(labelText: l.dialogProfileGroesse),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: weight,
+                decoration: InputDecoration(labelText: l.dialogProfileGewicht),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: age,
+                decoration: InputDecoration(labelText: l.dialogProfileAlter),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: sex,
+                decoration: InputDecoration(labelText: l.dialogProfileSex),
+              ),
+            ],
+          ),
         ),
-      ],
-    ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l.btnAbbrechen),
+          ),
+          FilledButton(
+            onPressed: () {
+              controller.updateProfile(
+                profile.copyWith(
+                  goal: goal.text,
+                  heightCm:
+                      double.tryParse(height.text.replaceAll(',', '.')) ??
+                      profile.heightCm,
+                  weightKg:
+                      double.tryParse(weight.text.replaceAll(',', '.')) ??
+                      profile.weightKg,
+                  age: int.tryParse(age.text) ?? profile.age,
+                  sex: sex.text,
+                ),
+              );
+              Navigator.pop(context);
+            },
+            child: Text(l.btnSpeichern),
+          ),
+        ],
+      );
+    },
   );
 }

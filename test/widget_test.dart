@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:trainingsplan_app/src/app.dart';
 import 'package:trainingsplan_app/src/data/local_store.dart';
 import 'package:trainingsplan_app/src/data/seed_data.dart';
+import 'package:trainingsplan_app/src/l10n/app_localizations.dart';
 import 'package:trainingsplan_app/src/models/fitness_models.dart';
 import 'package:trainingsplan_app/src/state/fitness_controller.dart';
 import 'package:trainingsplan_app/src/ui/dashboard.dart';
@@ -24,6 +25,9 @@ void main() {
     await controller.load();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
         home: FitnessScope(
           controller: controller,
           child: const CoachDashboard(),
@@ -49,6 +53,9 @@ void main() {
     await controller.load();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
         home: FitnessScope(
           controller: controller,
           child: const CoachDashboard(),

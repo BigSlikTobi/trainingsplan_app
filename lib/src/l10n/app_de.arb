@@ -1,0 +1,454 @@
+{
+  "@@locale": "de",
+
+  "navHeute": "Heute",
+  "@navHeute": { "description": "Bottom nav: today tab" },
+
+  "navBlocks": "Blocks",
+  "@navBlocks": { "description": "Bottom nav: blocks tab" },
+
+  "navErnaehrung": "Ernaehrung",
+  "@navErnaehrung": { "description": "Bottom nav: nutrition tab" },
+
+  "navCoach": "Coach",
+  "@navCoach": { "description": "Bottom nav: coach tab" },
+
+  "navProgress": "Progress",
+  "@navProgress": { "description": "Bottom nav: progress tab" },
+
+  "navSetup": "Setup",
+  "@navSetup": { "description": "Bottom nav: setup tab" },
+
+  "tooltipHealthKit": "HealthKit verbinden",
+  "@tooltipHealthKit": { "description": "AppBar HealthKit icon tooltip" },
+
+  "tooltipExport": "Snapshot exportieren",
+  "@tooltipExport": { "description": "AppBar export icon tooltip" },
+
+  "sectionUebungen": "Übungen",
+  "@sectionUebungen": { "description": "Section label: exercises list" },
+
+  "btnStarten": "Starten",
+  "@btnStarten": { "description": "Start workout button label" },
+
+  "btnBlockErstellen": "+ Block erstellen",
+  "@btnBlockErstellen": { "description": "Create block button label" },
+
+  "btnCodexPlanImportieren": "Codex Plan importieren",
+  "@btnCodexPlanImportieren": { "description": "Import Codex plan button label" },
+
+  "keinAktiverBlock": "Kein aktiver Block",
+  "@keinAktiverBlock": { "description": "Empty state heading: no active block" },
+
+  "keinAktiverBlockSubtitle": "Starte mit einer Vorlage oder importiere deinen Codex Plan.",
+  "@keinAktiverBlockSubtitle": { "description": "Empty state subtitle: no active block" },
+
+  "labelCoach": "COACH",
+  "@labelCoach": { "description": "Coach note eyebrow label" },
+
+  "labelProfil": "Profil",
+  "@labelProfil": { "description": "Nutrition header: profile link" },
+
+  "nutritionHeaderTitle": "Fuel + Recovery",
+  "@nutritionHeaderTitle": { "description": "Nutrition page header title (brand voice: keep English)" },
+
+  "weekDay": "W{week} · T{day}",
+  "@weekDay": {
+    "description": "Week and day indicator, e.g. W3 · T2",
+    "placeholders": {
+      "week": { "type": "int" },
+      "day": { "type": "int" }
+    }
+  },
+
+  "woche": "Woche {week}",
+  "@woche": {
+    "description": "Pill label: current week number",
+    "placeholders": {
+      "week": { "type": "int" }
+    }
+  },
+
+  "signalGreenLight": "GREEN LIGHT",
+  "@signalGreenLight": { "description": "Nutrition signal badge: green" },
+
+  "signalGreenLightSub": "Fuel und Readiness im Einklang — heute Vollgas.",
+  "@signalGreenLightSub": { "description": "Nutrition signal sub-line: green" },
+
+  "signalHold": "HOLD",
+  "@signalHold": { "description": "Nutrition signal badge: hold" },
+
+  "signalHoldSub": "Signale neutral — Intensität stabil halten.",
+  "@signalHoldSub": { "description": "Nutrition signal sub-line: hold" },
+
+  "signalFuelFirst": "FUEL FIRST",
+  "@signalFuelFirst": { "description": "Nutrition signal badge: fuel first" },
+
+  "signalFuelFirstSub": "Wenig gegessen — vor dem Training auffüllen.",
+  "@signalFuelFirstSub": { "description": "Nutrition signal sub-line: fuel first" },
+
+  "signalDeloadBias": "DELOAD BIAS",
+  "@signalDeloadBias": { "description": "Nutrition signal badge: deload" },
+
+  "signalDeloadBiasSub": "Schwaches Fuel und Erholung — Last reduzieren.",
+  "@signalDeloadBiasSub": { "description": "Nutrition signal sub-line: deload" },
+
+  "chipProtein": "PROTEIN",
+  "@chipProtein": { "description": "Yesterday signal chip: protein" },
+
+  "chipCarbs": "CARBS",
+  "@chipCarbs": { "description": "Yesterday signal chip: carbs" },
+
+  "chipHydration": "HYDRATION",
+  "@chipHydration": { "description": "Yesterday signal chip: hydration" },
+
+  "levelHigh": "HIGH",
+  "@levelHigh": { "description": "Level indicator: high" },
+
+  "levelModerate": "MODERATE",
+  "@levelModerate": { "description": "Level indicator: moderate" },
+
+  "levelLow": "LOW",
+  "@levelLow": { "description": "Level indicator: low" },
+
+  "sectionYesterdaysSignal": "YESTERDAY'S SIGNAL",
+  "@sectionYesterdaysSignal": { "description": "Yesterday card section label (brand voice: keep English)" },
+
+  "sectionTodaysFuel": "TODAY'S FUEL",
+  "@sectionTodaysFuel": { "description": "Fuel advice card header label (brand voice: keep English)" },
+
+  "sectionMealSuggestion": "MEAL SUGGESTION",
+  "@sectionMealSuggestion": { "description": "Meal suggestion eyebrow inside fuel card (brand voice: keep English)" },
+
+  "sectionMealIdeas": "Meal Ideas",
+  "@sectionMealIdeas": { "description": "Section label: meal ideas (brand voice: keep English)" },
+
+  "sectionMealAnalysis": "Meal Analysis",
+  "@sectionMealAnalysis": { "description": "Section label: meal analysis (brand voice: keep English)" },
+
+  "sectionTrainingImpact": "TRAINING IMPACT",
+  "@sectionTrainingImpact": { "description": "Meal result card: training impact label (brand voice: keep English)" },
+
+  "btnSpeichern": "Speichern",
+  "@btnSpeichern": { "description": "Generic save button" },
+
+  "btnVerwerfen": "Verwerfen",
+  "@btnVerwerfen": { "description": "Generic discard button" },
+
+  "btnAbbrechen": "Abbrechen",
+  "@btnAbbrechen": { "description": "Generic cancel button" },
+
+  "btnMakrosAusblenden": "Makros ausblenden",
+  "@btnMakrosAusblenden": { "description": "Collapse macros toggle label" },
+
+  "btnDetails": "Details",
+  "@btnDetails": { "description": "Expand details toggle label (shown as part of macro summary line)" },
+
+  "mahlzeitAnalysieren": "Mahlzeit analysieren",
+  "@mahlzeitAnalysieren": { "description": "Meal analysis CTA: primary label" },
+
+  "codexBewertetTrainingsauswirkung": "Codex bewertet Trainingsauswirkung",
+  "@codexBewertetTrainingsauswirkung": { "description": "Meal analysis CTA: subtitle" },
+
+  "mahlzeit": "Mahlzeit",
+  "@mahlzeit": { "description": "Fallback meal description when empty" },
+
+  "coachPageTitle": "Training",
+  "@coachPageTitle": { "description": "Coach page centered header title" },
+
+  "uebungProgress": "ÜBUNG {idx} / {total}",
+  "@uebungProgress": {
+    "description": "Exercise counter label in focus card, e.g. ÜBUNG 2 / 5",
+    "placeholders": {
+      "idx": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+
+  "statSaetze": "Sätze",
+  "@statSaetze": { "description": "Stat chip: sets" },
+
+  "statWdhl": "Wdhl.",
+  "@statWdhl": { "description": "Stat chip: reps abbreviation" },
+
+  "statLast": "Last",
+  "@statLast": { "description": "Stat chip: load" },
+
+  "statRpe": "RPE",
+  "@statRpe": { "description": "Stat chip: RPE" },
+
+  "statPause": "Pause",
+  "@statPause": { "description": "Stat chip: rest" },
+
+  "sectionAlleUebungen": "Alle Übungen",
+  "@sectionAlleUebungen": { "description": "Section label: all exercises in coach page" },
+
+  "erklaervideo": "Erklärvideo",
+  "@erklaervideo": { "description": "Video pill label" },
+
+  "coachEmptyState": "Kein aktives Workout. Wähle einen Block, um den Coach zu starten.",
+  "@coachEmptyState": { "description": "Coach empty state message" },
+
+  "pendingMealTitle": "Codex Meal Analyse wartet",
+  "@pendingMealTitle": { "description": "Pending meal request card title" },
+
+  "neuerCodexBlock": "Neuer Codex Trainingsblock verfuegbar",
+  "@neuerCodexBlock": { "description": "Banner: new Codex training block available" },
+
+  "btnImport": "Import",
+  "@btnImport": { "description": "Banner import button label" },
+
+  "dialogSetTitle": "{exerciseName} loggen",
+  "@dialogSetTitle": {
+    "description": "Set log dialog title",
+    "placeholders": {
+      "exerciseName": { "type": "String" }
+    }
+  },
+
+  "dialogSetWeight": "Gewicht kg",
+  "@dialogSetWeight": { "description": "Set log dialog: weight field label" },
+
+  "dialogSetReps": "Wiederholungen",
+  "@dialogSetReps": { "description": "Set log dialog: reps field label" },
+
+  "dialogSetRpe": "RPE",
+  "@dialogSetRpe": { "description": "Set log dialog: RPE field label" },
+
+  "dialogCompleteTitle": "Workout abschliessen",
+  "@dialogCompleteTitle": { "description": "Complete workout dialog title" },
+
+  "dialogCompleteReadiness": "Readiness {value}",
+  "@dialogCompleteReadiness": {
+    "description": "Readiness slider label",
+    "placeholders": {
+      "value": { "type": "int" }
+    }
+  },
+
+  "dialogCompleteSoreness": "Soreness {value}",
+  "@dialogCompleteSoreness": {
+    "description": "Soreness slider label",
+    "placeholders": {
+      "value": { "type": "int" }
+    }
+  },
+
+  "dialogCompleteNotes": "Notizen fuer Codex",
+  "@dialogCompleteNotes": { "description": "Complete dialog: notes field label" },
+
+  "btnFertig": "Fertig",
+  "@btnFertig": { "description": "Confirm / done button" },
+
+  "dialogMealAnalysisTitle": "Meal analysieren",
+  "@dialogMealAnalysisTitle": { "description": "Meal analysis dialog title" },
+
+  "dialogMealAnalysisWhat": "Was hast du gegessen?",
+  "@dialogMealAnalysisWhat": { "description": "Meal description text field label" },
+
+  "dialogMealAnalysisHint": "z.B. Bowl mit Reis, Huhn, Avocado, Sauce",
+  "@dialogMealAnalysisHint": { "description": "Meal description text field hint" },
+
+  "btnFoto": "Foto",
+  "@btnFoto": { "description": "Photo picker button label" },
+
+  "btnKamera": "Kamera",
+  "@btnKamera": { "description": "Camera button label" },
+
+  "btnAnCodexSenden": "An Codex senden",
+  "@btnAnCodexSenden": { "description": "Send meal analysis to Codex button" },
+
+  "dialogMealResultTitle": "Codex Analyse pruefen",
+  "@dialogMealResultTitle": { "description": "Meal result review dialog title" },
+
+  "dialogMealResultKalorien": "Kalorien",
+  "@dialogMealResultKalorien": { "description": "Meal result: calories field label" },
+
+  "dialogMealResultProtein": "Protein g",
+  "@dialogMealResultProtein": { "description": "Meal result: protein field label" },
+
+  "dialogMealResultCarbs": "Carbs g",
+  "@dialogMealResultCarbs": { "description": "Meal result: carbs field label" },
+
+  "dialogMealResultFett": "Fett g",
+  "@dialogMealResultFett": { "description": "Meal result: fat field label" },
+
+  "dialogMealResultKoerpergewicht": "Koerpergewicht kg",
+  "@dialogMealResultKoerpergewicht": { "description": "Meal result: body weight field label" },
+
+  "dialogMealResultKorrektur": "Korrektur/Notizen",
+  "@dialogMealResultKorrektur": { "description": "Meal result: correction notes field label" },
+
+  "dialogProfileTitle": "Nutrition Profil",
+  "@dialogProfileTitle": { "description": "Athlete profile dialog title" },
+
+  "dialogProfileTrainingsziel": "Trainingsziel",
+  "@dialogProfileTrainingsziel": { "description": "Profile dialog: goal field label" },
+
+  "dialogProfileGroesse": "Groesse cm",
+  "@dialogProfileGroesse": { "description": "Profile dialog: height field label" },
+
+  "dialogProfileGewicht": "Gewicht kg",
+  "@dialogProfileGewicht": { "description": "Profile dialog: weight field label" },
+
+  "dialogProfileAlter": "Alter",
+  "@dialogProfileAlter": { "description": "Profile dialog: age field label" },
+
+  "dialogProfileSex": "Sex",
+  "@dialogProfileSex": { "description": "Profile dialog: sex field label" },
+
+  "memoryWikiTitle": "Memory Wiki",
+  "@memoryWikiTitle": { "description": "Memory wiki section title" },
+
+  "memoryWikiAktiv": "{count} aktiv",
+  "@memoryWikiAktiv": {
+    "description": "Memory wiki active count",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "memoryWikiSubtitle": "Aktive Memories gehen in Codex Snapshots und Meal Analysen.",
+  "@memoryWikiSubtitle": { "description": "Memory wiki subtitle" },
+
+  "memoryWikiEmpty": "Noch keine Memories gespeichert.",
+  "@memoryWikiEmpty": { "description": "Memory wiki empty state" },
+
+  "tooltipMemoryHinzufuegen": "Memory hinzufuegen",
+  "@tooltipMemoryHinzufuegen": { "description": "Add memory icon tooltip" },
+
+  "tooltipBearbeiten": "Bearbeiten",
+  "@tooltipBearbeiten": { "description": "Edit icon tooltip" },
+
+  "tooltipLoeschen": "Loeschen",
+  "@tooltipLoeschen": { "description": "Delete icon tooltip" },
+
+  "dialogMemoryAddTitle": "Memory hinzufuegen",
+  "@dialogMemoryAddTitle": { "description": "Add memory dialog title" },
+
+  "dialogMemoryEditTitle": "Memory editieren",
+  "@dialogMemoryEditTitle": { "description": "Edit memory dialog title" },
+
+  "dialogMemoryKategorie": "Kategorie",
+  "@dialogMemoryKategorie": { "description": "Memory dialog: category field label" },
+
+  "dialogMemoryTitel": "Titel",
+  "@dialogMemoryTitel": { "description": "Memory dialog: title field label" },
+
+  "dialogMemoryKurzMemory": "Kurz-Memory",
+  "@dialogMemoryKurzMemory": { "description": "Memory dialog: summary field label" },
+
+  "dialogMemoryMarkdown": "Markdown Details",
+  "@dialogMemoryMarkdown": { "description": "Memory dialog: markdown field label" },
+
+  "dialogMemoryAktivFuerCodex": "Aktiv fuer Codex",
+  "@dialogMemoryAktivFuerCodex": { "description": "Memory dialog: active toggle label" },
+
+  "blocksHeroTitle": "8-Week Training Blocks",
+  "@blocksHeroTitle": { "description": "Blocks page hero panel title (brand voice: keep English)" },
+
+  "blocksHeroSubtitle": "Codex plant, die App fuehrt aus",
+  "@blocksHeroSubtitle": { "description": "Blocks page hero panel subtitle" },
+
+  "blocksHeroBody": "Starte lokal mit einer Sport-Vorlage oder importiere den Block, den Codex in iCloud bereitstellt.",
+  "@blocksHeroBody": { "description": "Blocks page hero panel body" },
+
+  "blocksCount": "{count} Blocks",
+  "@blocksCount": {
+    "description": "Blocks count trailing text",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "btnImportTrainingJson": "training_block_plan.json importieren",
+  "@btnImportTrainingJson": { "description": "Import training block JSON button label" },
+
+  "blockCardWeeks": "{weeks} Wochen · {createdBy}",
+  "@blockCardWeeks": {
+    "description": "Block card subtitle: weeks and creator",
+    "placeholders": {
+      "weeks": { "type": "int" },
+      "createdBy": { "type": "String" }
+    }
+  },
+
+  "blockCardTargets": "Targets: {targets}",
+  "@blockCardTargets": {
+    "description": "Block card targets line",
+    "placeholders": {
+      "targets": { "type": "String" }
+    }
+  },
+
+  "blockCardWorkouts": "{count} geplante Workouts",
+  "@blockCardWorkouts": {
+    "description": "Block card planned workouts count",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "progressHeroTitle": "Progress",
+  "@progressHeroTitle": { "description": "Progress page hero title" },
+
+  "progressHeroBody": "Diese Kennzahlen gehen in den naechsten Codex Snapshot.",
+  "@progressHeroBody": { "description": "Progress page hero body" },
+
+  "progressDone": "{count} done",
+  "@progressDone": {
+    "description": "Progress done count",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "progressLogSets": "{sets} Sets · {volume} kg · {status}",
+  "@progressLogSets": {
+    "description": "Progress log entry subtitle",
+    "placeholders": {
+      "sets": { "type": "int" },
+      "volume": { "type": "String" },
+      "status": { "type": "String" }
+    }
+  },
+
+  "settingsHeroTitle": "Agent Setup",
+  "@settingsHeroTitle": { "description": "Settings page hero title" },
+
+  "settingsHeroSubtitle": "Codex, Claude oder anderer Coach",
+  "@settingsHeroSubtitle": { "description": "Settings page hero subtitle" },
+
+  "settingsHeroBody": "Alle Infos, die ein neuer Agent braucht: iCloud Ordner, Startprompt, Tagesablauf und Schreibbefehle.",
+  "@settingsHeroBody": { "description": "Settings page hero body" },
+
+  "settingsHeroReady": "Ready",
+  "@settingsHeroReady": { "description": "Settings hero trailing: ready state" },
+
+  "settingsHeroLoading": "Loading",
+  "@settingsHeroLoading": { "description": "Settings hero trailing: loading state" },
+
+  "settingsExchangeFolder": "iCloud Exchange Folder",
+  "@settingsExchangeFolder": { "description": "Settings copy card: exchange folder title" },
+
+  "settingsBootstrapUrl": "Agent Bootstrap URL",
+  "@settingsBootstrapUrl": { "description": "Settings copy card: bootstrap URL title" },
+
+  "settingsStartprompt": "Agent Startprompt",
+  "@settingsStartprompt": { "description": "Settings copy card: start prompt title" },
+
+  "settingsWriteCommands": "Validated Write Commands",
+  "@settingsWriteCommands": { "description": "Settings copy card: write commands title" },
+
+  "settingsChecklist": "Daily Agent Checklist",
+  "@settingsChecklist": { "description": "Settings checklist card title" },
+
+  "tooltipKopieren": "Kopieren",
+  "@tooltipKopieren": { "description": "Copy to clipboard tooltip" },
+
+  "snackbarKopiert": "Kopiert",
+  "@snackbarKopiert": { "description": "Snackbar: copied to clipboard" },
+
+  "exchangeFolderLoading": "Exchange folder wird geladen...",
+  "@exchangeFolderLoading": { "description": "Settings: exchange folder loading placeholder" }
+}

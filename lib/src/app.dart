@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'design/design_tokens.dart';
+import 'l10n/app_localizations.dart';
 import 'state/fitness_controller.dart';
 import 'ui/dashboard.dart';
 
@@ -63,6 +64,15 @@ class _CodexCoachAppState extends State<CodexCoachApp>
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: AppTokens.appName,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localeResolutionCallback: (locale, supportedLocales) {
+        if (locale == null) return const Locale('de');
+        for (final supported in supportedLocales) {
+          if (supported.languageCode == locale.languageCode) return supported;
+        }
+        return const Locale('de');
+      },
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: const ColorScheme.light(
