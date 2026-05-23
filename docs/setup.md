@@ -3,21 +3,21 @@
 Use this file as the first read when a user installs the app and wants to hand
 daily coaching to Codex, Claude, Gemini, or another local agent.
 
-The canonical agent instructions now live in the sibling repo:
+The canonical agent instructions live in the public repo:
 
 ```text
-/Users/tobiaslatta/Projects/temp/t4l-agent-instructions
+https://github.com/BigSlikTobi/t4l-agent-instructions
 ```
 
-The supported agent transport is the Local LAN Bridge.
+The supported agent transport is the Self-Hosted T4L Server.
 
 ## Prerequisites
 
 - Install and open the iOS app once so it can create local training data.
-- Install the local bridge package on the computer that will run the agent:
+- Install the T4L server package on the computer that will run the agent:
 
 ```bash
-pipx install /Users/tobiaslatta/Projects/temp/t4l-local-bridge
+pipx install t4l-server
 ```
 
 - Grant HealthKit permissions if the user wants recovery, activity, body
@@ -28,38 +28,39 @@ pipx install /Users/tobiaslatta/Projects/temp/t4l-local-bridge
   are durable agent context for goals, constraints, nutrition patterns,
   recovery signals, preferences, and form cues.
 
-## Start The Bridge
+## Start The Server
 
-Run the bridge on the same computer as the agent:
+Run the server on the same computer as the agent, on a home server, or on a
+private VPS:
 
 ```bash
-t4l-bridge serve --dir ~/CodexFitnessExchange
+t4l-server serve --data-dir ~/T4LServerData
 ```
 
 The command prints:
 
 ```text
-Local URL: http://<local-ip>:8787
-Pairing token: 123-456
+Server URL: http://<local-ip>:8787
+API key: 123-456
 ```
 
-Enter the Local URL and Pairing Token in the app Settings screen, tap
+Enter the Server URL and API key in the app Settings screen, tap
 `Connect`, then tap `Push Context`.
 
-If the computer restarts, sleeps, changes network, or the bridge process stops,
-restart the bridge and reconnect with the newly printed URL/token.
+If the computer restarts, sleeps, changes network, or the server process stops,
+restart the server and reconnect with the newly printed URL/API key.
 
 ## Agent Startup Checklist
 
-1. Read the sibling agent instructions repo:
-   `/Users/tobiaslatta/Projects/temp/t4l-agent-instructions`.
+1. Read the public agent instructions repo:
+   `https://github.com/BigSlikTobi/t4l-agent-instructions`.
 2. Use the adapter for the current runtime:
    `agents/codex/SKILL.md`, `agents/claude/CLAUDE.md`, or
    `agents/gemini/GEMINI.md`.
-3. Verify `t4l-bridge` is installed. If missing, ask the user before installing
+3. Verify `t4l-server` is installed. If missing, ask the user before installing
    the official local package.
-4. Start or reuse the bridge with:
-   `t4l-bridge serve --dir ~/CodexFitnessExchange`.
+4. Start or reuse the server with:
+   `t4l-server serve --data-dir ~/T4LServerData`.
 5. Wait for the user to connect the app and tap `Push Context`.
 6. Inspect available exchange files before giving advice. Common files are:
    `day_context.json`, `daily_snapshot.json`, `athlete_profile.json`,
@@ -87,17 +88,17 @@ restart the bridge and reconnect with the newly printed URL/token.
 ## Codex Automation
 
 In Codex, create a daily morning automation that runs against this repository
-and uses the Local LAN Bridge exchange folder as the source of truth. The
+and uses the Self-Hosted T4L Server exchange folder as the source of truth. The
 automation prompt should say:
 
 ```text
-Read the local T4L agent instructions repo:
-/Users/tobiaslatta/Projects/temp/t4l-agent-instructions
+Read the T4L agent instructions repo:
+https://github.com/BigSlikTobi/t4l-agent-instructions
 
 Use agents/codex/SKILL.md. Verify or start:
-t4l-bridge serve --dir ~/CodexFitnessExchange
+t4l-server serve --data-dir ~/T4LServerData
 
-Wait for fresh app context from the Local LAN Bridge before coaching. Inspect
+Wait for fresh app context from the Self-Hosted T4L Server before coaching. Inspect
 day_context.json, daily_snapshot.json, athlete_profile.json,
 training_block_request.json, nutrition_analysis_request.json, active memoryWiki,
 recent training logs, nutrition logs, and HealthKit activity summaries. Produce
@@ -115,7 +116,7 @@ context appears stale and ask the user to push fresh context from the app.
 
 For Claude, Gemini, or another agent, use the same operating contract:
 
-- Give the agent the local instructions repo and the bridge exchange folder.
+- Give the agent the local instructions repo and the server folder.
 - Require it to inspect the exchange files before coaching.
 - Require validated writes:
   - `python3 tools/write_training_block_plan.py plan.json`

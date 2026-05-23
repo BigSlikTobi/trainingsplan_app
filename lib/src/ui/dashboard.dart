@@ -16,9 +16,8 @@ import 'today_hero_card.dart';
 import 'workout_summary_screen.dart';
 
 const _agentInstructionsRepo =
-    '/Users/tobiaslatta/Projects/temp/t4l-agent-instructions';
-const _bridgeInstallCommand =
-    'pipx install /Users/tobiaslatta/Projects/temp/t4l-local-bridge';
+    'https://github.com/BigSlikTobi/t4l-agent-instructions';
+const _bridgeInstallCommand = 'pipx install t4l-server';
 const _bridgeServeCommand = 't4l-server serve --data-dir ~/T4LServerData';
 
 class CoachDashboard extends StatefulWidget {
