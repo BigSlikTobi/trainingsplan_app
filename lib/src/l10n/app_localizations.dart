@@ -110,10 +110,10 @@ abstract class AppLocalizations {
   /// **'Blocks'**
   String get navBlocks;
 
-  /// Bottom nav: nutrition tab
+  /// Bottom nav: fuel/nutrition tab
   ///
   /// In de, this message translates to:
-  /// **'Ernaehrung'**
+  /// **'Fuel'**
   String get navErnaehrung;
 
   /// Bottom nav: coach tab
@@ -146,6 +146,12 @@ abstract class AppLocalizations {
   /// **'Snapshot exportieren'**
   String get tooltipExport;
 
+  /// AppBar settings/gear icon tooltip
+  ///
+  /// In de, this message translates to:
+  /// **'Einstellungen'**
+  String get tooltipSettings;
+
   /// Section label: exercises list
   ///
   /// In de, this message translates to:
@@ -157,12 +163,6 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Starten'**
   String get btnStarten;
-
-  /// Create block button label
-  ///
-  /// In de, this message translates to:
-  /// **'+ Block erstellen'**
-  String get btnBlockErstellen;
 
   /// Import Codex plan button label
   ///
@@ -179,7 +179,7 @@ abstract class AppLocalizations {
   /// Empty state subtitle: no active block
   ///
   /// In de, this message translates to:
-  /// **'Starte mit einer Vorlage oder importiere deinen Codex Plan.'**
+  /// **'Importiere deinen Codex Plan, um zu starten.'**
   String get keinAktiverBlockSubtitle;
 
   /// Coach note eyebrow label
@@ -725,7 +725,7 @@ abstract class AppLocalizations {
   /// Blocks page hero panel body
   ///
   /// In de, this message translates to:
-  /// **'Starte lokal mit einer Sport-Vorlage oder importiere den Block, den Codex in iCloud bereitstellt.'**
+  /// **'Importiere den Block, den Codex in iCloud bereitstellt.'**
   String get blocksHeroBody;
 
   /// Blocks count trailing text

@@ -211,6 +211,39 @@ The file uses schema `day_context.v1` and includes:
 - `trainingLogs`, `nutritionLogs`, `latestWorkoutLog`, `latestNutrition`,
   profile, active block, next workout, and memory wiki.
 
+Each workout log in `trainingLogs` / `latestWorkoutLog` may include:
+
+- `totalDurationSeconds` — **active** seconds (wall time between `startedAt`
+  and `completedAt` minus `pausedSeconds`). Omitted while the workout is
+  still active.
+- `pausedSeconds` — total seconds the session timer was paused (omitted
+  when zero).
+- `exerciseTimings[]` — one entry per planned exercise the user timed during
+  the session. Each exercise can be timed exactly once (Start → optionally
+  Pause/Resume → Stop is terminal). When every planned exercise has been
+  stopped, the workout auto-closes and the user reviews a summary screen.
+  Fields:
+  - `exerciseId`, `exerciseName`
+  - `startedAt`, `completedAt` (ISO-8601). `completedAt` is omitted while
+    the timer is still running or paused; on workout stop any non-terminal
+    timer is auto-closed to the workout's `completedAt`.
+  - `pausedSeconds` — total seconds this exercise spent paused (omitted
+    when zero).
+  - `durationSeconds` — **active** seconds (wall time minus `pausedSeconds`).
+    Omitted while running.
+  - `healthSnapshot` (optional) — `LiveHealthMetrics` (heart rate, steps,
+    active energy, blood oxygen) read from HealthKit for the exercise's
+    `startedAt → completedAt` wall-clock window. May be absent if HealthKit
+    reads failed or returned no samples.
+  - `notes` (optional) — free-text the user entered for this specific
+    exercise on the post-workout summary screen (e.g. "right knee pinched
+    on set 2"). Empty string when omitted.
+
+Use per-exercise active durations and snapshots to gauge true work time,
+rest length, and per-exercise effort when adapting the next session.
+Paused intervals are excluded from durations but preserved separately so
+the coach can spot unusually long rests.
+
 When adapting tomorrow's training or today's nutrition, consider post-training
 walks, runs, rides, and other Apple Fitness activity as recovery and energy-load
 signals. Missing HealthKit permissions or unavailable metrics are represented in

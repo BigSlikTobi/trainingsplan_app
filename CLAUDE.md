@@ -44,7 +44,7 @@ Single-page Material 3 app rooted at `lib/main.dart` → `lib/src/app.dart`. Sta
 
 - `lib/src/state/fitness_controller.dart` — the single `ChangeNotifier` owning all app state (training blocks, workouts, logs, nutrition, profile). Exposed app-wide through `FitnessScope` (InheritedNotifier in `app.dart`). New behavior almost always belongs here, not in new abstractions.
 - `lib/src/models/fitness_models.dart` — all domain models (`TrainingBlock`, `Workout`, `Exercise`, nutrition entities) with `toJson`/`fromJson`. The JSON shape here is the contract for both the Codex exchange files and the OpenAI Responses API output.
-- `lib/src/data/` — `local_store.dart` (Drift/SQLite persistence), `seed_data.dart`, `exercise_library.dart` (built-in exercise reference data used at render time for *locally created* plans only — Codex-imported plans do not fall back to it).
+- `lib/src/data/` — `local_store.dart` (Drift/SQLite persistence) and `seed_data.dart` exposing `createEmptyFitnessData()`. The app has **no local block templates** — first launch is an empty shell and all training blocks come from the agent via the Codex JSON exchange.
 - `lib/src/services/`
   - `coach_exchange_service.dart` — watches iCloud exchange dir, parses `training_block_plan.json` and `nutrition_analysis_result.json`, surfaces "new block available" prompts.
   - `exchange_directory_service.dart` — resolves iOS ubiquity container path `Documents/CodexFitnessExchange`.

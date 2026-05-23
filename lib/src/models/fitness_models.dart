@@ -480,6 +480,88 @@ class LoggedSet {
   }
 }
 
+class ExerciseTiming {
+  const ExerciseTiming({
+    required this.exerciseId,
+    required this.exerciseName,
+    required this.startedAt,
+    this.completedAt,
+    this.pausedAt,
+    this.pausedSeconds = 0,
+    this.healthSnapshot,
+    this.notes = '',
+  });
+
+  final String exerciseId;
+  final String exerciseName;
+  final DateTime startedAt;
+  final DateTime? completedAt;
+  final DateTime? pausedAt;
+  final int pausedSeconds;
+  final LiveHealthMetrics? healthSnapshot;
+  final String notes;
+
+  bool get isStopped => completedAt != null;
+  bool get isPaused => pausedAt != null && !isStopped;
+  bool get isRunning => !isStopped && !isPaused;
+
+  /// Active wall time minus all paused intervals.
+  int? get durationSeconds {
+    final end = completedAt;
+    if (end == null) return null;
+    final wall = end.difference(startedAt).inSeconds;
+    final active = wall - pausedSeconds;
+    return active < 0 ? 0 : active;
+  }
+
+  ExerciseTiming copyWith({
+    DateTime? completedAt,
+    DateTime? pausedAt,
+    bool clearPausedAt = false,
+    int? pausedSeconds,
+    LiveHealthMetrics? healthSnapshot,
+    String? notes,
+  }) {
+    return ExerciseTiming(
+      exerciseId: exerciseId,
+      exerciseName: exerciseName,
+      startedAt: startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      pausedAt: clearPausedAt ? null : (pausedAt ?? this.pausedAt),
+      pausedSeconds: pausedSeconds ?? this.pausedSeconds,
+      healthSnapshot: healthSnapshot ?? this.healthSnapshot,
+      notes: notes ?? this.notes,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'exerciseId': exerciseId,
+    'exerciseName': exerciseName,
+    'startedAt': startedAt.toIso8601String(),
+    if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+    if (pausedAt != null) 'pausedAt': pausedAt!.toIso8601String(),
+    if (pausedSeconds > 0) 'pausedSeconds': pausedSeconds,
+    if (durationSeconds != null) 'durationSeconds': durationSeconds,
+    if (healthSnapshot != null) 'healthSnapshot': healthSnapshot!.toJson(),
+    if (notes.isNotEmpty) 'notes': notes,
+  };
+
+  factory ExerciseTiming.fromJson(Map<String, dynamic> json) {
+    return ExerciseTiming(
+      exerciseId: json['exerciseId'] as String? ?? '',
+      exerciseName: json['exerciseName'] as String? ?? '',
+      startedAt:
+          DateTime.tryParse(json['startedAt'] as String? ?? '') ??
+          DateTime.now(),
+      completedAt: DateTime.tryParse(json['completedAt'] as String? ?? ''),
+      pausedAt: DateTime.tryParse(json['pausedAt'] as String? ?? ''),
+      pausedSeconds: _intValue(json['pausedSeconds'], 0),
+      healthSnapshot: _healthMetricsValue(json['healthSnapshot']),
+      notes: json['notes'] as String? ?? '',
+    );
+  }
+}
+
 class WorkoutLog {
   const WorkoutLog({
     required this.id,
@@ -493,6 +575,9 @@ class WorkoutLog {
     required this.sets,
     required this.healthWriteStatus,
     this.healthMetrics,
+    this.exerciseTimings = const [],
+    this.pausedAt,
+    this.pausedSeconds = 0,
   });
 
   final String id;
@@ -506,8 +591,24 @@ class WorkoutLog {
   final List<LoggedSet> sets;
   final String healthWriteStatus;
   final LiveHealthMetrics? healthMetrics;
+  final List<ExerciseTiming> exerciseTimings;
+  final DateTime? pausedAt;
+  final int pausedSeconds;
+
+  bool get isStopped => completedAt != null;
+  bool get isPaused => pausedAt != null && !isStopped;
+  bool get isRunning => !isStopped && !isPaused;
 
   double get totalVolume => sets.fold(0, (sum, item) => sum + item.volume);
+
+  /// Active wall time minus all paused intervals.
+  int? get totalDurationSeconds {
+    final end = completedAt;
+    if (end == null) return null;
+    final wall = end.difference(startedAt).inSeconds;
+    final active = wall - pausedSeconds;
+    return active < 0 ? 0 : active;
+  }
 
   WorkoutLog copyWith({
     DateTime? completedAt,
@@ -517,6 +618,10 @@ class WorkoutLog {
     List<LoggedSet>? sets,
     String? healthWriteStatus,
     LiveHealthMetrics? healthMetrics,
+    List<ExerciseTiming>? exerciseTimings,
+    DateTime? pausedAt,
+    bool clearPausedAt = false,
+    int? pausedSeconds,
   }) {
     return WorkoutLog(
       id: id,
@@ -530,6 +635,9 @@ class WorkoutLog {
       sets: sets ?? this.sets,
       healthWriteStatus: healthWriteStatus ?? this.healthWriteStatus,
       healthMetrics: healthMetrics ?? this.healthMetrics,
+      exerciseTimings: exerciseTimings ?? this.exerciseTimings,
+      pausedAt: clearPausedAt ? null : (pausedAt ?? this.pausedAt),
+      pausedSeconds: pausedSeconds ?? this.pausedSeconds,
     );
   }
 
@@ -539,12 +647,18 @@ class WorkoutLog {
     'title': title,
     'startedAt': startedAt.toIso8601String(),
     'completedAt': completedAt?.toIso8601String(),
+    if (pausedAt != null) 'pausedAt': pausedAt!.toIso8601String(),
+    if (pausedSeconds > 0) 'pausedSeconds': pausedSeconds,
+    if (totalDurationSeconds != null)
+      'totalDurationSeconds': totalDurationSeconds,
     'readiness': readiness,
     'soreness': soreness,
     'notes': notes,
     'sets': sets.map((item) => item.toJson()).toList(),
     'healthWriteStatus': healthWriteStatus,
     if (healthMetrics != null) 'healthMetrics': healthMetrics!.toJson(),
+    if (exerciseTimings.isNotEmpty)
+      'exerciseTimings': exerciseTimings.map((item) => item.toJson()).toList(),
   };
 
   factory WorkoutLog.fromJson(Map<String, dynamic> json) {
@@ -562,6 +676,12 @@ class WorkoutLog {
       sets: _objectList(json['sets'], LoggedSet.fromJson),
       healthWriteStatus: json['healthWriteStatus'] as String? ?? 'not_synced',
       healthMetrics: _healthMetricsValue(json['healthMetrics']),
+      exerciseTimings: _objectList(
+        json['exerciseTimings'],
+        ExerciseTiming.fromJson,
+      ),
+      pausedAt: DateTime.tryParse(json['pausedAt'] as String? ?? ''),
+      pausedSeconds: _intValue(json['pausedSeconds'], 0),
     );
   }
 }

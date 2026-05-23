@@ -7,8 +7,8 @@
   "navBlocks": "Blocks",
   "@navBlocks": { "description": "Bottom nav: blocks tab" },
 
-  "navErnaehrung": "Ernaehrung",
-  "@navErnaehrung": { "description": "Bottom nav: nutrition tab" },
+  "navErnaehrung": "Fuel",
+  "@navErnaehrung": { "description": "Bottom nav: fuel/nutrition tab" },
 
   "navCoach": "Coach",
   "@navCoach": { "description": "Bottom nav: coach tab" },
@@ -25,14 +25,14 @@
   "tooltipExport": "Snapshot exportieren",
   "@tooltipExport": { "description": "AppBar export icon tooltip" },
 
+  "tooltipSettings": "Einstellungen",
+  "@tooltipSettings": { "description": "AppBar settings/gear icon tooltip" },
+
   "sectionUebungen": "Übungen",
   "@sectionUebungen": { "description": "Section label: exercises list" },
 
   "btnStarten": "Starten",
   "@btnStarten": { "description": "Start workout button label" },
-
-  "btnBlockErstellen": "+ Block erstellen",
-  "@btnBlockErstellen": { "description": "Create block button label" },
 
   "btnCodexPlanImportieren": "Codex Plan importieren",
   "@btnCodexPlanImportieren": { "description": "Import Codex plan button label" },
@@ -40,7 +40,7 @@
   "keinAktiverBlock": "Kein aktiver Block",
   "@keinAktiverBlock": { "description": "Empty state heading: no active block" },
 
-  "keinAktiverBlockSubtitle": "Starte mit einer Vorlage oder importiere deinen Codex Plan.",
+  "keinAktiverBlockSubtitle": "Importiere deinen Codex Plan, um zu starten.",
   "@keinAktiverBlockSubtitle": { "description": "Empty state subtitle: no active block" },
 
   "labelCoach": "COACH",
@@ -350,7 +350,7 @@
   "blocksHeroSubtitle": "Codex plant, die App fuehrt aus",
   "@blocksHeroSubtitle": { "description": "Blocks page hero panel subtitle" },
 
-  "blocksHeroBody": "Starte lokal mit einer Sport-Vorlage oder importiere den Block, den Codex in iCloud bereitstellt.",
+  "blocksHeroBody": "Importiere den Block, den Codex in iCloud bereitstellt.",
   "@blocksHeroBody": { "description": "Blocks page hero panel body" },
 
   "blocksCount": "{count} Blocks",

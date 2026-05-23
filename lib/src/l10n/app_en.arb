@@ -3,22 +3,22 @@
 
   "navHeute": "Today",
   "navBlocks": "Blocks",
-  "navErnaehrung": "Nutrition",
+  "navErnaehrung": "Fuel",
   "navCoach": "Coach",
   "navProgress": "Progress",
   "navSetup": "Setup",
 
   "tooltipHealthKit": "Connect HealthKit",
   "tooltipExport": "Export snapshot",
+  "tooltipSettings": "Settings",
 
   "sectionUebungen": "Exercises",
 
   "btnStarten": "Start",
-  "btnBlockErstellen": "+ Create Block",
   "btnCodexPlanImportieren": "Import Codex Plan",
 
   "keinAktiverBlock": "No active block",
-  "keinAktiverBlockSubtitle": "Start with a template or import your Codex Plan.",
+  "keinAktiverBlockSubtitle": "Import your Codex Plan to get started.",
 
   "labelCoach": "COACH",
   "labelProfil": "Profile",
@@ -141,7 +141,7 @@
 
   "blocksHeroTitle": "8-Week Training Blocks",
   "blocksHeroSubtitle": "Codex plans, the app executes",
-  "blocksHeroBody": "Start locally with a sport template or import the block Codex provides in iCloud.",
+  "blocksHeroBody": "Import the block Codex provides in iCloud.",
 
   "blocksCount": "{count} Blocks",
 

@@ -27,7 +27,7 @@ class _CodexCoachAppState extends State<CodexCoachApp>
     WidgetsBinding.instance.addObserver(this);
     controller = FitnessController();
     controller.addListener(_syncWorkoutWakelock);
-    unawaited(controller.load());
+    unawaited(controller.load().then((_) => controller.syncWorkoutToWatch()));
     _exchangePoller = Timer.periodic(
       const Duration(seconds: 30),
       (_) => controller.checkForCodexUpdates(),
@@ -48,6 +48,7 @@ class _CodexCoachAppState extends State<CodexCoachApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       controller.checkForCodexUpdates();
+      controller.syncWorkoutToWatch();
       _syncWorkoutWakelock(force: true);
     }
   }

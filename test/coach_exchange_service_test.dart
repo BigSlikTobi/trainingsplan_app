@@ -2,15 +2,16 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trainingsplan_app/src/data/local_store.dart';
-import 'package:trainingsplan_app/src/data/seed_data.dart';
 import 'package:trainingsplan_app/src/models/fitness_models.dart';
 import 'package:trainingsplan_app/src/services/coach_exchange_service.dart';
+
+import 'helpers/sample_fitness_data.dart';
 
 void main() {
   test('daily snapshot exports latest workout log with logged sets', () async {
     final store = _CapturingStore();
     final service = CoachExchangeService(store);
-    final data = createSeedFitnessData();
+    final data = sampleFitnessData();
     final workout = data.nextWorkout!;
     final olderLog = WorkoutLog(
       id: 'older-log',
@@ -75,7 +76,7 @@ void main() {
       final service = CoachExchangeService(store);
 
       final (request, path) = await service.exportNutritionAnalysisRequest(
-        data: createSeedFitnessData(),
+        data: sampleFitnessData(),
         description: 'Chicken rice bowl with avocado',
       );
 
@@ -97,7 +98,7 @@ void main() {
   test('day context exports local-day activity, sessions, and logs', () async {
     final store = _CapturingStore();
     final service = CoachExchangeService(store);
-    final data = createSeedFitnessData();
+    final data = sampleFitnessData();
     final workout = data.nextWorkout!;
     final todayLog = WorkoutLog(
       id: 'today-log',
@@ -171,7 +172,7 @@ void main() {
   test('daily snapshot exports active memory wiki entries', () async {
     final store = _CapturingStore();
     final service = CoachExchangeService(store);
-    final data = createSeedFitnessData().copyWith(
+    final data = sampleFitnessData().copyWith(
       memories: [
         MemoryEntry(
           id: 'active-memory',
@@ -213,7 +214,7 @@ void main() {
     final store = _CapturingStore();
     final service = CoachExchangeService(store);
     final now = DateTime(2026, 5, 20, 9);
-    final data = createSeedFitnessData().copyWith(
+    final data = sampleFitnessData().copyWith(
       memories: [
         MemoryEntry(
           id: 'nutrition-memory',
@@ -252,6 +253,36 @@ void main() {
 
     expect(entries.single, containsPair('title', 'Lunch pattern'));
   });
+
+  test(
+    'reads exchange memory wiki entries from exported context files',
+    () async {
+      final store = _CapturingStore()
+        ..jsonFiles['day_context.json'] = {
+          'schema': 'day_context.v1',
+          'memoryWiki': {
+            'entries': [
+              {
+                'category': 'constraint',
+                'title': 'Right hip flexor',
+                'summary': 'No sprints until pain-free.',
+                'source': 'manual_codex_decision',
+                'confidence': 1.0,
+                'updatedAt': '2026-05-21T10:35:00+02:00',
+              },
+            ],
+          },
+        };
+      final service = CoachExchangeService(store);
+
+      final memories = await service.readExchangeMemoryWikiEntries();
+
+      expect(memories, hasLength(1));
+      expect(memories.single.category, MemoryCategory.constraint);
+      expect(memories.single.title, 'Right hip flexor');
+      expect(memories.single.active, isTrue);
+    },
+  );
 
   test('nutrition analysis result validates positive calories', () async {
     final store = _CapturingStore()

@@ -14,6 +14,11 @@ class CoachExchangeService {
   static const _nutritionResultFile = 'nutrition_analysis_result.json';
   static const _dayContextFile = 'day_context.json';
   static const _fuelGuidanceFile = 'fuel_guidance.json';
+  static const _memoryWikiFiles = [
+    _dayContextFile,
+    'daily_snapshot.json',
+    _nutritionRequestFile,
+  ];
 
   Future<String> exportDailySnapshot(FitnessData data) async {
     final recentLogs = [...data.logs]..sort(_compareWorkoutLogsNewestFirst);
@@ -235,6 +240,25 @@ class CoachExchangeService {
 
   Future<void> clearFuelGuidance() {
     return _store.deleteExchangeJson(_fuelGuidanceFile);
+  }
+
+  Future<List<MemoryEntry>> readExchangeMemoryWikiEntries() async {
+    final entries = <MemoryEntry>[];
+    for (final fileName in _memoryWikiFiles) {
+      final json = await _store.readExchangeJson(fileName);
+      final wiki = (json?['memoryWiki'] as Map?)?.cast<String, dynamic>();
+      final rawEntries = wiki?['entries'];
+      if (rawEntries is! List) continue;
+      for (final raw in rawEntries) {
+        if (raw is! Map) continue;
+        final entry = MemoryEntry.fromJson(raw.cast<String, dynamic>());
+        if (entry.title.trim().isEmpty || entry.summary.trim().isEmpty) {
+          continue;
+        }
+        entries.add(entry);
+      }
+    }
+    return entries;
   }
 
   Future<String?> _copyMealImage(String? imagePath) async {

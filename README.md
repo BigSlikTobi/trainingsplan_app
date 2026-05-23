@@ -44,3 +44,9 @@ python3 tools/write_training_block_plan.py plan.json
 
 See `docs/setup.md` for first-run setup and
 `docs/codex_coach_workflow.md` for the coaching flow and JSON contract.
+
+## Apple Watch app
+
+The iOS workspace includes a native SwiftUI watchOS target,
+`T4LTrainerWatchApp`, for executing the current workout on Apple Watch. See
+`docs/watch_app.md` for signing, first-run, HealthKit, and validation steps.

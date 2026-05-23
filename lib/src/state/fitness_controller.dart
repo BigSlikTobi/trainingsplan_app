@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -7,32 +8,44 @@ import '../data/seed_data.dart';
 import '../models/fitness_models.dart';
 import '../services/coach_exchange_service.dart';
 import '../services/health_sync_service.dart';
+import '../services/local_bridge_service.dart';
 import '../services/media_capture_service.dart';
+import '../services/watch_sync_service.dart';
 
 class FitnessController extends ChangeNotifier {
   FitnessController({
     LocalFitnessStore? store,
     HealthSyncService? health,
     MediaCaptureService? media,
+    LocalBridgeService? bridge,
+    WatchSyncService? watchSync,
   }) : _store = store ?? LocalFitnessStore(),
        _health = health ?? HealthSyncService(),
-       _media = media ?? MediaCaptureService() {
+       _media = media ?? MediaCaptureService(),
+       _bridge = bridge ?? LocalBridgeService(),
+       _watchSync = watchSync ?? WatchSyncService() {
     _coach = CoachExchangeService(_store);
   }
 
   final LocalFitnessStore _store;
   final HealthSyncService _health;
   final MediaCaptureService _media;
+  final LocalBridgeService _bridge;
+  final WatchSyncService _watchSync;
   late final CoachExchangeService _coach;
 
-  FitnessData _data = createSeedFitnessData();
+  FitnessData _data = createEmptyFitnessData();
   bool _isLoading = true;
   bool _hasPendingCodexBlock = false;
   bool _hasPendingNutritionAnalysis = false;
   bool _isHealthTracking = false;
   LiveHealthMetrics? _liveHealthMetrics;
   Timer? _healthPoller;
+  Timer? _uiTicker;
   String _status = 'Loading local training data...';
+  WorkoutLog? _justCompletedLog;
+  LocalBridgeConfig _bridgeConfig = const LocalBridgeConfig();
+  StreamSubscription<Map<String, dynamic>>? _watchEvents;
 
   FitnessData get data => _data;
   bool get isLoading => _isLoading;
@@ -45,9 +58,88 @@ class FitnessController extends ChangeNotifier {
   PlannedWorkout? get nextWorkout => _data.nextWorkout;
   bool get hasActiveWorkout => _data.hasActiveWorkout;
   WorkoutLog? get activeWorkoutLog => _activeWorkoutLog();
+  WorkoutLog? get justCompletedLog => _justCompletedLog;
   MealAnalysisRequest? get pendingMealRequest => _data.pendingMealRequest;
   MealAnalysisResult? get pendingMealResult => _data.pendingMealResult;
   FuelGuidance? get fuelGuidance => _data.fuelGuidance;
+  LocalBridgeConfig get bridgeConfig => _bridgeConfig;
+
+  Future<void> syncWorkoutToWatch() async {
+    final workout = nextWorkout;
+    if (workout == null) {
+      _status = 'No workout available for Apple Watch sync';
+      notifyListeners();
+      return;
+    }
+
+    try {
+      _status = await _watchSync.syncWorkout(
+        workout: workout,
+        activeLog: _activeWorkoutLog(),
+      );
+    } on Object catch (error) {
+      _status = 'Apple Watch sync failed: $error';
+    }
+    notifyListeners();
+  }
+
+  Future<void> handleWatchWorkoutCompleted(Map<String, dynamic> payload) async {
+    final completion = _watchCompletionLog(payload);
+    if (completion == null) {
+      _status = 'Ignored invalid Apple Watch workout payload';
+      notifyListeners();
+      return;
+    }
+
+    final logs = [..._data.logs];
+    final activeIndex = logs.indexWhere(
+      (log) => log.workoutId == completion.workoutId && log.completedAt == null,
+    );
+    final completedIndex = logs.indexWhere(
+      (log) => log.workoutId == completion.workoutId && log.completedAt != null,
+    );
+
+    if (activeIndex >= 0) {
+      logs[activeIndex] = _mergeWatchCompletion(
+        existing: logs[activeIndex],
+        incoming: completion,
+      );
+    } else if (completedIndex >= 0) {
+      final existing = logs[completedIndex];
+      if (completion.sets.length <= existing.sets.length) {
+        _markWatchCompletionHandled(payload);
+        _status = 'Ignored duplicate Apple Watch workout';
+        notifyListeners();
+        return;
+      }
+      logs[completedIndex] = _mergeWatchCompletion(
+        existing: existing,
+        incoming: completion,
+      );
+    } else {
+      logs.insert(0, completion);
+    }
+
+    _stopHealthPolling();
+    _stopUiTicker();
+    _data = _data.copyWith(logs: logs);
+    _justCompletedLog = logs.firstWhere(
+      (log) => log.workoutId == completion.workoutId && log.completedAt != null,
+      orElse: () => completion,
+    );
+    _captureWorkoutMemory(_justCompletedLog!);
+    await _persist('Imported Apple Watch workout');
+    await _exportDayContext(notify: false);
+
+    _markWatchCompletionHandled(payload);
+  }
+
+  void _markWatchCompletionHandled(Map<String, dynamic> payload) {
+    final completionId = payload['completionId'] as String?;
+    if (completionId != null && completionId.isNotEmpty) {
+      unawaited(_watchSync.markCompletionHandled(completionId));
+    }
+  }
 
   Future<void> addMemory({
     required MemoryCategory category,
@@ -136,31 +228,21 @@ class FitnessController extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     _data = await _store.load();
+    _bridgeConfig = await _store.loadBridgeConfig();
     _isLoading = false;
     _status = 'Local-first coaching data loaded';
+    try {
+      _watchEvents ??= _watchSync.events.listen((event) {
+        final payload = (event['payload'] as Map?)?.cast<String, dynamic>();
+        if (payload != null) {
+          unawaited(handleWatchWorkoutCompleted(payload));
+        }
+      }, onError: (_) {});
+    } on Object {
+      _watchEvents = null;
+    }
     notifyListeners();
     await checkForCodexUpdates();
-  }
-
-  Future<void> createLocalBlock(TrainingStyle style) async {
-    final block = createTemplateBlock(style);
-    _data = _data.copyWith(
-      blocks: [block, ..._data.blocks],
-      activeBlockId: block.id,
-      coachDecisions: [
-        CoachDecision(
-          id: newId('decision'),
-          createdAt: DateTime.now(),
-          title: '${style.label} block created',
-          rationale:
-              'This is a structured local 8-week block. Codex can replace it by writing a new training_block_plan.json to iCloud.',
-          safetyFlags: const [],
-          accepted: true,
-        ),
-        ..._data.coachDecisions,
-      ],
-    );
-    await _persist('Created ${style.label} block');
   }
 
   Future<String> exportDailySnapshot() async {
@@ -213,6 +295,187 @@ class FitnessController extends ChangeNotifier {
     await checkForCodexBlockPlan();
     await checkForNutritionAnalysisResult();
     await importFuelGuidance();
+    await importExchangeMemoryWiki();
+  }
+
+  Future<void> saveBridgeConfig({
+    required String baseUrl,
+    required String token,
+  }) async {
+    _bridgeConfig = _bridgeConfig.copyWith(
+      baseUrl: baseUrl.trim(),
+      token: token.trim(),
+      clearLastSyncAt: true,
+    );
+    await _store.saveBridgeConfig(_bridgeConfig);
+    _status = _bridgeConfig.isConfigured
+        ? 'Self-hosted server settings saved'
+        : 'Server URL and API key are required';
+    notifyListeners();
+  }
+
+  Future<void> testBridgeConnection() async {
+    if (!_bridgeConfig.isConfigured) {
+      _status = 'Enter the self-hosted server URL and API key first';
+      notifyListeners();
+      return;
+    }
+    try {
+      await _bridge.health(_bridgeConfig);
+      _status = 'Self-hosted server connected';
+    } on Object catch (error) {
+      _status = 'Self-hosted server connection failed: $error';
+    }
+    notifyListeners();
+  }
+
+  Future<void> migrateToServer() async {
+    if (!_bridgeConfig.isConfigured) {
+      _status = 'Enter the self-hosted server URL and API key first';
+      notifyListeners();
+      return;
+    }
+    try {
+      await _exportDayContext(notify: false);
+      await _coach.exportDailySnapshot(_data);
+      final dayContext = await _store.readExchangeJson('day_context.json');
+      final dailySnapshot = await _store.readExchangeJson(
+        'daily_snapshot.json',
+      );
+      await _bridge.uploadAppSnapshot(_bridgeConfig, {
+        'schema': 't4l_app_snapshot.v1',
+        'createdAt': DateTime.now().toIso8601String(),
+        'fitnessData': _data.toJson(),
+        'dayContext': ?dayContext,
+        'dailySnapshot': ?dailySnapshot,
+      });
+      _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
+      await _store.saveBridgeConfig(_bridgeConfig);
+      _status =
+          'Migrated local training snapshot to self-hosted server. Phone data unchanged.';
+    } on Object catch (error) {
+      _status = 'Server migration failed: $error';
+    }
+    notifyListeners();
+  }
+
+  Future<void> pushBridgeContext() async {
+    if (!_bridgeConfig.isConfigured) {
+      _status = 'Enter the self-hosted server URL and API key first';
+      notifyListeners();
+      return;
+    }
+    try {
+      await _exportDayContext(notify: false);
+      await _coach.exportDailySnapshot(_data);
+      await _bridge.uploadProfile(_bridgeConfig, {
+        'schema': 'athlete_profile.v1',
+        'createdAt': DateTime.now().toIso8601String(),
+        'profile': _data.profile.toJson(),
+      });
+      final uploaded = <String>['athlete_profile.json'];
+      final dayContext = await _store.readExchangeJson('day_context.json');
+      if (dayContext != null) {
+        await _bridge.uploadDayContext(_bridgeConfig, dayContext);
+        uploaded.add('day_context.json');
+      }
+      final dailySnapshot = await _store.readExchangeJson(
+        'daily_snapshot.json',
+      );
+      if (dailySnapshot != null) {
+        await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
+        uploaded.add('daily_snapshot.json');
+      }
+      for (final fileName in const [
+        'training_block_request.json',
+        'nutrition_analysis_request.json',
+      ]) {
+        final payload = await _store.readExchangeJson(fileName);
+        if (payload == null) continue;
+        await _bridge.uploadJson(_bridgeConfig, fileName, payload);
+        uploaded.add(fileName);
+      }
+      final exchangeDir = await _store.getExchangeDirectory();
+      final imagesDir = Directory('${exchangeDir.path}/meal_images');
+      if (imagesDir.existsSync()) {
+        for (final entity in imagesDir.listSync()) {
+          if (entity is! File) continue;
+          final name = entity.uri.pathSegments.last;
+          await _bridge.uploadBytes(
+            _bridgeConfig,
+            'meal_images/$name',
+            await entity.readAsBytes(),
+          );
+          uploaded.add('meal_images/$name');
+        }
+      }
+      _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
+      await _store.saveBridgeConfig(_bridgeConfig);
+      _status = 'Pushed ${uploaded.join(', ')} to self-hosted server';
+    } on Object catch (error) {
+      _status = 'Server push failed: $error';
+    }
+    notifyListeners();
+  }
+
+  Future<void> pullBridgeResults() async {
+    if (!_bridgeConfig.isConfigured) {
+      _status = 'Enter the self-hosted server URL and API key first';
+      notifyListeners();
+      return;
+    }
+    final downloaded = <String>[];
+    try {
+      const resultFiles = {
+        'training_block_plan': 'training_block_plan.json',
+        'next_day_plan': 'next_day_plan.json',
+        'nutrition_analysis_result': 'nutrition_analysis_result.json',
+        'fuel_guidance': 'fuel_guidance.json',
+      };
+      final pendingKinds = await _bridge.pendingResultKinds(_bridgeConfig);
+      for (final kind in pendingKinds) {
+        final fileName = resultFiles[kind];
+        if (fileName == null) continue;
+        final payload = await _bridge.downloadResult(_bridgeConfig, kind);
+        if (payload == null) continue;
+        await _store.writeExchangeJson(fileName, payload);
+        await _bridge.markResultConsumed(_bridgeConfig, kind);
+        downloaded.add(fileName);
+      }
+      await checkForCodexUpdates();
+      _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
+      await _store.saveBridgeConfig(_bridgeConfig);
+      _status = downloaded.isEmpty
+          ? 'No self-hosted server results found'
+          : 'Pulled ${downloaded.join(', ')} from self-hosted server';
+    } on Object catch (error) {
+      _status = 'Server result check failed: $error';
+    }
+    notifyListeners();
+  }
+
+  Future<void> importExchangeMemoryWiki() async {
+    try {
+      final incoming = await _coach.readExchangeMemoryWikiEntries();
+      if (incoming.isEmpty) return;
+      final existingKeys = _data.memories.map(_memoryImportKey).toSet();
+      final imported = <MemoryEntry>[];
+      for (final memory in incoming) {
+        final key = _memoryImportKey(memory);
+        if (existingKeys.add(key)) {
+          imported.add(memory);
+        }
+      }
+      if (imported.isEmpty) return;
+      _data = _data.copyWith(memories: [...imported, ..._data.memories]);
+      await _persist(
+        'Imported ${imported.length} coach memory '
+        '${imported.length == 1 ? 'entry' : 'entries'}',
+      );
+    } on Object catch (error) {
+      _status = 'Memory wiki import failed: $error';
+      notifyListeners();
+    }
   }
 
   Future<void> importFuelGuidance() async {
@@ -351,8 +614,367 @@ class FitnessController extends ChangeNotifier {
     _isHealthTracking = true;
     _status = 'Workout started - live HealthKit tracking active';
     _startHealthPolling();
+    _startUiTicker();
     notifyListeners();
     await refreshLiveHealthMetrics();
+    unawaited(syncWorkoutToWatch());
+  }
+
+  Future<void> startExerciseTimer({
+    required String exerciseId,
+    required String exerciseName,
+  }) async {
+    final index = _activeWorkoutLogIndex();
+    if (index < 0) {
+      _status = 'Start the workout before timing an exercise';
+      notifyListeners();
+      return;
+    }
+    final log = _data.logs[index];
+    final hasTiming = log.exerciseTimings.any(
+      (t) => t.exerciseId == exerciseId,
+    );
+    if (hasTiming) return;
+
+    final timing = ExerciseTiming(
+      exerciseId: exerciseId,
+      exerciseName: exerciseName,
+      startedAt: DateTime.now(),
+    );
+    final updated = log.copyWith(
+      exerciseTimings: [...log.exerciseTimings, timing],
+    );
+    final logs = [..._data.logs]..[index] = updated;
+    _data = _data.copyWith(logs: logs);
+    await _persist('Started timer: $exerciseName');
+  }
+
+  Future<void> pauseExerciseTimer(String exerciseId) async {
+    final mutated = _mutateActiveExerciseTiming(
+      exerciseId,
+      (t) => t.isRunning ? t.copyWith(pausedAt: DateTime.now()) : null,
+    );
+    if (mutated != null) {
+      await _persist('Paused timer: ${mutated.exerciseName}');
+    }
+  }
+
+  Future<void> resumeExerciseTimer(String exerciseId) async {
+    final mutated = _mutateActiveExerciseTiming(exerciseId, (t) {
+      if (!t.isPaused) return null;
+      final added = DateTime.now().difference(t.pausedAt!).inSeconds;
+      return t.copyWith(
+        clearPausedAt: true,
+        pausedSeconds: t.pausedSeconds + (added < 0 ? 0 : added),
+      );
+    });
+    if (mutated != null) {
+      await _persist('Resumed timer: ${mutated.exerciseName}');
+    }
+  }
+
+  Future<void> stopExerciseTimer(
+    String exerciseId, {
+    bool autoCloseWorkout = true,
+  }) async {
+    final index = _activeWorkoutLogIndex();
+    if (index < 0) return;
+    final log = _data.logs[index];
+    final timingIndex = log.exerciseTimings.indexWhere(
+      (t) => t.exerciseId == exerciseId && !t.isStopped,
+    );
+    if (timingIndex < 0) return;
+    final current = log.exerciseTimings[timingIndex];
+
+    final now = DateTime.now();
+    var pausedSeconds = current.pausedSeconds;
+    if (current.isPaused) {
+      final added = now.difference(current.pausedAt!).inSeconds;
+      pausedSeconds += (added < 0 ? 0 : added);
+    }
+
+    LiveHealthMetrics? snapshot;
+    try {
+      snapshot = await _health.readLiveWorkoutMetrics(current.startedAt);
+    } on Object {
+      snapshot = null;
+    }
+
+    final stopped = current.copyWith(
+      completedAt: now,
+      clearPausedAt: true,
+      pausedSeconds: pausedSeconds,
+      healthSnapshot: snapshot,
+    );
+    final timings = [...log.exerciseTimings]..[timingIndex] = stopped;
+    final updated = log.copyWith(exerciseTimings: timings);
+    final logs = [..._data.logs]..[index] = updated;
+    _data = _data.copyWith(logs: logs);
+    await _persist('Stopped timer: ${current.exerciseName}');
+    if (autoCloseWorkout) await _maybeAutoCloseWorkout();
+  }
+
+  Future<void> tryAutoCloseWorkout() => _maybeAutoCloseWorkout();
+
+  Future<void> pauseCurrentWorkout() async {
+    final index = _activeWorkoutLogIndex();
+    if (index < 0) return;
+    final log = _data.logs[index];
+    if (!log.isRunning) return;
+    final updated = log.copyWith(pausedAt: DateTime.now());
+    final logs = [..._data.logs]..[index] = updated;
+    _data = _data.copyWith(logs: logs);
+    _stopHealthPolling(clearMetrics: false);
+    await _persist('Workout paused');
+    unawaited(syncWorkoutToWatch());
+  }
+
+  Future<void> resumeCurrentWorkout() async {
+    final index = _activeWorkoutLogIndex();
+    if (index < 0) return;
+    final log = _data.logs[index];
+    if (!log.isPaused) return;
+    final added = DateTime.now().difference(log.pausedAt!).inSeconds;
+    final updated = log.copyWith(
+      clearPausedAt: true,
+      pausedSeconds: log.pausedSeconds + (added < 0 ? 0 : added),
+    );
+    final logs = [..._data.logs]..[index] = updated;
+    _data = _data.copyWith(logs: logs);
+    _isHealthTracking = true;
+    _startHealthPolling();
+    await _persist('Workout resumed');
+    unawaited(syncWorkoutToWatch());
+  }
+
+  Duration? get activeSessionElapsed {
+    final log = _activeWorkoutLog();
+    if (log == null) return null;
+    final now = DateTime.now();
+    var paused = log.pausedSeconds;
+    if (log.isPaused) {
+      final extra = now.difference(log.pausedAt!).inSeconds;
+      paused += (extra < 0 ? 0 : extra);
+    }
+    final wall = now.difference(log.startedAt).inSeconds;
+    final active = wall - paused;
+    return Duration(seconds: active < 0 ? 0 : active);
+  }
+
+  Duration? elapsedForExercise(String exerciseId) {
+    final log = _activeWorkoutLog();
+    if (log == null) return null;
+    final i = log.exerciseTimings.indexWhere(
+      (t) => t.exerciseId == exerciseId && !t.isStopped,
+    );
+    if (i < 0) return null;
+    final t = log.exerciseTimings[i];
+    final now = DateTime.now();
+    var paused = t.pausedSeconds;
+    if (t.isPaused) {
+      final extra = now.difference(t.pausedAt!).inSeconds;
+      paused += (extra < 0 ? 0 : extra);
+    }
+    final wall = now.difference(t.startedAt).inSeconds;
+    final active = wall - paused;
+    return Duration(seconds: active < 0 ? 0 : active);
+  }
+
+  ExerciseTiming? _timingFor(String exerciseId) {
+    final log = _activeWorkoutLog();
+    if (log == null) return null;
+    final i = log.exerciseTimings.indexWhere((t) => t.exerciseId == exerciseId);
+    return i < 0 ? null : log.exerciseTimings[i];
+  }
+
+  bool isExerciseRunning(String exerciseId) =>
+      _timingFor(exerciseId)?.isRunning ?? false;
+  bool isExercisePaused(String exerciseId) =>
+      _timingFor(exerciseId)?.isPaused ?? false;
+  bool isExerciseStopped(String exerciseId) {
+    final log = _activeWorkoutLog() ?? _justCompletedLog;
+    if (log == null) return false;
+    return log.exerciseTimings.any(
+      (t) => t.exerciseId == exerciseId && t.isStopped,
+    );
+  }
+
+  bool get sessionIsRunning => _activeWorkoutLog()?.isRunning ?? false;
+  bool get sessionIsPaused => _activeWorkoutLog()?.isPaused ?? false;
+
+  ExerciseTiming? _mutateActiveExerciseTiming(
+    String exerciseId,
+    ExerciseTiming? Function(ExerciseTiming) transform,
+  ) {
+    final index = _activeWorkoutLogIndex();
+    if (index < 0) return null;
+    final log = _data.logs[index];
+    final timingIndex = log.exerciseTimings.indexWhere(
+      (t) => t.exerciseId == exerciseId && !t.isStopped,
+    );
+    if (timingIndex < 0) return null;
+    final updatedTiming = transform(log.exerciseTimings[timingIndex]);
+    if (updatedTiming == null) return null;
+    final timings = [...log.exerciseTimings]..[timingIndex] = updatedTiming;
+    final updatedLog = log.copyWith(exerciseTimings: timings);
+    final logs = [..._data.logs]..[index] = updatedLog;
+    _data = _data.copyWith(logs: logs);
+    return updatedTiming;
+  }
+
+  Future<void> _maybeAutoCloseWorkout() async {
+    final workout = nextWorkout;
+    final log = _activeWorkoutLog();
+    if (workout == null || log == null) return;
+    final stoppedIds = log.exerciseTimings
+        .where((t) => t.isStopped)
+        .map((t) => t.exerciseId)
+        .toSet();
+    final allDone = workout.exercises.every(
+      (e) => stoppedIds.contains(e.exerciseId),
+    );
+    if (!allDone) return;
+    await stopCurrentWorkout();
+  }
+
+  void clearJustCompleted() {
+    if (_justCompletedLog == null) return;
+    _justCompletedLog = null;
+    notifyListeners();
+  }
+
+  Future<void> updateCompletedLog(
+    String logId, {
+    String? notes,
+    int? readiness,
+    int? soreness,
+  }) async {
+    final index = _data.logs.indexWhere((l) => l.id == logId);
+    if (index < 0) return;
+    final updated = _data.logs[index].copyWith(
+      notes: notes,
+      readiness: readiness,
+      soreness: soreness,
+    );
+    final logs = [..._data.logs]..[index] = updated;
+    _data = _data.copyWith(logs: logs);
+    if (_justCompletedLog?.id == logId) {
+      _justCompletedLog = updated;
+    }
+    await _persist('Updated workout reflection');
+    await _exportDayContext(notify: false);
+  }
+
+  Future<void> updateLoggedSet(
+    String logId,
+    int setIndex, {
+    double? weightKg,
+    int? reps,
+    double? rpe,
+  }) async {
+    final logIdx = _data.logs.indexWhere((l) => l.id == logId);
+    if (logIdx < 0) return;
+    final log = _data.logs[logIdx];
+    if (setIndex < 0 || setIndex >= log.sets.length) return;
+    final old = log.sets[setIndex];
+    final updatedSet = LoggedSet(
+      exerciseId: old.exerciseId,
+      exerciseName: old.exerciseName,
+      setNumber: old.setNumber,
+      weightKg: weightKg ?? old.weightKg,
+      reps: reps ?? old.reps,
+      rpe: (rpe ?? old.rpe).clamp(1, 10).toDouble(),
+    );
+    final sets = [...log.sets]..[setIndex] = updatedSet;
+    await _saveLog(logIdx, log.copyWith(sets: sets), 'Updated set');
+  }
+
+  Future<void> addLoggedSet(
+    String logId, {
+    required String exerciseId,
+    required String exerciseName,
+    double weightKg = 0,
+    int reps = 0,
+    double rpe = 7,
+  }) async {
+    final logIdx = _data.logs.indexWhere((l) => l.id == logId);
+    if (logIdx < 0) return;
+    final log = _data.logs[logIdx];
+    final setNumber =
+        log.sets.where((s) => s.exerciseId == exerciseId).length + 1;
+    final set = LoggedSet(
+      exerciseId: exerciseId,
+      exerciseName: exerciseName,
+      setNumber: setNumber,
+      weightKg: weightKg,
+      reps: reps,
+      rpe: rpe.clamp(1, 10).toDouble(),
+    );
+    await _saveLog(logIdx, log.copyWith(sets: [...log.sets, set]), 'Added set');
+  }
+
+  Future<void> removeLoggedSet(String logId, int setIndex) async {
+    final logIdx = _data.logs.indexWhere((l) => l.id == logId);
+    if (logIdx < 0) return;
+    final log = _data.logs[logIdx];
+    if (setIndex < 0 || setIndex >= log.sets.length) return;
+    final removed = log.sets[setIndex];
+    final remaining = [...log.sets]..removeAt(setIndex);
+    // Renumber sets for the affected exercise so set numbers stay 1..N.
+    var counter = 0;
+    final renumbered = remaining.map((s) {
+      if (s.exerciseId != removed.exerciseId) return s;
+      counter += 1;
+      return LoggedSet(
+        exerciseId: s.exerciseId,
+        exerciseName: s.exerciseName,
+        setNumber: counter,
+        weightKg: s.weightKg,
+        reps: s.reps,
+        rpe: s.rpe,
+      );
+    }).toList();
+    await _saveLog(logIdx, log.copyWith(sets: renumbered), 'Removed set');
+  }
+
+  Future<void> updateExerciseNotes(
+    String logId,
+    String exerciseId,
+    String notes,
+  ) async {
+    final logIdx = _data.logs.indexWhere((l) => l.id == logId);
+    if (logIdx < 0) return;
+    final log = _data.logs[logIdx];
+    final tIdx = log.exerciseTimings.indexWhere(
+      (t) => t.exerciseId == exerciseId,
+    );
+    if (tIdx < 0) return;
+    final timings = [...log.exerciseTimings]
+      ..[tIdx] = log.exerciseTimings[tIdx].copyWith(notes: notes);
+    await _saveLog(
+      logIdx,
+      log.copyWith(exerciseTimings: timings),
+      'Updated exercise notes',
+    );
+  }
+
+  Future<void> removeWorkoutLog(String logId) async {
+    final remaining = _data.logs.where((l) => l.id != logId).toList();
+    if (remaining.length == _data.logs.length) return;
+    _data = _data.copyWith(logs: remaining);
+    if (_justCompletedLog?.id == logId) _justCompletedLog = null;
+    await _persist('Deleted workout log');
+    await _exportDayContext(notify: false);
+  }
+
+  Future<void> _saveLog(int logIdx, WorkoutLog updated, String status) async {
+    final logs = [..._data.logs]..[logIdx] = updated;
+    _data = _data.copyWith(logs: logs);
+    if (_justCompletedLog?.id == updated.id) {
+      _justCompletedLog = updated;
+    }
+    await _persist(status);
+    await _exportDayContext(notify: false);
   }
 
   Future<void> stopCurrentWorkout({
@@ -370,20 +992,48 @@ class FitnessController extends ChangeNotifier {
 
     final finalHealthMetrics = _liveHealthMetrics;
     _stopHealthPolling();
-    var completed = _data.logs[index].copyWith(
-      completedAt: DateTime.now(),
+    _stopUiTicker();
+    final existing = _data.logs[index];
+    final now = DateTime.now();
+    final closedTimings = existing.exerciseTimings.map((t) {
+      if (t.isStopped) return t;
+      var paused = t.pausedSeconds;
+      if (t.isPaused) {
+        final extra = now.difference(t.pausedAt!).inSeconds;
+        paused += (extra < 0 ? 0 : extra);
+      }
+      return t.copyWith(
+        completedAt: now,
+        clearPausedAt: true,
+        pausedSeconds: paused,
+      );
+    }).toList();
+
+    var sessionPaused = existing.pausedSeconds;
+    if (existing.isPaused) {
+      final extra = now.difference(existing.pausedAt!).inSeconds;
+      sessionPaused += (extra < 0 ? 0 : extra);
+    }
+
+    var completed = existing.copyWith(
+      completedAt: now,
       notes: notes,
       readiness: readiness,
       soreness: soreness,
       healthMetrics: finalHealthMetrics,
+      exerciseTimings: closedTimings,
+      clearPausedAt: true,
+      pausedSeconds: sessionPaused,
     );
     completed = await _syncCompletedWorkout(completed);
 
     final logs = [..._data.logs]..[index] = completed;
     _data = _data.copyWith(logs: logs);
     _captureWorkoutMemory(completed);
+    _justCompletedLog = completed;
     await _persist('Workout stopped and saved');
     await _exportDayContext(notify: false);
+    unawaited(syncWorkoutToWatch());
   }
 
   Future<void> refreshLiveHealthMetrics() async {
@@ -434,6 +1084,7 @@ class FitnessController extends ChangeNotifier {
     _captureWorkoutMemory(completed);
     await _persist('Completed ${workout.title}');
     await _exportDayContext(notify: false);
+    unawaited(syncWorkoutToWatch());
   }
 
   Future<void> saveNutrition(NutritionLog log) async {
@@ -584,7 +1235,9 @@ class FitnessController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _watchEvents?.cancel();
     _healthPoller?.cancel();
+    _uiTicker?.cancel();
     super.dispose();
   }
 
@@ -599,6 +1252,19 @@ class FitnessController extends ChangeNotifier {
   WorkoutLog? _activeWorkoutLog() {
     final index = _activeWorkoutLogIndex();
     return index < 0 ? null : _data.logs[index];
+  }
+
+  void _startUiTicker() {
+    _uiTicker?.cancel();
+    _uiTicker = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => notifyListeners(),
+    );
+  }
+
+  void _stopUiTicker() {
+    _uiTicker?.cancel();
+    _uiTicker = null;
   }
 
   void _startHealthPolling() {
@@ -645,6 +1311,62 @@ class FitnessController extends ChangeNotifier {
       notifyListeners();
     }
     return path;
+  }
+
+  WorkoutLog? _watchCompletionLog(Map<String, dynamic> payload) {
+    if (payload['schemaVersion'] != WatchSyncService.schemaVersion) {
+      return null;
+    }
+    final workoutId = payload['workoutId'] as String? ?? '';
+    if (workoutId.isEmpty) return null;
+    final startedAt = DateTime.tryParse(payload['startedAt'] as String? ?? '');
+    final completedAt = DateTime.tryParse(
+      payload['completedAt'] as String? ?? '',
+    );
+    if (startedAt == null || completedAt == null) return null;
+
+    final title =
+        payload['title'] as String? ?? nextWorkout?.title ?? 'Workout';
+    return WorkoutLog(
+      id: payload['logId'] as String? ?? newId('watch_log'),
+      workoutId: workoutId,
+      title: title,
+      startedAt: startedAt,
+      completedAt: completedAt,
+      readiness: _payloadInt(payload['readiness'], 3),
+      soreness: _payloadInt(payload['soreness'], 2),
+      notes: payload['notes'] as String? ?? '',
+      sets: _payloadObjects(payload['sets'], LoggedSet.fromJson),
+      healthWriteStatus:
+          payload['healthWriteStatus'] as String? ?? 'watch_health_unavailable',
+      healthMetrics: _payloadObject(
+        payload['healthMetrics'],
+        LiveHealthMetrics.fromJson,
+      ),
+      exerciseTimings: _payloadObjects(
+        payload['exerciseTimings'],
+        ExerciseTiming.fromJson,
+      ),
+      pausedSeconds: _payloadInt(payload['pausedSeconds'], 0),
+    );
+  }
+
+  WorkoutLog _mergeWatchCompletion({
+    required WorkoutLog existing,
+    required WorkoutLog incoming,
+  }) {
+    return existing.copyWith(
+      completedAt: incoming.completedAt,
+      notes: incoming.notes.isNotEmpty ? incoming.notes : existing.notes,
+      sets: incoming.sets.isNotEmpty ? incoming.sets : existing.sets,
+      healthWriteStatus: incoming.healthWriteStatus,
+      healthMetrics: incoming.healthMetrics,
+      exerciseTimings: incoming.exerciseTimings.isNotEmpty
+          ? incoming.exerciseTimings
+          : existing.exerciseTimings,
+      clearPausedAt: true,
+      pausedSeconds: incoming.pausedSeconds,
+    );
   }
 
   void _captureWorkoutMemory(WorkoutLog log) {
@@ -743,4 +1465,37 @@ class FitnessController extends ChangeNotifier {
     await _store.save(_data);
     notifyListeners();
   }
+}
+
+String _memoryImportKey(MemoryEntry memory) {
+  return [
+    memory.category.name,
+    memory.source.trim().toLowerCase(),
+    memory.title.trim().toLowerCase(),
+    memory.summary.trim().toLowerCase(),
+  ].join('\n');
+}
+
+int _payloadInt(Object? value, int fallback) {
+  if (value is int) return value;
+  if (value is num) return value.round();
+  if (value is String) return int.tryParse(value) ?? fallback;
+  return fallback;
+}
+
+T? _payloadObject<T>(Object? value, T Function(Map<String, dynamic>) fromJson) {
+  if (value is Map<String, dynamic>) return fromJson(value);
+  if (value is Map) return fromJson(value.cast<String, dynamic>());
+  return null;
+}
+
+List<T> _payloadObjects<T>(
+  Object? value,
+  T Function(Map<String, dynamic>) fromJson,
+) {
+  if (value is! List) return const [];
+  return value
+      .whereType<Map>()
+      .map((item) => fromJson(item.cast<String, dynamic>()))
+      .toList();
 }

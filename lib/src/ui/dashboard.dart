@@ -4,14 +4,22 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app.dart';
 import '../design/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../models/fitness_models.dart';
+import '../services/local_bridge_service.dart';
+import 'set_log_modal.dart';
+import 'today_hero_card.dart';
+import 'workout_summary_screen.dart';
 
-const _agentBootstrapUrl =
-    'https://gist.githubusercontent.com/BigSlikTobi/90ff2ce6c7ab3e37e27eabd48f003afa/raw/1783a1fa51737c17ca448611e00b168f382d53dc/t4l_agent_bootstrap.md';
+const _agentInstructionsRepo =
+    '/Users/tobiaslatta/Projects/temp/t4l-agent-instructions';
+const _bridgeInstallCommand =
+    'pipx install /Users/tobiaslatta/Projects/temp/t4l-local-bridge';
+const _bridgeServeCommand = 't4l-server serve --data-dir ~/T4LServerData';
 
 class CoachDashboard extends StatefulWidget {
   const CoachDashboard({super.key});
@@ -26,38 +34,53 @@ class _CoachDashboardState extends State<CoachDashboard> {
   @override
   Widget build(BuildContext context) {
     final controller = FitnessScope.of(context);
+    final l = AppLocalizations.of(context)!;
+    // When a workout has just been auto-closed, jump back to the Today
+    // tab so the user lands on the inline summary instead of whatever
+    // tab they were on. Consume the flag so we only do it once.
+    if (controller.justCompletedLog != null) {
+      if (index != 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => index = 0);
+        });
+      }
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => controller.clearJustCompleted(),
+      );
+    }
     final pages = [
       _TodayPage(controller: controller),
       _BlocksPage(controller: controller),
       _NutritionPage(controller: controller),
       _CoachPage(controller: controller),
       _ProgressPage(controller: controller),
-      _SettingsPage(controller: controller),
+    ];
+    final titles = [
+      l.navHeute,
+      l.navBlocks,
+      l.nutritionHeaderTitle,
+      l.navCoach,
+      l.navProgress,
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const _BrandTitle(),
+        title: Text(
+          titles[index],
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
         actions: [
-          Builder(
-            builder: (context) {
-              final l = AppLocalizations.of(context)!;
-              return IconButton(
-                tooltip: l.tooltipHealthKit,
-                onPressed: controller.connectHealth,
-                icon: const Icon(CupertinoIcons.heart),
-              );
-            },
-          ),
-          Builder(
-            builder: (context) {
-              final l = AppLocalizations.of(context)!;
-              return IconButton(
-                tooltip: l.tooltipExport,
-                onPressed: controller.exportDailySnapshot,
-                icon: const Icon(CupertinoIcons.square_arrow_up),
-              );
-            },
+          IconButton(
+            tooltip: l.tooltipSettings,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => FitnessScope(
+                  controller: controller,
+                  child: const _SettingsScreen(),
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.settings_outlined),
           ),
         ],
       ),
@@ -100,14 +123,41 @@ class _CoachDashboardState extends State<CoachDashboard> {
                 icon: const Icon(CupertinoIcons.chart_bar),
                 label: l.navProgress,
               ),
-              NavigationDestination(
-                icon: const Icon(CupertinoIcons.gear),
-                label: l.navSetup,
-              ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+class _SettingsScreen extends StatelessWidget {
+  const _SettingsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = FitnessScope.of(context);
+    final l = AppLocalizations.of(context)!;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          l.navSetup,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        actions: [
+          IconButton(
+            tooltip: l.tooltipHealthKit,
+            onPressed: controller.connectHealth,
+            icon: const Icon(CupertinoIcons.heart),
+          ),
+          IconButton(
+            tooltip: l.tooltipExport,
+            onPressed: controller.exportDailySnapshot,
+            icon: const Icon(CupertinoIcons.square_arrow_up),
+          ),
+        ],
+      ),
+      body: SafeArea(child: _SettingsPage(controller: controller)),
     );
   }
 }
@@ -126,6 +176,26 @@ class _TodayPage extends StatelessWidget {
       return _TodayEmptyState(controller: controller);
     }
 
+    // If a workout has already been completed today, the Today tab
+    // shows its inline summary instead of any training UI for the
+    // remaining/next planned workout.
+    final todayKey = dateKey(DateTime.now());
+    final logsCompletedToday =
+        data.logs
+            .where(
+              (log) =>
+                  log.completedAt != null &&
+                  dateKey(log.completedAt!) == todayKey,
+            )
+            .toList()
+          ..sort((a, b) => b.completedAt!.compareTo(a.completedAt!));
+    if (logsCompletedToday.isNotEmpty) {
+      return ColoredBox(
+        color: AppColors.bg,
+        child: WorkoutSummaryView(logId: logsCompletedToday.first.id),
+      );
+    }
+
     final completedInBlock = data.logs
         .where(
           (log) =>
@@ -136,9 +206,54 @@ class _TodayPage extends StatelessWidget {
     final progress = block.workouts.isEmpty
         ? 0.0
         : completedInBlock / block.workouts.length;
-    final progressLabel = '${(progress * 100).round()}%';
+    final progressPercent = (progress * 100).round();
     final activeLog = controller.activeWorkoutLog as WorkoutLog?;
     final hasActiveWorkout = activeLog != null;
+    final sessionIsPaused = controller.sessionIsPaused as bool;
+
+    final totalSets = workout.exercises.fold<int>(
+      0,
+      (sum, ex) => sum + ex.sets,
+    );
+    final completedSets = activeLog?.sets.length ?? 0;
+    final avgRpe = activeLog == null || activeLog.sets.isEmpty
+        ? null
+        : activeLog.sets.fold<double>(0, (s, set) => s + set.rpe) /
+              activeLog.sets.length;
+
+    // Find which exercise the hero should focus on: prefer running,
+    // otherwise the first paused one.
+    ExercisePrescription? focusedExercise;
+    int focusedIndex = 0;
+    bool focusedIsPaused = false;
+    for (var i = 0; i < workout.exercises.length; i++) {
+      final ex = workout.exercises[i];
+      if (controller.isExerciseRunning(ex.exerciseId) as bool) {
+        focusedExercise = ex;
+        focusedIndex = i + 1;
+        focusedIsPaused = false;
+        break;
+      }
+    }
+    if (focusedExercise == null) {
+      for (var i = 0; i < workout.exercises.length; i++) {
+        final ex = workout.exercises[i];
+        if (controller.isExercisePaused(ex.exerciseId) as bool) {
+          focusedExercise = ex;
+          focusedIndex = i + 1;
+          focusedIsPaused = true;
+          break;
+        }
+      }
+    }
+
+    final heroStatus = !hasActiveWorkout
+        ? HeroWorkoutStatus.bereit
+        : sessionIsPaused
+        ? HeroWorkoutStatus.pause
+        : HeroWorkoutStatus.aktiv;
+
+    final dayIndex = block.workouts.indexWhere((w) => w.id == workout.id);
 
     return ColoredBox(
       color: AppColors.bg,
@@ -147,27 +262,73 @@ class _TodayPage extends StatelessWidget {
         children: [
           _TodayDateLine(text: _formatToday(context)),
           const SizedBox(height: AppSpacing.medium),
-          _OneCard(
-            week: workout.week,
+          TodayHeroCard(
+            status: heroStatus,
+            block: block,
+            workout: workout,
+            dayIndex: dayIndex < 0 ? 1 : dayIndex + 1,
+            totalDays: block.workouts.isEmpty ? 1 : block.workouts.length,
             sessionMinutes: data.profile.sessionMinutes,
-            title: workout.title,
-            progress: progress,
-            progressLabel: progressLabel,
-            hasActiveWorkout: hasActiveWorkout,
+            totalSets: totalSets,
+            completedSets: completedSets,
+            blockProgressPercent: progressPercent,
+            sessionElapsed: controller.activeSessionElapsed as Duration?,
+            avgRpe: avgRpe,
+            focusedExercise: focusedExercise,
+            focusedExerciseIndex: focusedIndex,
+            focusedExerciseElapsed: focusedExercise == null
+                ? null
+                : controller.elapsedForExercise(focusedExercise.exerciseId)
+                      as Duration?,
+            focusedExerciseIsPaused: focusedIsPaused,
+            canDismissFocus: focusedIsPaused,
+            totalExercises: workout.exercises.length,
             onStart: controller.startCurrentWorkout,
-            onComplete: () => _showCompleteDialog(context, controller),
+            onPause: controller.pauseCurrentWorkout,
+            onResume: controller.resumeCurrentWorkout,
+            onStop: () => controller.stopCurrentWorkout(),
+            onExercisePause: focusedExercise == null
+                ? () {}
+                : () => controller.pauseExerciseTimer(
+                    focusedExercise!.exerciseId,
+                  ),
+            onExerciseResume: focusedExercise == null
+                ? () {}
+                : () => controller.resumeExerciseTimer(
+                    focusedExercise!.exerciseId,
+                  ),
+            onExerciseStop: focusedExercise == null
+                ? () {}
+                : () => _handleExerciseStop(
+                    context,
+                    controller,
+                    focusedExercise!,
+                  ),
+            onDismissExerciseFocus: () {
+              if (focusedExercise != null && focusedIsPaused) {
+                // Soft dismissal: explicit user pause already happened; this
+                // is just a UI affordance to peek at the overview. We model
+                // it by clearing focus via stopping no timer — the next
+                // rebuild will re-evaluate. For now this is a no-op since
+                // the focus is derived from controller state.
+              }
+            },
           ),
           const SizedBox(height: AppSpacing.page),
           _SectionLabel(label: AppLocalizations.of(context)!.sectionUebungen),
-          const SizedBox(height: AppSpacing.small),
-          for (var i = 0; i < workout.exercises.length; i++)
-            _ExerciseRow(
-              number: i + 1,
-              exercise: workout.exercises[i],
-              isLast: i == workout.exercises.length - 1,
-              onTap: () =>
-                  _showSetDialog(context, controller, workout.exercises[i]),
-            ),
+          const SizedBox(height: 6),
+          const _RpeLegend(),
+          const SizedBox(height: 8),
+          _ExerciseListCard(
+            exercises: workout.exercises,
+            controller: controller,
+            hasActiveWorkout: hasActiveWorkout,
+            focusedExerciseId: focusedExercise?.exerciseId,
+          ),
+          if (workout.conditioning.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _ConditioningNote(text: workout.conditioning),
+          ],
           if (workout.rationale.trim().isNotEmpty) ...[
             const SizedBox(height: AppSpacing.page),
             _CoachNote(text: workout.rationale),
@@ -204,129 +365,182 @@ class _TodayDateLine extends StatelessWidget {
   }
 }
 
-class _OneCard extends StatelessWidget {
-  const _OneCard({
-    required this.week,
-    required this.sessionMinutes,
-    required this.title,
-    required this.progress,
-    required this.progressLabel,
+class _RpeLegend extends StatelessWidget {
+  const _RpeLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: const [
+          _RpeLegendDot(label: 'Warm-up', color: AppColors.sage),
+          SizedBox(width: 14),
+          _RpeLegendDot(label: 'Moderat', color: AppColors.gold),
+          SizedBox(width: 14),
+          _RpeLegendDot(label: 'Hart', color: AppColors.coral),
+        ],
+      ),
+    );
+  }
+}
+
+class _RpeLegendDot extends StatelessWidget {
+  const _RpeLegendDot({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.85),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.4,
+            color: AppColors.ink.withValues(alpha: 0.35),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExerciseListCard extends StatelessWidget {
+  const _ExerciseListCard({
+    required this.exercises,
+    required this.controller,
     required this.hasActiveWorkout,
-    required this.onStart,
-    required this.onComplete,
+    required this.focusedExerciseId,
   });
 
-  final int week;
-  final int sessionMinutes;
-  final String title;
-  final double progress;
-  final String progressLabel;
+  final List<ExercisePrescription> exercises;
+  final dynamic controller;
   final bool hasActiveWorkout;
-  final VoidCallback onStart;
-  final VoidCallback onComplete;
+  final String? focusedExerciseId;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
+        border: Border.all(color: AppColors.ink.withValues(alpha: 0.08)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 4),
+            color: AppColors.ink.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          children: [
+            for (var i = 0; i < exercises.length; i++)
+              _ExerciseRow(
+                number: i + 1,
+                exercise: exercises[i],
+                isLast: i == exercises.length - 1,
+                hasActiveWorkout: hasActiveWorkout,
+                isFocused: focusedExerciseId == exercises[i].exerciseId,
+                isRunning:
+                    controller.isExerciseRunning(exercises[i].exerciseId)
+                        as bool,
+                isPaused:
+                    controller.isExercisePaused(exercises[i].exerciseId)
+                        as bool,
+                isStopped:
+                    controller.isExerciseStopped(exercises[i].exerciseId)
+                        as bool,
+                elapsed:
+                    controller.elapsedForExercise(exercises[i].exerciseId)
+                        as Duration?,
+                onStart: () => controller.startExerciseTimer(
+                  exerciseId: exercises[i].exerciseId,
+                  exerciseName: exercises[i].name,
+                ),
+                onPause: () =>
+                    controller.pauseExerciseTimer(exercises[i].exerciseId),
+                onResume: () =>
+                    controller.resumeExerciseTimer(exercises[i].exerciseId),
+                onStop: () =>
+                    _handleExerciseStop(context, controller, exercises[i]),
+                onTap: () => _showSetDialog(context, controller, exercises[i]),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConditioningNote extends StatelessWidget {
+  const _ConditioningNote({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.sage.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.sage.withValues(alpha: 0.15)),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _SagePill(label: 'Woche $week'),
-              const SizedBox(width: 6),
-              _SagePill(label: '$sessionMinutes min'),
-              const Spacer(),
-              Text(
-                progressLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 24,
-              height: 1.1,
-              fontWeight: FontWeight.w900,
-              color: AppColors.ink,
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: AppColors.sage.withValues(alpha: 0.13),
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: const Icon(Icons.schedule, size: 16, color: AppColors.sage),
           ),
-          const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
-              minHeight: 3,
-              backgroundColor: AppColors.ink.withValues(
-                alpha: AppOpacity.subtle,
-              ),
-              valueColor: const AlwaysStoppedAnimation(AppColors.sage),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: FilledButton.icon(
-                    onPressed: hasActiveWorkout ? null : onStart,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.ink,
-                      foregroundColor: AppColors.paper,
-                      disabledBackgroundColor: AppColors.ink.withValues(
-                        alpha: AppOpacity.mutedText,
-                      ),
-                      disabledForegroundColor: AppColors.paper.withValues(
-                        alpha: AppOpacity.inverseMuted,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    icon: const Icon(CupertinoIcons.play_fill, size: 14),
-                    label: Text(
-                      AppLocalizations.of(context)!.btnStarten,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'CONDITIONING',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.3,
+                    color: AppColors.sage,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              _DashedSquareButton(
-                size: 46,
-                enabled: hasActiveWorkout,
-                onTap: onComplete,
-                child: Icon(
-                  CupertinoIcons.check_mark,
-                  size: 18,
-                  color: hasActiveWorkout
-                      ? AppColors.ink.withValues(alpha: AppOpacity.mutedText)
-                      : AppColors.ink.withValues(alpha: AppOpacity.subtle),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.55,
+                    color: AppColors.ink.withValues(alpha: 0.52),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -397,43 +611,73 @@ class _ExerciseRow extends StatelessWidget {
     required this.exercise,
     required this.isLast,
     required this.onTap,
+    this.hasActiveWorkout = false,
+    this.isFocused = false,
+    this.isRunning = false,
+    this.isPaused = false,
+    this.isStopped = false,
+    this.elapsed,
+    this.onStart,
+    this.onPause,
+    this.onResume,
+    this.onStop,
   });
 
   final int number;
   final ExercisePrescription exercise;
   final bool isLast;
   final VoidCallback onTap;
+  final bool hasActiveWorkout;
+  final bool isFocused;
+  final bool isRunning;
+  final bool isPaused;
+  final bool isStopped;
+  final Duration? elapsed;
+  final VoidCallback? onStart;
+  final VoidCallback? onPause;
+  final VoidCallback? onResume;
+  final VoidCallback? onStop;
 
   @override
   Widget build(BuildContext context) {
-    final pre = '${exercise.sets} × ${exercise.reps} · ${exercise.targetLoad}';
+    final pre =
+        '${exercise.sets} × ${exercise.reps}'
+        '${exercise.targetLoad.trim().isEmpty ? '' : ' · ${exercise.targetLoad}'}';
+    final showRpeDot =
+        !hasActiveWorkout || (!isRunning && !isPaused && !isStopped);
     return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(
+          color: isFocused
+              ? AppColors.sage.withValues(alpha: 0.05)
+              : AppColors.transparent,
           border: Border(
+            left: BorderSide(
+              color: isFocused ? AppColors.sage : AppColors.transparent,
+              width: 3,
+            ),
             bottom: BorderSide(
               color: isLast
                   ? AppColors.transparent
-                  : AppColors.ink.withValues(alpha: AppOpacity.subtle),
+                  : AppColors.ink.withValues(alpha: 0.07),
             ),
           ),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: SizedBox(
-                width: 14,
-                child: Text(
-                  '$number',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.sage,
-                  ),
+            SizedBox(
+              width: 16,
+              child: Text(
+                '$number',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.sage,
                 ),
               ),
             ),
@@ -441,13 +685,17 @@ class _ExerciseRow extends StatelessWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     exercise.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                      color: isFocused ? AppColors.sage : AppColors.ink,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -455,19 +703,229 @@ class _ExerciseRow extends StatelessWidget {
                     pre,
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.ink.withValues(
-                        alpha: AppOpacity.mutedText,
-                      ),
+                      color: AppColors.ink.withValues(alpha: 0.43),
                     ),
                   ),
                 ],
               ),
+            ),
+            const SizedBox(width: 8),
+            if (showRpeDot) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _rpeColor(exercise.targetRpe).withValues(alpha: 0.85),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            _ExerciseTimerControls(
+              hasActiveWorkout: hasActiveWorkout,
+              isRunning: isRunning,
+              isPaused: isPaused,
+              isStopped: isStopped,
+              elapsed: elapsed,
+              onStart: onStart,
+              onPause: onPause,
+              onResume: onResume,
+              onStop: onStop,
             ),
           ],
         ),
       ),
     );
   }
+}
+
+Color _rpeColor(double rpe) {
+  if (rpe <= 4) return AppColors.sage;
+  if (rpe <= 6) return AppColors.gold;
+  return AppColors.coral;
+}
+
+class _ExerciseTimerControls extends StatelessWidget {
+  const _ExerciseTimerControls({
+    required this.hasActiveWorkout,
+    required this.isRunning,
+    required this.isPaused,
+    required this.isStopped,
+    required this.elapsed,
+    required this.onStart,
+    required this.onPause,
+    required this.onResume,
+    required this.onStop,
+  });
+
+  final bool hasActiveWorkout;
+  final bool isRunning;
+  final bool isPaused;
+  final bool isStopped;
+  final Duration? elapsed;
+  final VoidCallback? onStart;
+  final VoidCallback? onPause;
+  final VoidCallback? onResume;
+  final VoidCallback? onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasActiveWorkout) {
+      return Icon(
+        Icons.chevron_right,
+        size: 22,
+        color: AppColors.ink.withValues(alpha: 0.17),
+      );
+    }
+    if (isStopped) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (elapsed != null) ...[
+            Text(
+              _fmtElapsed(elapsed!),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.sage,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: AppColors.sage.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Icon(Icons.check, size: 14, color: AppColors.sage),
+          ),
+        ],
+      );
+    }
+
+    if (!isRunning && !isPaused) {
+      // Idle in active workout: prominent 40px circular sage play button.
+      return _CircularPlayButton(onTap: onStart);
+    }
+
+    final timerColor = isRunning ? AppColors.coral : AppColors.gold;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (elapsed != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 7),
+            child: SizedBox(
+              width: 42,
+              child: Text(
+                _fmtElapsed(elapsed!),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: timerColor,
+                  letterSpacing: 0.2,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+        _SquareTimerButton(
+          icon: isPaused ? Icons.play_arrow : Icons.pause,
+          iconColor: isPaused ? AppColors.sage : AppColors.ink,
+          background: AppColors.ink.withValues(alpha: 0.07),
+          onTap: isPaused ? onResume : onPause,
+        ),
+        const SizedBox(width: 6),
+        _SquareTimerButton(
+          icon: Icons.stop,
+          iconColor: AppColors.coral,
+          background: AppColors.coral.withValues(alpha: 0.10),
+          onTap: onStop,
+        ),
+      ],
+    );
+  }
+}
+
+class _CircularPlayButton extends StatelessWidget {
+  const _CircularPlayButton({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.sage.withValues(alpha: 0.13),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.sage.withValues(alpha: 0.28),
+              width: 1.5,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.play_arrow, size: 18, color: AppColors.sage),
+        ),
+      ),
+    );
+  }
+}
+
+class _SquareTimerButton extends StatelessWidget {
+  const _SquareTimerButton({
+    required this.icon,
+    required this.iconColor,
+    required this.background,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color background;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 16, color: iconColor),
+        ),
+      ),
+    );
+  }
+}
+
+String _fmtElapsed(Duration d) {
+  final total = d.inSeconds < 0 ? 0 : d.inSeconds;
+  final h = total ~/ 3600;
+  final m = (total % 3600) ~/ 60;
+  final s = total % 60;
+  final mm = m.toString().padLeft(2, '0');
+  final ss = s.toString().padLeft(2, '0');
+  return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
 }
 
 class _CoachNote extends StatelessWidget {
@@ -519,141 +977,44 @@ class _TodayEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isConnected =
+        (controller.bridgeConfig as LocalBridgeConfig).isConfigured;
     return ColoredBox(
       color: AppColors.bg,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.ink.withValues(alpha: 0.06),
-                  blurRadius: 24,
-                  offset: const Offset(0, 4),
+          _TodayDateLine(text: _TodayPage._formatToday(context)),
+          const SizedBox(height: AppSpacing.medium),
+          EmptyHeroCard(
+            isConnected: isConnected,
+            onLoadPlan: controller.importCodexBlockPlan,
+            onConnect: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => FitnessScope(
+                  controller: controller,
+                  child: const _SettingsScreen(),
                 ),
-              ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _DashedSquareButton(
-                  size: 40,
-                  enabled: false,
-                  onTap: () {},
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: AppColors.sage.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  AppLocalizations.of(context)!.keinAktiverBlock,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  AppLocalizations.of(context)!.keinAktiverBlockSubtitle,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: AppColors.ink.withValues(
-                      alpha: AppOpacity.mutedText,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: FilledButton(
-                    onPressed: () =>
-                        controller.createLocalBlock(TrainingStyle.hybrid),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.ink,
-                      foregroundColor: AppColors.paper,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text(
-                      AppLocalizations.of(context)!.btnBlockErstellen,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _DashedSquareButton(
-                  height: 44,
-                  enabled: true,
-                  onTap: controller.importCodexBlockPlan,
-                  child: Text(
-                    AppLocalizations.of(context)!.btnCodexPlanImportieren,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.ink.withValues(
-                        alpha: AppOpacity.mutedText,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(height: AppSpacing.page),
+          _SectionLabel(label: AppLocalizations.of(context)!.sectionUebungen),
+          const SizedBox(height: AppSpacing.small),
+          const GhostExerciseSection(),
+          const SizedBox(height: 14),
+          Center(
+            child: Text(
+              'Dein Plan erscheint hier',
+              style: TextStyle(
+                fontSize: 11,
+                letterSpacing: 0.4,
+                color: AppColors.ink.withValues(alpha: 0.28),
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _DashedSquareButton extends StatelessWidget {
-  const _DashedSquareButton({
-    required this.child,
-    required this.enabled,
-    required this.onTap,
-    this.size,
-    this.height,
-  });
-
-  final Widget child;
-  final bool enabled;
-  final VoidCallback onTap;
-  final double? size;
-  final double? height;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Center(child: child);
-    final painted = CustomPaint(
-      painter: _DashedRRectPainter(
-        radius: 10,
-        color: AppColors.ink.withValues(alpha: 0.22),
-        strokeWidth: 1.5,
-        dashLength: 4,
-        gapLength: 3,
-      ),
-      child: SizedBox(width: size, height: size ?? height, child: content),
-    );
-    if (!enabled) return painted;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: painted,
     );
   }
 }
@@ -724,18 +1085,6 @@ class _BlocksPage extends StatelessWidget {
           trailing: l.blocksCount(data.blocks.length),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: TrainingStyle.values.map((style) {
-            return ActionChip(
-              avatar: const Icon(CupertinoIcons.plus, size: 18),
-              label: Text(style.label),
-              onPressed: () => controller.createLocalBlock(style),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: controller.importCodexBlockPlan,
           icon: const Icon(CupertinoIcons.arrow_down_doc),
@@ -762,8 +1111,7 @@ class _NutritionPage extends StatelessWidget {
     final latest = data.nutrition.isEmpty ? null : data.nutrition.first;
     final guidance = controller.fuelGuidance as FuelGuidance?;
     final today = _todayDateKey();
-    final isGuidanceFresh =
-        guidance != null && guidance.validFor == today;
+    final isGuidanceFresh = guidance != null && guidance.validFor == today;
 
     return ColoredBox(
       color: AppColors.bg,
@@ -904,8 +1252,7 @@ class _NutritionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final right =
-        (week != null && day != null) ? l.weekDay(week!, day!) : '';
+    final right = (week != null && day != null) ? l.weekDay(week!, day!) : '';
     return Row(
       children: [
         Expanded(
@@ -958,7 +1305,6 @@ class _NutritionHeader extends StatelessWidget {
     );
   }
 }
-
 
 class _SignalConfig {
   const _SignalConfig({
@@ -1135,10 +1481,7 @@ class _WhiteCard extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: child,
-      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
     );
   }
 }
@@ -1889,27 +2232,27 @@ class _MealAnalysisCta extends StatelessWidget {
                   builder: (context) {
                     final l = AppLocalizations.of(context)!;
                     return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l.mahlzeitAnalysieren,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      l.codexBewertetTrainingsauswirkung,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.ink.withValues(
-                          alpha: AppOpacity.mutedText,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l.mahlzeitAnalysieren,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.ink,
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                        const SizedBox(height: 2),
+                        Text(
+                          l.codexBewertetTrainingsauswirkung,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.ink.withValues(
+                              alpha: AppOpacity.mutedText,
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -2398,7 +2741,11 @@ class _VideoPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(CupertinoIcons.play_fill, size: 11, color: AppColors.sage),
+            const Icon(
+              CupertinoIcons.play_fill,
+              size: 11,
+              color: AppColors.sage,
+            ),
             const SizedBox(width: 7),
             Text(
               AppLocalizations.of(context)!.erklaervideo,
@@ -2853,6 +3200,7 @@ class _MemoryCard extends StatelessWidget {
     );
   }
 }
+
 class _PendingMealRequestCard extends StatelessWidget {
   const _PendingMealRequestCard({required this.request});
 
@@ -2920,6 +3268,15 @@ class _ProgressPage extends StatelessWidget {
                 log.healthWriteStatus,
               ),
             ),
+            trailing: IconButton(
+              tooltip: 'Delete log',
+              icon: Icon(
+                Icons.delete_outline,
+                color: AppColors.ink.withValues(alpha: AppOpacity.mutedIcon),
+              ),
+              onPressed: () => _confirmDeleteLog(context, controller, log),
+            ),
+            onLongPress: () => _confirmDeleteLog(context, controller, log),
           ),
       ],
     );
@@ -2937,11 +3294,27 @@ class _SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<_SettingsPage> {
   late Future<String> _exchangePath;
+  late final TextEditingController _bridgeUrlController;
+  late final TextEditingController _bridgeTokenController;
+  bool _bridgeBusy = false;
 
   @override
   void initState() {
     super.initState();
     _exchangePath = widget.controller.exchangeDirectoryPath();
+    _bridgeUrlController = TextEditingController(
+      text: widget.controller.bridgeConfig.baseUrl,
+    );
+    _bridgeTokenController = TextEditingController(
+      text: widget.controller.bridgeConfig.token,
+    );
+  }
+
+  @override
+  void dispose() {
+    _bridgeUrlController.dispose();
+    _bridgeTokenController.dispose();
+    super.dispose();
   }
 
   @override
@@ -2950,9 +3323,8 @@ class _SettingsPageState extends State<_SettingsPage> {
       future: _exchangePath,
       builder: (context, snapshot) {
         final l = AppLocalizations.of(context)!;
-        final exchangePath =
-            snapshot.data ?? l.exchangeFolderLoading;
-        final agentPrompt = _agentSetupPrompt(exchangePath);
+        final exchangePath = snapshot.data ?? l.exchangeFolderLoading;
+        final handoff = _agentHandoffPayload(exchangePath);
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -2960,69 +3332,60 @@ class _SettingsPageState extends State<_SettingsPage> {
               title: l.settingsHeroTitle,
               subtitle: l.settingsHeroSubtitle,
               body: l.settingsHeroBody,
-              trailing: snapshot.hasData ? l.settingsHeroReady : l.settingsHeroLoading,
+              trailing: snapshot.hasData
+                  ? l.settingsHeroReady
+                  : l.settingsHeroLoading,
             ),
             const SizedBox(height: 12),
-            _CopyCard(
-              icon: CupertinoIcons.folder,
-              title: l.settingsExchangeFolder,
-              body: exchangePath,
-              copyValue: exchangePath,
-              enabled: snapshot.hasData,
+            _LocalBridgeCard(
+              controller: widget.controller,
+              urlController: _bridgeUrlController,
+              tokenController: _bridgeTokenController,
+              busy: _bridgeBusy,
+              onAction: _runBridgeAction,
             ),
             const SizedBox(height: 12),
-            _CopyCard(
-              icon: CupertinoIcons.link,
-              title: l.settingsBootstrapUrl,
-              body: _agentBootstrapUrl,
-              copyValue: _agentBootstrapUrl,
-            ),
-            const SizedBox(height: 12),
-            _CopyCard(
-              icon: CupertinoIcons.doc_text,
-              title: l.settingsStartprompt,
-              body: agentPrompt,
-              copyValue: agentPrompt,
-              maxLines: 12,
-              enabled: snapshot.hasData,
-            ),
+            _AgentHandoffCard(handoff: handoff, enabled: snapshot.hasData),
             const SizedBox(height: 12),
             _SetupChecklistCard(exchangePath: exchangePath),
-            const SizedBox(height: 12),
-            _CopyCard(
-              icon: CupertinoIcons.command,
-              title: l.settingsWriteCommands,
-              body: _agentCommands(exchangePath),
-              copyValue: _agentCommands(exchangePath),
-              maxLines: 8,
-              enabled: snapshot.hasData,
-            ),
           ],
         );
       },
     );
   }
+
+  Future<void> _runBridgeAction(Future<void> Function() action) async {
+    if (_bridgeBusy) return;
+    setState(() => _bridgeBusy = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _bridgeBusy = false);
+    }
+  }
 }
 
-class _CopyCard extends StatelessWidget {
-  const _CopyCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-    required this.copyValue,
-    this.maxLines = 4,
-    this.enabled = true,
+class _LocalBridgeCard extends StatelessWidget {
+  const _LocalBridgeCard({
+    required this.controller,
+    required this.urlController,
+    required this.tokenController,
+    required this.busy,
+    required this.onAction,
   });
 
-  final IconData icon;
-  final String title;
-  final String body;
-  final String copyValue;
-  final int maxLines;
-  final bool enabled;
+  final dynamic controller;
+  final TextEditingController urlController;
+  final TextEditingController tokenController;
+  final bool busy;
+  final Future<void> Function(Future<void> Function() action) onAction;
 
   @override
   Widget build(BuildContext context) {
+    final config = controller.bridgeConfig;
+    final lastSync = config.lastSyncAt == null
+        ? 'No server sync yet'
+        : 'Last server sync: ${DateFormat.yMd().add_Hm().format(config.lastSyncAt!)}';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -3031,36 +3394,151 @@ class _CopyCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon),
+                const Icon(CupertinoIcons.dot_radiowaves_left_right),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    title,
+                    'Self-Hosted T4L Server',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: AppLocalizations.of(context)!.tooltipKopieren,
-                  onPressed: enabled
-                      ? () => _copyToClipboard(context, copyValue)
-                      : null,
-                  icon: const Icon(CupertinoIcons.doc_on_doc),
+                Text(
+                  config.isConfigured ? 'Configured' : 'Optional',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            SelectableText(
-              body,
-              maxLines: maxLines,
+            Text(
+              'Connect to your own T4L server. The phone stays the source of '
+              'truth, and new plans still need your import confirmation.',
               style: TextStyle(
-                color: AppColors.ink.withValues(alpha: AppOpacity.inverseBody),
-                height: 1.35,
+                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
               ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: urlController,
+              decoration: const InputDecoration(
+                labelText: 'Server URL',
+                hintText: 'http://192.168.1.42:8787',
+              ),
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: tokenController,
+              decoration: const InputDecoration(
+                labelText: 'API key',
+                hintText: 'Paste the key printed by t4l-server',
+              ),
+              textInputAction: TextInputAction.done,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => onAction(() async {
+                          await controller.saveBridgeConfig(
+                            baseUrl: urlController.text,
+                            token: tokenController.text,
+                          );
+                          await controller.testBridgeConnection();
+                        }),
+                  icon: const Icon(CupertinoIcons.link),
+                  label: const Text('Connect'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => onAction(controller.migrateToServer),
+                  icon: const Icon(CupertinoIcons.tray_arrow_up),
+                  label: const Text('Migrate Data'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => onAction(controller.pushBridgeContext),
+                  icon: const Icon(CupertinoIcons.arrow_up_doc),
+                  label: const Text('Push Context'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => onAction(controller.pullBridgeResults),
+                  icon: const Icon(CupertinoIcons.arrow_down_doc),
+                  label: const Text('Check Results'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (busy) const LinearProgressIndicator(),
+            if (busy) const SizedBox(height: 8),
+            Text(
+              '$lastSync\n${controller.status}',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AgentHandoffCard extends StatelessWidget {
+  const _AgentHandoffCard({required this.handoff, required this.enabled});
+
+  final String handoff;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final copyTooltip = AppLocalizations.of(context)!.tooltipKopieren;
+    return Card(
+      child: ExpansionTile(
+        leading: const Icon(CupertinoIcons.square_arrow_up),
+        title: const Text(
+          'Complete Agent Handoff',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: const Text('Copy this once and send it to Codex or Claude.'),
+        trailing: Wrap(
+          spacing: 2,
+          children: [
+            IconButton(
+              tooltip: 'Share via AirDrop',
+              onPressed: enabled ? () => _shareHandoff(context, handoff) : null,
+              icon: const Icon(CupertinoIcons.share),
+            ),
+            IconButton(
+              tooltip: copyTooltip,
+              onPressed: enabled
+                  ? () => _copyToClipboard(context, handoff)
+                  : null,
+              icon: const Icon(CupertinoIcons.doc_on_doc),
+            ),
+          ],
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          SelectableText(
+            handoff,
+            style: TextStyle(
+              color: AppColors.ink.withValues(alpha: AppOpacity.inverseBody),
+              height: 1.35,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3074,14 +3552,15 @@ class _SetupChecklistCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      'Fetch and read the Agent Bootstrap URL first.',
+      'Read the local agent instructions repo first.',
+      'Install or verify t4l-server, then start the self-hosted server.',
       'If long-term goal or current block target is unclear, start with goal discovery before coaching.',
-      'Use the exchange folder as source of truth: $exchangePath',
+      'Push fresh context from the app before coaching.',
       'Inspect day_context.json, daily_snapshot.json, athlete_profile.json, active block, next workout, logs, nutrition, HealthKit activity, and memoryWiki.',
       'Separate facts from assumptions. Missing HealthKit data is unknown, not zero.',
       'Choose today: progress, hold, substitute, deload, or rest.',
       'Give food-based nutrition guidance from today\'s training and yesterday\'s intake pattern.',
-      'Write app JSON only with the validated helper scripts.',
+      'Verify any app JSON before writing it through MCP tools.',
     ];
     return Card(
       child: Padding(
@@ -3144,10 +3623,9 @@ class _BlockCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         subtitle: Text(
-          AppLocalizations.of(context)!.blockCardWeeks(
-            block.durationWeeks,
-            block.createdBy,
-          ),
+          AppLocalizations.of(
+            context,
+          )!.blockCardWeeks(block.durationWeeks, block.createdBy),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
@@ -3159,18 +3637,18 @@ class _BlockCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              AppLocalizations.of(context)!.blockCardTargets(
-                block.measurableTargets.join(', '),
-              ),
+              AppLocalizations.of(
+                context,
+              )!.blockCardTargets(block.measurableTargets.join(', ')),
             ),
           ),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              AppLocalizations.of(context)!.blockCardWorkouts(
-                block.workouts.length,
-              ),
+              AppLocalizations.of(
+                context,
+              )!.blockCardWorkouts(block.workouts.length),
             ),
           ),
         ],
@@ -3244,33 +3722,6 @@ class _HeroPanel extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _BrandTitle extends StatelessWidget {
-  const _BrandTitle();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadii.xsmall),
-          child: Image.asset(
-            AppAssets.brandIcon,
-            width: 30,
-            height: 30,
-            fit: BoxFit.cover,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.medium),
-        const Text(
-          AppTokens.appName,
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
-      ],
     );
   }
 }
@@ -3364,30 +3815,23 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-String _agentSetupPrompt(String exchangePath) {
+String _agentHandoffPayload(String exchangePath) {
   return '''
 You are my T4L Trainer coaching agent.
 
-First fetch and read this bootstrap guide:
-$_agentBootstrapUrl
+Agent instructions repo:
+$_agentInstructionsRepo
 
-Then use this iCloud exchange folder as the source of truth:
+Server install command:
+$_bridgeInstallCommand
+
+Server start command:
+$_bridgeServeCommand
+
+Informational iPhone exchange path:
 $exchangePath
 
-Inspect day_context.json, daily_snapshot.json, athlete_profile.json, training_block_request.json, nutrition_analysis_request.json, activeBlock, nextWorkout, recent training logs, nutrition logs, HealthKit activity summaries, and memoryWiki.
-
-If my long-term goal and current short-term block target are missing or unclear, start with a goal-discovery discussion before giving a plan. Ask for the long-term goal, current block target, block length, success criteria, schedule, equipment, constraints, nutrition context, and preferences. After the block ends, review results and recommend the next short-term goal.
-
-Produce a morning coaching plan for today. Decide whether training should progress, hold, substitute, deload, or rest. Treat nutrition as contextual food guidance, not fixed targets unless I ask for targets. Use yesterday's nutrition as a soft training-readiness signal: carbs support hard work, protein supports recovery, low intake or poor hydration should bias toward holding or deloading. Give concrete meal advice for today, for example foods that fit the planned training. Separate facts from assumptions. Missing health data is unknown, not zero. Ask before changing goals, ignoring constraints, or writing app-consumed JSON.
-'''
-      .trim();
-}
-
-String _agentCommands(String exchangePath) {
-  return '''
-python3 tools/write_training_block_plan.py --print-dir
-python3 tools/write_training_block_plan.py --exchange-dir "$exchangePath" plan.json
-python3 tools/write_nutrition_analysis_result.py --exchange-dir "$exchangePath" result.json
+Please read the agent instructions repo and follow the adapter for your runtime.
 '''
       .trim();
 }
@@ -3399,6 +3843,24 @@ Future<void> _copyToClipboard(BuildContext context, String value) async {
   ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text(l.snackbarKopiert)));
+}
+
+Future<void> _shareHandoff(BuildContext context, String value) async {
+  try {
+    final box = context.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(
+      ShareParams(
+        text: value,
+        subject: 'T4L Trainer Agent Handoff',
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
+      ),
+    );
+  } on MissingPluginException {
+    if (!context.mounted) return;
+    await _copyToClipboard(context, value);
+  }
 }
 
 class _CodexBlockAvailableBanner extends StatelessWidget {
@@ -3446,130 +3908,163 @@ class _CodexBlockAvailableBanner extends StatelessWidget {
   }
 }
 
+Future<void> _handleExerciseStop(
+  BuildContext context,
+  dynamic controller,
+  ExercisePrescription exercise,
+) async {
+  // Stop the timer first (so duration is final) but keep the workout
+  // open so any "last exercise → summary" auto-close waits until the
+  // user has logged the sets for this exercise.
+  await controller.stopExerciseTimer(
+    exercise.exerciseId,
+    autoCloseWorkout: false,
+  );
+
+  if (!context.mounted) return;
+
+  // Prefill from the previously-logged set on this exercise (if any),
+  // otherwise from the prescription.
+  final activeLog = controller.activeWorkoutLog as WorkoutLog?;
+  var history = activeLog == null
+      ? <LoggedSet>[]
+      : activeLog.sets
+            .where((s) => s.exerciseId == exercise.exerciseId)
+            .toList();
+
+  final prescribedRepsMatch = RegExp(
+    r'\d+',
+  ).firstMatch(exercise.reps)?.group(0);
+  final prescribedWeightMatch = RegExp(
+    r'(\d+(?:[.,]\d+)?)',
+  ).firstMatch(exercise.targetLoad);
+  final double fallbackWeight = prescribedWeightMatch != null
+      ? (double.tryParse(
+              prescribedWeightMatch.group(1)!.replaceAll(',', '.'),
+            ) ??
+            20.0)
+      : 20.0;
+  final fallbackReps = int.tryParse(prescribedRepsMatch ?? '') ?? 8;
+
+  while (context.mounted) {
+    final logged = history.length;
+    if (logged >= exercise.sets) break;
+    final initWeight = history.isNotEmpty
+        ? history.last.weightKg
+        : fallbackWeight;
+    final initReps = history.isNotEmpty ? history.last.reps : fallbackReps;
+
+    if (!context.mounted) break;
+    // ignore: use_build_context_synchronously
+    final result = await showSetLogModal(
+      context,
+      exerciseName: exercise.name,
+      currentSetNumber: logged + 1,
+      totalSets: exercise.sets,
+      initialWeightKg: initWeight,
+      initialReps: initReps,
+      initialRpe: exercise.targetRpe,
+      targetReps: int.tryParse(prescribedRepsMatch ?? ''),
+      targetRpe: exercise.targetRpe,
+      history: history,
+    );
+    if (result == null || result.delete) break;
+    await controller.logSet(exercise, result.weightKg, result.reps, result.rpe);
+    // Refresh from controller to get the freshly appended set.
+    final refreshedLog = controller.activeWorkoutLog as WorkoutLog?;
+    history = refreshedLog == null
+        ? history
+        : refreshedLog.sets
+              .where((s) => s.exerciseId == exercise.exerciseId)
+              .toList();
+  }
+
+  // Now run the auto-close check the controller deferred.
+  await controller.tryAutoCloseWorkout();
+}
+
+Future<void> _confirmDeleteLog(
+  BuildContext context,
+  dynamic controller,
+  WorkoutLog log,
+) async {
+  final dateText = DateFormat('d. MMM yyyy, HH:mm').format(log.startedAt);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete this log?'),
+      content: Text(
+        '${log.title}\n$dateText\n\n'
+        '${log.sets.length} sets · ${log.totalVolume.toStringAsFixed(0)} kg\n'
+        'Status: ${log.healthWriteStatus}',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: AppColors.coral),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) {
+    await controller.removeWorkoutLog(log.id);
+  }
+}
+
 Future<void> _showSetDialog(
   BuildContext context,
   dynamic controller,
   ExercisePrescription exercise,
 ) async {
-  final weight = TextEditingController(text: '20');
-  final reps = TextEditingController(text: '8');
-  final rpe = TextEditingController(
-    text: exercise.targetRpe.toStringAsFixed(1),
-  );
-  await showDialog<void>(
-    context: context,
-    builder: (context) {
-      final l = AppLocalizations.of(context)!;
-      return AlertDialog(
-        title: Text(l.dialogSetTitle(exercise.name)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: weight,
-              decoration: InputDecoration(labelText: l.dialogSetWeight),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: reps,
-              decoration: InputDecoration(labelText: l.dialogSetReps),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: rpe,
-              decoration: InputDecoration(labelText: l.dialogSetRpe),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l.btnAbbrechen),
-          ),
-          FilledButton(
-            onPressed: () {
-              controller.logSet(
-                exercise,
-                double.tryParse(weight.text) ?? 0,
-                int.tryParse(reps.text) ?? 0,
-                double.tryParse(rpe.text.replaceAll(',', '.')) ?? 7,
-              );
-              Navigator.pop(context);
-            },
-            child: Text(l.btnSpeichern),
-          ),
-        ],
-      );
-    },
-  );
-}
+  final activeLog = controller.activeWorkoutLog as WorkoutLog?;
+  final history = activeLog == null
+      ? const <LoggedSet>[]
+      : activeLog.sets
+            .where((s) => s.exerciseId == exercise.exerciseId)
+            .toList();
+  final currentSetNumber = history.length + 1;
 
-Future<void> _showCompleteDialog(
-  BuildContext context,
-  dynamic controller,
-) async {
-  final notes = TextEditingController();
-  var readiness = 3.0;
-  var soreness = 2.0;
-  await showDialog<void>(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) {
-        final l = AppLocalizations.of(context)!;
-        return AlertDialog(
-          title: Text(l.dialogCompleteTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(l.dialogCompleteReadiness(readiness.round())),
-              Slider(
-                value: readiness,
-                min: 1,
-                max: 5,
-                divisions: 4,
-                onChanged: (value) => setState(() => readiness = value),
-              ),
-              Text(l.dialogCompleteSoreness(soreness.round())),
-              Slider(
-                value: soreness,
-                min: 1,
-                max: 5,
-                divisions: 4,
-                onChanged: (value) => setState(() => soreness = value),
-              ),
-              TextField(
-                controller: notes,
-                decoration: InputDecoration(labelText: l.dialogCompleteNotes),
-                minLines: 2,
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(l.btnAbbrechen),
-            ),
-            FilledButton(
-              onPressed: () async {
-                await controller.completeCurrentWorkout(
-                  notes: notes.text,
-                  readiness: readiness.round(),
-                  soreness: soreness.round(),
-                );
-                await controller.exportDailySnapshot();
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: Text(l.btnFertig),
-            ),
-          ],
-        );
-      },
+  // Try to infer a starting weight from the prescription's targetLoad
+  // (e.g. "80 kg" or "100"). Falls back to the last logged set on this
+  // exercise, then to 20 kg.
+  double initialWeight;
+  if (history.isNotEmpty) {
+    initialWeight = history.last.weightKg;
+  } else {
+    final match = RegExp(r'(\d+(?:[.,]\d+)?)').firstMatch(exercise.targetLoad);
+    initialWeight = match != null
+        ? double.tryParse(match.group(1)!.replaceAll(',', '.')) ?? 20
+        : 20;
+  }
+
+  final initialReps = history.isNotEmpty
+      ? history.last.reps
+      : (int.tryParse(
+              RegExp(r'\d+').firstMatch(exercise.reps)?.group(0) ?? '',
+            ) ??
+            8);
+
+  final result = await showSetLogModal(
+    context,
+    exerciseName: exercise.name,
+    currentSetNumber: currentSetNumber,
+    totalSets: exercise.sets,
+    initialWeightKg: initialWeight,
+    initialReps: initialReps,
+    initialRpe: exercise.targetRpe,
+    targetReps: int.tryParse(
+      RegExp(r'\d+').firstMatch(exercise.reps)?.group(0) ?? '',
     ),
+    targetRpe: exercise.targetRpe,
+    history: history,
   );
+  if (result == null || result.delete) return;
+  await controller.logSet(exercise, result.weightKg, result.reps, result.rpe);
 }
 
 Future<void> _showMemoryDialog(
@@ -3597,7 +4092,9 @@ Future<void> _showMemoryDialog(
               children: [
                 DropdownButtonFormField<MemoryCategory>(
                   initialValue: category,
-                  decoration: InputDecoration(labelText: l.dialogMemoryKategorie),
+                  decoration: InputDecoration(
+                    labelText: l.dialogMemoryKategorie,
+                  ),
                   items: [
                     for (final item in MemoryCategory.values)
                       DropdownMenuItem(value: item, child: Text(item.label)),
@@ -3614,14 +4111,18 @@ Future<void> _showMemoryDialog(
                 const SizedBox(height: 8),
                 TextField(
                   controller: summary,
-                  decoration: InputDecoration(labelText: l.dialogMemoryKurzMemory),
+                  decoration: InputDecoration(
+                    labelText: l.dialogMemoryKurzMemory,
+                  ),
                   minLines: 2,
                   maxLines: 3,
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: markdown,
-                  decoration: InputDecoration(labelText: l.dialogMemoryMarkdown),
+                  decoration: InputDecoration(
+                    labelText: l.dialogMemoryMarkdown,
+                  ),
                   minLines: 3,
                   maxLines: 6,
                 ),
@@ -3728,7 +4229,8 @@ Future<void> _showMealAnalysisDialog(
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () async {
-                          final path = await controller.pickMealImageFromCamera();
+                          final path = await controller
+                              .pickMealImageFromCamera();
                           if (path != null) setState(() => imagePath = path);
                         },
                         icon: const Icon(CupertinoIcons.camera),
@@ -3794,13 +4296,17 @@ Future<void> _showMealResultDialog(
               const SizedBox(height: 12),
               TextField(
                 controller: calories,
-                decoration: InputDecoration(labelText: l.dialogMealResultKalorien),
+                decoration: InputDecoration(
+                  labelText: l.dialogMealResultKalorien,
+                ),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: protein,
-                decoration: InputDecoration(labelText: l.dialogMealResultProtein),
+                decoration: InputDecoration(
+                  labelText: l.dialogMealResultProtein,
+                ),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 8),
@@ -3891,7 +4397,9 @@ Future<void> _showProfileDialog(
             children: [
               TextField(
                 controller: goal,
-                decoration: InputDecoration(labelText: l.dialogProfileTrainingsziel),
+                decoration: InputDecoration(
+                  labelText: l.dialogProfileTrainingsziel,
+                ),
               ),
               const SizedBox(height: 8),
               TextField(

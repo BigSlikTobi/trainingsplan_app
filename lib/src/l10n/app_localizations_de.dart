@@ -15,7 +15,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get navBlocks => 'Blocks';
 
   @override
-  String get navErnaehrung => 'Ernaehrung';
+  String get navErnaehrung => 'Fuel';
 
   @override
   String get navCoach => 'Coach';
@@ -33,13 +33,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get tooltipExport => 'Snapshot exportieren';
 
   @override
+  String get tooltipSettings => 'Einstellungen';
+
+  @override
   String get sectionUebungen => 'Übungen';
 
   @override
   String get btnStarten => 'Starten';
-
-  @override
-  String get btnBlockErstellen => '+ Block erstellen';
 
   @override
   String get btnCodexPlanImportieren => 'Codex Plan importieren';
@@ -49,7 +49,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get keinAktiverBlockSubtitle =>
-      'Starte mit einer Vorlage oder importiere deinen Codex Plan.';
+      'Importiere deinen Codex Plan, um zu starten.';
 
   @override
   String get labelCoach => 'COACH';
@@ -344,7 +344,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get blocksHeroBody =>
-      'Starte lokal mit einer Sport-Vorlage oder importiere den Block, den Codex in iCloud bereitstellt.';
+      'Importiere den Block, den Codex in iCloud bereitstellt.';
 
   @override
   String blocksCount(int count) {

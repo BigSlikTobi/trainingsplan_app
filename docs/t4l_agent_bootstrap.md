@@ -7,8 +7,25 @@ run the daily coaching loop.
 
 ## Source Of Truth
 
-The user should provide the absolute path to their `CodexFitnessExchange`
-folder. Use that folder as the source of truth for all app context.
+This bootstrap currently supports the iPhone app plus a Mac-based agent
+workspace. The iPhone writes files to iCloud. The Mac agent must resolve the
+local synced copy of the `CodexFitnessExchange` folder before coaching.
+
+Do not ask the user to browse Finder. Resolve the folder yourself on the Mac by
+running:
+
+```bash
+find "$HOME/Library/Mobile Documents" -type d -name CodexFitnessExchange 2>/dev/null
+```
+
+If exactly one folder is found, use it as the source of truth. If multiple
+folders are found, prefer the one whose path contains the T4L Trainer app
+container or ask the user which one is active. If no folder is found, ask the
+user to open the iPhone app, visit Setup, and export or refresh daily context so
+iCloud creates and syncs the folder.
+
+Before coaching, verify access by listing the folder and reading at least one
+available JSON file.
 
 Common files:
 

@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-APP_BUNDLE_ID = "com.example.trainingsplanApp"
+APP_BUNDLE_ID = "com.tobiaslatta.trainingsplanapp"
 EXCHANGE_FOLDER = "CodexFitnessExchange"
 OUTPUT_FILE = "nutrition_analysis_result.json"
 

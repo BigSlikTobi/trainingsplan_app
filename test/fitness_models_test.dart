@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:trainingsplan_app/src/data/exercise_library.dart';
-import 'package:trainingsplan_app/src/data/seed_data.dart';
 import 'package:trainingsplan_app/src/models/fitness_models.dart';
+
+import 'helpers/sample_fitness_data.dart';
 
 void main() {
   test('unfinished workout log keeps workout active and next', () {
-    final data = createSeedFitnessData();
+    final data = sampleFitnessData();
     final workout = data.nextWorkout!;
     final activeLog = WorkoutLog(
       id: 'log-active',
@@ -27,7 +27,7 @@ void main() {
   });
 
   test('completed workout log advances next workout', () {
-    final data = createSeedFitnessData();
+    final data = sampleFitnessData();
     final workout = data.nextWorkout!;
     final completedLog = WorkoutLog(
       id: 'log-completed',
@@ -91,7 +91,7 @@ void main() {
   });
 
   test('profile nutrition fields and meal analysis result round trip', () {
-    final data = createSeedFitnessData();
+    final data = sampleFitnessData();
     final result = MealAnalysisResult(
       id: 'meal_result_test',
       requestId: 'meal_request_test',
@@ -149,7 +149,7 @@ void main() {
       );
 
       final decoded = MemoryEntry.fromJson(memory.toJson());
-      final oldJson = createSeedFitnessData().toJson()..remove('memories');
+      final oldJson = sampleFitnessData().toJson()..remove('memories');
       final oldData = FitnessData.fromJson(oldJson);
 
       expect(decoded.category, MemoryCategory.form);
@@ -248,10 +248,6 @@ void main() {
     expect(exercise.media?.commonMistakes, ['Hips sag']);
   });
 
-  test('unknown exercise ids do not fall back to goblet squat', () {
-    expect(exerciseById('ankle_rockers'), isNull);
-  });
-
   test('FuelGuidance round-trips through toJson / fromJson', () {
     final guidance = FuelGuidance(
       issuedAt: DateTime.utc(2026, 5, 20, 7),
@@ -319,7 +315,7 @@ void main() {
   });
 
   test('FuelGuidance round-trips through FitnessData toJson / fromJson', () {
-    final data = createSeedFitnessData();
+    final data = sampleFitnessData();
     final guidance2 = FuelGuidance(
       issuedAt: DateTime.utc(2026, 5, 20, 7),
       validFor: '2026-05-20',

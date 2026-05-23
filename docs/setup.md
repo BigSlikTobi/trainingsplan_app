@@ -1,25 +1,25 @@
 # Agent Setup Guide
 
 Use this file as the first read when a user installs the app and wants to hand
-daily coaching to Codex, Claude, or another agent. Codex is the preferred
-desktop workflow, but the same iCloud files and helper scripts work for any
-agent that can read and write local JSON files.
+daily coaching to Codex, Claude, Gemini, or another local agent.
 
-For agents that should not receive the full repository, use the public bootstrap
-guide instead:
+The canonical agent instructions now live in the sibling repo:
 
 ```text
-https://gist.githubusercontent.com/BigSlikTobi/90ff2ce6c7ab3e37e27eabd48f003afa/raw/t4l_agent_bootstrap.md
+/Users/tobiaslatta/Projects/temp/t4l-agent-instructions
 ```
 
-The app's Setup tab copies this URL together with the user's local exchange
-folder path.
+The supported agent transport is the Local LAN Bridge.
 
 ## Prerequisites
 
-- Install and open the iOS app once so it can create its local data and iCloud
-  exchange folder.
-- Enable iCloud Drive for the Apple ID used by the iPhone and Mac.
+- Install and open the iOS app once so it can create local training data.
+- Install the local bridge package on the computer that will run the agent:
+
+```bash
+pipx install /Users/tobiaslatta/Projects/temp/t4l-local-bridge
+```
+
 - Grant HealthKit permissions if the user wants recovery, activity, body
   weight, and nutrition signals included in daily context.
 - Complete the profile in the app: goal, body metrics, training days, session
@@ -27,55 +27,51 @@ folder path.
 - Add or review active entries in the Coach tab `Memory Wiki`. These memories
   are durable agent context for goals, constraints, nutrition patterns,
   recovery signals, preferences, and form cues.
-- Optional: provide `OPENAI_API_KEY` when running the Flutter app if the app
-  should generate plans through the OpenAI Responses API. The iCloud agent
-  workflow does not require committing or storing an API key in the repository.
 
-## Locate The Exchange Folder
+## Start The Bridge
 
-From the repository root, print the resolved iCloud exchange directory:
+Run the bridge on the same computer as the agent:
 
 ```bash
-python3 tools/write_training_block_plan.py --print-dir
+t4l-bridge serve --dir ~/CodexFitnessExchange
 ```
 
-The folder is usually inside the Mac's Mobile Documents area and ends with:
+The command prints:
 
 ```text
-Documents/CodexFitnessExchange
+Local URL: http://<local-ip>:8787
+Pairing token: 123-456
 ```
 
-If automatic resolution is wrong, pass the folder explicitly when writing a
-result:
+Enter the Local URL and Pairing Token in the app Settings screen, tap
+`Connect`, then tap `Push Context`.
 
-```bash
-TRAININGSPLAN_EXCHANGE_DIR="/absolute/path/to/CodexFitnessExchange" \
-  python3 tools/write_training_block_plan.py plan.json
-```
-
-Use the training block helper above as the canonical folder check. If another
-helper prints a different folder on a local machine, reuse the canonical folder
-with `--exchange-dir` or `TRAININGSPLAN_EXCHANGE_DIR` so all files land in the
-same `CodexFitnessExchange` directory.
+If the computer restarts, sleeps, changes network, or the bridge process stops,
+restart the bridge and reconnect with the newly printed URL/token.
 
 ## Agent Startup Checklist
 
-1. Read this file.
-2. Read `docs/codex_coach_workflow.md` for the full file contract and coaching
-   rules.
-3. Resolve the exchange folder with `python3 tools/write_training_block_plan.py
-   --print-dir`.
-4. Inspect available exchange files before giving advice. Common files are:
+1. Read the sibling agent instructions repo:
+   `/Users/tobiaslatta/Projects/temp/t4l-agent-instructions`.
+2. Use the adapter for the current runtime:
+   `agents/codex/SKILL.md`, `agents/claude/CLAUDE.md`, or
+   `agents/gemini/GEMINI.md`.
+3. Verify `t4l-bridge` is installed. If missing, ask the user before installing
+   the official local package.
+4. Start or reuse the bridge with:
+   `t4l-bridge serve --dir ~/CodexFitnessExchange`.
+5. Wait for the user to connect the app and tap `Push Context`.
+6. Inspect available exchange files before giving advice. Common files are:
    `day_context.json`, `daily_snapshot.json`, `athlete_profile.json`,
    `training_block_request.json`, `nutrition_analysis_request.json`,
-   `training_block_plan.json`, `next_day_plan.json`, and
-   `nutrition_analysis_result.json`.
-5. Treat `day_context.json` as the primary current-day file when it exists.
+   `training_block_plan.json`, `next_day_plan.json`,
+   `nutrition_analysis_result.json`, and `fuel_guidance.json`.
+7. Treat `day_context.json` as the primary current-day file when it exists.
    Use `daily_snapshot.json` and `athlete_profile.json` as fallback or
    supporting context.
-6. Separate facts from assumptions. Missing HealthKit metrics or omitted JSON
+8. Separate facts from assumptions. Missing HealthKit metrics or omitted JSON
    fields are unknown, not zero.
-7. Process the current day using the morning planning loop:
+9. Process the current day using the morning planning loop:
    - Review long-term goal, current block goal, current week, next workout,
      recent workout performance, recovery, activity load, nutrition logs, and
      active `memoryWiki` entries.
@@ -85,47 +81,47 @@ same `CodexFitnessExchange` directory.
      yesterday's intake pattern, recovery, preferences, and digestion context.
    - Ask the user before changing direction when goals, constraints, schedule,
      injury notes, or recovery signals conflict.
-8. Write app-consumed JSON only through the validated helper scripts whenever a
-   helper exists.
+10. Write app-consumed JSON only through the validated helper scripts whenever a
+    helper exists.
 
 ## Codex Automation
 
 In Codex, create a daily morning automation that runs against this repository
-and uses the exchange folder as the source of truth. The automation prompt
-should say:
+and uses the Local LAN Bridge exchange folder as the source of truth. The
+automation prompt should say:
 
 ```text
-Fetch and read the T4L Trainer bootstrap guide:
-https://gist.githubusercontent.com/BigSlikTobi/90ff2ce6c7ab3e37e27eabd48f003afa/raw/t4l_agent_bootstrap.md
+Read the local T4L agent instructions repo:
+/Users/tobiaslatta/Projects/temp/t4l-agent-instructions
 
-Use the CodexFitnessExchange folder as the source of truth. Inspect
+Use agents/codex/SKILL.md. Verify or start:
+t4l-bridge serve --dir ~/CodexFitnessExchange
+
+Wait for fresh app context from the Local LAN Bridge before coaching. Inspect
 day_context.json, daily_snapshot.json, athlete_profile.json,
 training_block_request.json, nutrition_analysis_request.json, active memoryWiki,
 recent training logs, nutrition logs, and HealthKit activity summaries. Produce
 a morning coaching plan for today. Decide whether training should progress,
 hold, substitute, deload, or rest. Treat nutrition as contextual food guidance,
-not fixed targets unless the user asks for targets. Use yesterday's intake as a
-soft training-readiness signal and suggest concrete meals that fit today's
-training. Do not invent missing health data.
+not fixed targets unless the user asks for targets. Do not invent missing
+health data.
 ```
 
-Schedule it for the user's preferred morning time. The app writes
-`day_context.json` only after explicit pushes, workout completion, and meal
-analysis export, so the automation should report when the context appears stale
-and ask the user to export a fresh daily context from the app.
+The app writes `day_context.json` only after explicit pushes, workout
+completion, and meal analysis export, so the automation should report when the
+context appears stale and ask the user to push fresh context from the app.
 
 ## Generic Agent Setup
 
-For Claude or another agent, use the same operating contract:
+For Claude, Gemini, or another agent, use the same operating contract:
 
-- Give the agent this repository and the resolved `CodexFitnessExchange` folder.
-- Tell it to read `docs/setup.md` first, then `docs/codex_coach_workflow.md`.
-- Run it manually each morning or schedule it with the tool that agent supports.
+- Give the agent the local instructions repo and the bridge exchange folder.
 - Require it to inspect the exchange files before coaching.
 - Require validated writes:
   - `python3 tools/write_training_block_plan.py plan.json`
   - `python3 tools/write_nutrition_analysis_result.py --exchange-dir
     "/absolute/path/to/CodexFitnessExchange" result.json`
+  - `python3 tools/write_fuel_guidance.py guidance.json`
 - Require a user confirmation step before overwriting training direction,
   ignoring constraints, or making a recommendation from stale context.
 
@@ -136,5 +132,5 @@ For Claude or another agent, use the same operating contract:
 - Do not overwrite user intent with generic fitness advice.
 - Do not treat missing data as evidence.
 - Do not store API keys in files.
-- Leave generated build outputs, Flutter tool state, and iOS Pods alone unless
-  the user explicitly asks for app development work.
+- Leave generated build outputs, Flutter tool state, iOS Pods, and unrelated
+  files alone unless the user explicitly asks for app development work.
