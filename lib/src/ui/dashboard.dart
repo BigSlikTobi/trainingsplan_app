@@ -576,10 +576,7 @@ Future<void> _showExerciseDetailSheet(
       const <String>[];
   final warning = exercise.displayWarningCue;
   final detailNote = exercise.displayDetailNote;
-  final explainerUri = Uri.tryParse(media?.explainerUrl ?? '');
-  final hasVideo =
-      explainerUri != null &&
-      (explainerUri.scheme == 'http' || explainerUri.scheme == 'https');
+  final videoUri = _exerciseVideoUri(exercise);
   final restLabel = _restLabel(exercise.restSeconds);
 
   await showModalBottomSheet<void>(
@@ -599,14 +596,25 @@ Future<void> _showExerciseDetailSheet(
               controller: scrollController,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
               children: [
-                Text(
-                  exercise.name,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    height: 1.1,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.ink,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        exercise.name,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          height: 1.1,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                    if (videoUri != null) ...[
+                      const SizedBox(width: 10),
+                      _ExerciseVideoButton(uri: videoUri, prominent: true),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -722,14 +730,9 @@ Future<void> _showExerciseDetailSheet(
                         label: const Text('Satz loggen'),
                       ),
                     ),
-                    if (hasVideo) ...[
+                    if (videoUri != null) ...[
                       const SizedBox(width: 10),
-                      _VideoPill(
-                        onTap: () => launchUrl(
-                          _preferYoutubeShorts(explainerUri),
-                          mode: LaunchMode.externalApplication,
-                        ),
-                      ),
+                      _VideoPill(onTap: () => _openExerciseVideo(videoUri)),
                     ],
                   ],
                 ),
@@ -920,6 +923,7 @@ class _ExerciseRow extends StatelessWidget {
     final cue = exercise.displayPrimaryCue;
     final restLabel = _restLabel(exercise.restSeconds);
     final rpeText = _rpeText(exercise.targetRpe);
+    final videoUri = _exerciseVideoUri(exercise);
     final showRpeDot =
         !hasActiveWorkout || (!isRunning && !isPaused && !isStopped);
     return InkWell(
@@ -1019,6 +1023,10 @@ class _ExerciseRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
             ],
+            if (videoUri != null) ...[
+              _ExerciseVideoButton(uri: videoUri),
+              const SizedBox(width: 6),
+            ],
             _ExerciseTimerControls(
               hasActiveWorkout: hasActiveWorkout,
               isRunning: isRunning,
@@ -1077,6 +1085,44 @@ class _ExerciseMetaChip extends StatelessWidget {
             color: muted
                 ? AppColors.ink.withValues(alpha: 0.50)
                 : AppColors.ink.withValues(alpha: 0.72),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExerciseVideoButton extends StatelessWidget {
+  const _ExerciseVideoButton({required this.uri, this.prominent = false});
+
+  final Uri uri;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = AppLocalizations.of(context)!.erklaervideo;
+    final size = prominent ? 38.0 : 32.0;
+    return Tooltip(
+      message: label,
+      child: Material(
+        color: AppColors.transparent,
+        child: InkWell(
+          onTap: () => _openExerciseVideo(uri),
+          borderRadius: BorderRadius.circular(99),
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: AppColors.sage.withValues(alpha: prominent ? 0.13 : 0.08),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.sage.withValues(alpha: 0.28)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              CupertinoIcons.play_fill,
+              size: prominent ? 15 : 12,
+              color: AppColors.sage,
+            ),
           ),
         ),
       ),
@@ -1447,7 +1493,8 @@ class _BlocksPage extends StatelessWidget {
           label: Text(l.btnImportTrainingJson),
         ),
         const SizedBox(height: 16),
-        for (final block in data.blocks) _BlockCard(block: block),
+        for (final block in data.blocks)
+          _BlockCard(block: block, isActive: block.id == data.activeBlockId),
       ],
     );
   }
@@ -3004,6 +3051,20 @@ class _VideoPill extends StatelessWidget {
   }
 }
 
+Uri? _exerciseVideoUri(ExercisePrescription exercise) {
+  final raw = exercise.media?.explainerUrl.trim() ?? '';
+  if (raw.isEmpty) return null;
+  final uri = Uri.tryParse(raw);
+  if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+    return null;
+  }
+  return _preferYoutubeShorts(uri);
+}
+
+Future<void> _openExerciseVideo(Uri uri) {
+  return launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
 Uri _preferYoutubeShorts(Uri uri) {
   final host = uri.host.toLowerCase();
   final isYoutube =
@@ -3632,46 +3693,133 @@ class _SetupChecklistCard extends StatelessWidget {
 }
 
 class _BlockCard extends StatelessWidget {
-  const _BlockCard({required this.block});
+  const _BlockCard({required this.block, required this.isActive});
 
   final TrainingBlock block;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Card(
       child: ExpansionTile(
-        initiallyExpanded: false,
+        initiallyExpanded: isActive,
         title: Text(
           block.title,
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
-        subtitle: Text(
-          AppLocalizations.of(
-            context,
-          )!.blockCardWeeks(block.durationWeeks, block.createdBy),
-        ),
+        subtitle: Text(l.blockCardWeeks(block.durationWeeks, block.createdBy)),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
+          if (block.weeklyFocus.isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(block.weeklyFocus.join('\n')),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (block.measurableTargets.isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                l.blockCardTargets(block.measurableTargets.join(', ')),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Align(
             alignment: Alignment.centerLeft,
-            child: Text(block.weeklyFocus.join('\n')),
+            child: Text(l.blockCardWorkouts(block.workouts.length)),
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              AppLocalizations.of(
-                context,
-              )!.blockCardTargets(block.measurableTargets.join(', ')),
+          for (final workout in block.workouts.take(8))
+            _WorkoutPreviewRow(workout: workout),
+          if (block.workouts.length > 8)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '+${block.workouts.length - 8} weitere Workouts',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink.withValues(
+                      alpha: AppOpacity.mutedText,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutPreviewRow extends StatelessWidget {
+  const _WorkoutPreviewRow({required this.workout});
+
+  final PlannedWorkout workout;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppRadii.small),
+        border: Border.all(
+          color: AppColors.ink.withValues(alpha: AppOpacity.subtle),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  workout.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                l.weekDay(workout.week, workout.day),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            workout.focus,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
             ),
           ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              AppLocalizations.of(
-                context,
-              )!.blockCardWorkouts(block.workouts.length),
+          const SizedBox(height: 6),
+          Text(
+            '${workout.exercises.length} Übungen',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppColors.ink.withValues(alpha: .48),
             ),
           ),
         ],

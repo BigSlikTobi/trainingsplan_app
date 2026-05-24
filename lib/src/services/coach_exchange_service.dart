@@ -10,6 +10,7 @@ class CoachExchangeService {
 
   final LocalFitnessStore _store;
   static const _trainingBlockPlanFile = 'training_block_plan.json';
+  static const _nextDayPlanFile = 'next_day_plan.json';
   static const _nutritionRequestFile = 'nutrition_analysis_request.json';
   static const _nutritionResultFile = 'nutrition_analysis_result.json';
   static const _dayContextFile = 'day_context.json';
@@ -186,7 +187,7 @@ class CoachExchangeService {
   }
 
   Future<PlannedWorkout?> readNextDayPlan() async {
-    final json = await _store.readExchangeJson('next_day_plan.json');
+    final json = await _store.readExchangeJson(_nextDayPlanFile);
     if (json == null) return null;
     final workoutJson =
         (json['workout'] as Map?)?.cast<String, dynamic>() ?? json;
@@ -195,6 +196,14 @@ class CoachExchangeService {
       throw const FormatException('next_day_plan.json has no exercises.');
     }
     return workout;
+  }
+
+  Future<bool> hasNextDayPlan() {
+    return _store.exchangeJsonExists(_nextDayPlanFile);
+  }
+
+  Future<void> clearNextDayPlan() {
+    return _store.deleteExchangeJson(_nextDayPlanFile);
   }
 
   Future<bool> hasNutritionAnalysisResult() {

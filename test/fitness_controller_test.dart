@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trainingsplan_app/src/data/local_store.dart';
+import 'package:trainingsplan_app/src/data/seed_data.dart';
 import 'package:trainingsplan_app/src/models/fitness_models.dart';
 import 'package:trainingsplan_app/src/services/health_sync_service.dart';
 import 'package:trainingsplan_app/src/services/local_bridge_service.dart';
@@ -195,6 +196,50 @@ void main() {
     expect(store.saved?.memories.first.summary, contains('No sprints'));
   });
 
+  test(
+    'imports next-day plan into the active block during update checks',
+    () async {
+      final store = _MemoryStore()
+        ..jsonFiles['next_day_plan.json'] = {
+          'schema': 'next_day_plan.v1',
+          'workout': {
+            'id': 'daily_2026_05_25',
+            'week': 1,
+            'day': 3,
+            'title': 'Tomorrow Strength',
+            'focus': 'Upper body strength with easy conditioning.',
+            'rationale': 'Daily coach adjustment from fresh context.',
+            'conditioning': '10 min easy walk',
+            'exercises': [
+              {
+                'exerciseId': 'push_up',
+                'name': 'Push-Up',
+                'sets': 3,
+                'reps': '8-12',
+                'targetLoad': 'Bodyweight',
+                'targetRpe': 7,
+                'restSeconds': 75,
+                'coachCue': 'Brace and move as one line.',
+              },
+            ],
+          },
+        };
+      final controller = FitnessController(store: store);
+
+      await controller.load();
+
+      final activeBlock = controller.data.activeBlock!;
+      expect(activeBlock.workouts.first.id, 'daily_2026_05_25');
+      expect(activeBlock.workouts.first.title, 'Tomorrow Strength');
+      expect(
+        activeBlock.workouts.where((item) => item.id == 'daily_2026_05_25'),
+        hasLength(1),
+      );
+      expect(store.jsonFiles.containsKey('next_day_plan.json'), isFalse);
+      expect(store.saved?.activeBlock?.workouts.first.id, 'daily_2026_05_25');
+    },
+  );
+
   test('bridge config persists outside fitness data', () async {
     final store = _MemoryStore();
     final controller = FitnessController(store: store);
@@ -209,6 +254,119 @@ void main() {
     expect(store.bridgeConfig.baseUrl, 'http://127.0.0.1:8787');
     expect(store.bridgeConfig.token, '123-456');
   });
+
+  test(
+    'server API imports t4l-server next_day_plan result into active block',
+    () async {
+      final store = _MemoryStore()
+        ..bridgeConfig = const LocalBridgeConfig(
+          baseUrl: 'http://127.0.0.1:8787',
+          token: '123-456',
+        );
+      final bridge = _ResultBridgeService(
+        pendingKinds: const ['next_day_plan'],
+        results: {
+          'next_day_plan': {
+            'schema': 'next_day_plan.v1',
+            'plan': {
+              'title': 'Easy Engine + Hip Reset',
+              'targetDate': '2026-05-25',
+              'workout': {
+                'id': 'server_2026_05_25',
+                'week': 1,
+                'day': 3,
+                'title': 'Server Tomorrow',
+                'focus': 'API-generated upper-body day.',
+                'rationale': 'T4L server returned tomorrow from sync context.',
+                'conditioning': '12 min zone 2',
+                'exercises': [
+                  {
+                    'exerciseId': 'incline_push_up',
+                    'name': 'Incline Push-Up',
+                    'sets': 3,
+                    'reps': '10-12',
+                    'targetLoad': 'Bodyweight',
+                    'targetRpe': 7,
+                    'restSeconds': 75,
+                    'coachCue': 'Stay long from head to heel.',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      );
+      final controller = FitnessController(store: store, bridge: bridge);
+      await controller.load();
+
+      await controller.pullBridgeResults();
+
+      expect(
+        controller.data.activeBlock!.workouts.first.id,
+        'server_2026_05_25',
+      );
+      expect(
+        controller.data.activeBlock!.workouts.first.title,
+        'Server Tomorrow',
+      );
+      expect(bridge.consumedKinds, ['next_day_plan']);
+      expect(store.jsonFiles.containsKey('next_day_plan.json'), isFalse);
+    },
+  );
+
+  test(
+    'server API creates a visible daily block when no active block exists',
+    () async {
+      final store = _MemoryStore()
+        ..saved = createEmptyFitnessData()
+        ..bridgeConfig = const LocalBridgeConfig(
+          baseUrl: 'http://127.0.0.1:8787',
+          token: '123-456',
+        );
+      final bridge = _ResultBridgeService(
+        pendingKinds: const ['next_day_plan'],
+        results: {
+          'next_day_plan': {
+            'schema': 'next_day_plan.v1',
+            'workout': {
+              'id': 'server_daily_without_block',
+              'week': 1,
+              'day': 1,
+              'title': 'Easy Engine + Hip Reset',
+              'focus': 'Easy aerobic work and hip reset.',
+              'rationale':
+                  'No active block exists, so keep the daily plan visible.',
+              'conditioning': '20 min easy bike',
+              'exercises': [
+                {
+                  'exerciseId': 'hip_airplane_regression',
+                  'name': 'Hip Airplane Regression',
+                  'sets': 2,
+                  'reps': '5/side',
+                  'targetLoad': 'Bodyweight',
+                  'targetRpe': 4,
+                  'restSeconds': 45,
+                  'coachCue': 'Move slowly and own the hip.',
+                },
+              ],
+            },
+          },
+        },
+      );
+      final controller = FitnessController(store: store, bridge: bridge);
+      await controller.load();
+
+      await controller.pullBridgeResults();
+
+      expect(controller.data.blocks, hasLength(1));
+      expect(controller.data.activeBlock?.title, 'Daily Coach Plans');
+      expect(
+        controller.data.activeBlock?.workouts.first.title,
+        'Easy Engine + Hip Reset',
+      );
+      expect(bridge.consumedKinds, ['next_day_plan']);
+    },
+  );
 
   test(
     'server migration uploads full snapshot without mutating phone data',
@@ -735,6 +893,32 @@ class _CapturingBridgeService extends LocalBridgeService {
     Map<String, dynamic> payload,
   ) async {
     snapshot = payload;
+  }
+}
+
+class _ResultBridgeService extends LocalBridgeService {
+  _ResultBridgeService({required this.pendingKinds, required this.results});
+
+  final List<String> pendingKinds;
+  final Map<String, Map<String, dynamic>> results;
+  final consumedKinds = <String>[];
+
+  @override
+  Future<List<String>> pendingResultKinds(LocalBridgeConfig config) async {
+    return pendingKinds;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> downloadResult(
+    LocalBridgeConfig config,
+    String kind,
+  ) async {
+    return results[kind];
+  }
+
+  @override
+  Future<void> markResultConsumed(LocalBridgeConfig config, String kind) async {
+    consumedKinds.add(kind);
   }
 }
 

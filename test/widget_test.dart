@@ -83,6 +83,32 @@ void main() {
     expect(find.textContaining('CodexFitnessExchange'), findsWidgets);
   });
 
+  testWidgets('blocks page shows active block workout previews', (
+    tester,
+  ) async {
+    final controller = FitnessController(store: _WidgetStore());
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Blocks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sample Block'), findsOneWidget);
+    expect(find.text('W1 D1 - Sample A'), findsOneWidget);
+    expect(find.text('W1 D2 - Sample B'), findsOneWidget);
+  });
+
   testWidgets('today workout rows keep long coaching text in details', (
     tester,
   ) async {
@@ -108,6 +134,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Keep the ribcage stacked'), findsOneWidget);
+    expect(find.byTooltip('Erklärvideo'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('Goblet Squat With Deliberately Long Name'));
@@ -115,6 +142,7 @@ void main() {
 
     expect(find.text('AGENT NOTE'), findsOneWidget);
     expect(find.textContaining('This longer note belongs'), findsOneWidget);
+    expect(find.byTooltip('Erklärvideo'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -205,7 +233,7 @@ FitnessData _longCoachData() {
     warningCue:
         'Stop or reduce range immediately if knee pain increases during the set.',
     media: const ExerciseMedia(
-      explainerUrl: '',
+      explainerUrl: 'https://www.youtube.com/watch?v=abc123',
       setup:
           'Set the feet just outside hip width, hold the bell high against the sternum, and create a tripod foot before the first descent.',
       cues: [

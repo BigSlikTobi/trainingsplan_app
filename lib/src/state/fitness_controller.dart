@@ -361,6 +361,7 @@ class FitnessController extends ChangeNotifier {
 
   Future<void> checkForCodexUpdates() async {
     await checkForCodexBlockPlan();
+    await checkForNextDayPlan();
     await checkForNutritionAnalysisResult();
     await importFuelGuidance();
     await importExchangeMemoryWiki();
@@ -494,21 +495,14 @@ class FitnessController extends ChangeNotifier {
     }
     final downloaded = <String>[];
     try {
-      const resultFiles = {
-        'training_block_plan': 'training_block_plan.json',
-        'next_day_plan': 'next_day_plan.json',
-        'nutrition_analysis_result': 'nutrition_analysis_result.json',
-        'fuel_guidance': 'fuel_guidance.json',
-      };
       final pendingKinds = await _bridge.pendingResultKinds(_bridgeConfig);
       for (final kind in pendingKinds) {
-        final fileName = resultFiles[kind];
-        if (fileName == null) continue;
         final payload = await _bridge.downloadResult(_bridgeConfig, kind);
         if (payload == null) continue;
-        await _store.writeExchangeJson(fileName, payload);
+        final resultLabel = await _importBridgeResult(kind, payload);
+        if (resultLabel == null) continue;
         await _bridge.markResultConsumed(_bridgeConfig, kind);
-        downloaded.add(fileName);
+        downloaded.add(resultLabel);
       }
       await checkForCodexUpdates();
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
@@ -561,15 +555,95 @@ class FitnessController extends ChangeNotifier {
     }
   }
 
+  Future<void> checkForNextDayPlan() async {
+    final hasPlan = await _coach.hasNextDayPlan();
+    if (!hasPlan) return;
+    try {
+      await importNextDayPlan();
+    } on Object catch (error) {
+      _status = 'Next-day plan import failed: $error';
+      notifyListeners();
+    }
+  }
+
+  Future<String?> _importBridgeResult(
+    String kind,
+    Map<String, dynamic> payload,
+  ) async {
+    switch (kind) {
+      case 'next_day_plan':
+        final workout = _plannedWorkoutFromResult(payload);
+        await importNextDayWorkout(workout, source: 'T4L server');
+        return 'next_day_plan';
+      case 'training_block_plan':
+        await _store.writeExchangeJson('training_block_plan.json', payload);
+        return 'training_block_plan.json';
+      case 'nutrition_analysis_result':
+        await _store.writeExchangeJson(
+          'nutrition_analysis_result.json',
+          payload,
+        );
+        return 'nutrition_analysis_result.json';
+      case 'fuel_guidance':
+        await _store.writeExchangeJson('fuel_guidance.json', payload);
+        return 'fuel_guidance.json';
+    }
+    return null;
+  }
+
   Future<void> importNextDayPlan() async {
     final workout = await _coach.readNextDayPlan();
-    final block = activeBlock;
-    if (workout == null || block == null) {
+    if (workout == null) {
       _status = 'No next_day_plan.json found or no active block exists';
       notifyListeners();
       return;
     }
-    final updatedBlock = block.copyWith(workouts: [workout, ...block.workouts]);
+    await importNextDayWorkout(workout, source: 'Codex');
+    await _coach.clearNextDayPlan();
+  }
+
+  Future<void> importNextDayWorkout(
+    PlannedWorkout workout, {
+    String source = 'coach',
+  }) async {
+    final block = activeBlock;
+    if (block == null) {
+      final fallbackBlock = TrainingBlock(
+        id: newId('block_daily'),
+        style: TrainingStyle.custom,
+        title: 'Daily Coach Plans',
+        durationWeeks: 1,
+        currentWeek: workout.week,
+        weeklyFocus: [workout.focus],
+        measurableTargets: const [],
+        workouts: [workout],
+        createdBy: source,
+        createdAt: DateTime.now(),
+      );
+      _data = _data.copyWith(
+        blocks: [fallbackBlock, ..._data.blocks],
+        activeBlockId: fallbackBlock.id,
+        coachDecisions: [
+          CoachDecision(
+            id: newId('decision'),
+            createdAt: DateTime.now(),
+            title: 'Imported next-day plan',
+            rationale: workout.rationale,
+            safetyFlags: const [],
+            accepted: true,
+          ),
+          ..._data.coachDecisions,
+        ],
+      );
+      await _persist('Imported next-day plan from $source');
+      return;
+    }
+    final updatedBlock = block.copyWith(
+      workouts: [
+        workout,
+        ...block.workouts.where((item) => item.id != workout.id),
+      ],
+    );
     _data = _data.copyWith(
       blocks: _data.blocks
           .map((item) => item.id == block.id ? updatedBlock : item)
@@ -586,7 +660,7 @@ class FitnessController extends ChangeNotifier {
         ..._data.coachDecisions,
       ],
     );
-    await _persist('Imported next-day plan from Codex');
+    await _persist('Imported next-day plan from $source');
   }
 
   Future<void> logSet(
@@ -1565,6 +1639,36 @@ String _memoryImportKey(MemoryEntry memory) {
     memory.title.trim().toLowerCase(),
     memory.summary.trim().toLowerCase(),
   ].join('\n');
+}
+
+PlannedWorkout _plannedWorkoutFromResult(Map<String, dynamic> payload) {
+  final workoutJson = _workoutPayloadObject(payload);
+  final workout = PlannedWorkout.fromJson(workoutJson);
+  if (workout.exercises.isEmpty) {
+    throw const FormatException('next_day_plan result has no exercises.');
+  }
+  return workout;
+}
+
+Map<String, dynamic> _workoutPayloadObject(Map<String, dynamic> payload) {
+  final workout = (payload['workout'] as Map?)?.cast<String, dynamic>();
+  if (workout != null) return workout;
+
+  final plan = (payload['plan'] as Map?)?.cast<String, dynamic>();
+  if (plan != null) {
+    final planWorkout = (plan['workout'] as Map?)?.cast<String, dynamic>();
+    if (planWorkout != null) return planWorkout;
+    if (plan['exercises'] is List) return plan;
+  }
+
+  final result = (payload['result'] as Map?)?.cast<String, dynamic>();
+  if (result != null) {
+    final resultWorkout = (result['workout'] as Map?)?.cast<String, dynamic>();
+    if (resultWorkout != null) return resultWorkout;
+    if (result['exercises'] is List) return result;
+  }
+
+  return payload;
 }
 
 int _payloadInt(Object? value, int fallback) {

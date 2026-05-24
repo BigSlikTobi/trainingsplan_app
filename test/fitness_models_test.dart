@@ -191,6 +191,7 @@ void main() {
               'restSeconds': '90',
               'coachCue': 'Brace before each rep.',
               'media': {
+                'youtubeUrl': 'https://www.youtube.com/watch?v=goblet',
                 'setup': 'Kettlebell tight to sternum.',
                 'cues': ['Tripod foot', 'Brace hard'],
                 'commonMistakes': ['Losing heel pressure'],
@@ -213,6 +214,10 @@ void main() {
     expect(
       block.workouts.single.exercises.single.media?.setup,
       'Kettlebell tight to sternum.',
+    );
+    expect(
+      block.workouts.single.exercises.single.media?.explainerUrl,
+      'https://www.youtube.com/watch?v=goblet',
     );
     expect(block.workouts.single.exercises.single.media?.cues, [
       'Tripod foot',
