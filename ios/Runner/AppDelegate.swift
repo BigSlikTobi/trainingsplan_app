@@ -48,6 +48,12 @@ import UIKit
             self?.watchSync.markCompletionHandled(completionId)
           }
           result(nil)
+        case "endWatchWorkout":
+          let args = call.arguments as? [String: Any]
+          if let workoutId = args?["workoutId"] as? String, !workoutId.isEmpty {
+            self?.watchSync.endWatchWorkout(workoutId)
+          }
+          result(nil)
         default:
           result(FlutterMethodNotImplemented)
         }

@@ -29,23 +29,25 @@ class CoachDashboard extends StatefulWidget {
 
 class _CoachDashboardState extends State<CoachDashboard> {
   var index = 0;
+  String? _seenJustCompletedLogId;
 
   @override
   Widget build(BuildContext context) {
     final controller = FitnessScope.of(context);
     final l = AppLocalizations.of(context)!;
     // When a workout has just been auto-closed, jump back to the Today
-    // tab so the user lands on the inline summary instead of whatever
-    // tab they were on. Consume the flag so we only do it once.
-    if (controller.justCompletedLog != null) {
+    // tab so the user lands on the inline summary. We track the id locally
+    // so this fires once per completion — we no longer clear the controller's
+    // _justCompletedLog here, because the watch sync relies on it to keep
+    // showing the "Done" card instead of advancing to the next workout.
+    final justCompleted = controller.justCompletedLog;
+    if (justCompleted != null && _seenJustCompletedLogId != justCompleted.id) {
+      _seenJustCompletedLogId = justCompleted.id;
       if (index != 0) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) setState(() => index = 0);
         });
       }
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => controller.clearJustCompleted(),
-      );
     }
     final pages = [
       _TodayPage(controller: controller),
@@ -91,7 +93,9 @@ class _CoachDashboardState extends State<CoachDashboard> {
                   _StatusBar(text: controller.status),
                   if (controller.hasPendingCodexBlock)
                     _CodexBlockAvailableBanner(controller: controller),
-                  Expanded(child: pages[index]),
+                  Expanded(
+                    child: IndexedStack(index: index, children: pages),
+                  ),
                 ],
               ),
             ),
@@ -319,6 +323,7 @@ class _TodayPage extends StatelessWidget {
           const _RpeLegend(),
           const SizedBox(height: 8),
           _ExerciseListCard(
+            workout: workout,
             exercises: workout.exercises,
             controller: controller,
             hasActiveWorkout: hasActiveWorkout,
@@ -421,12 +426,14 @@ class _RpeLegendDot extends StatelessWidget {
 
 class _ExerciseListCard extends StatelessWidget {
   const _ExerciseListCard({
+    required this.workout,
     required this.exercises,
     required this.controller,
     required this.hasActiveWorkout,
     required this.focusedExerciseId,
   });
 
+  final PlannedWorkout workout;
   final List<ExercisePrescription> exercises;
   final dynamic controller;
   final bool hasActiveWorkout;
@@ -480,7 +487,12 @@ class _ExerciseListCard extends StatelessWidget {
                     controller.resumeExerciseTimer(exercises[i].exerciseId),
                 onStop: () =>
                     _handleExerciseStop(context, controller, exercises[i]),
-                onTap: () => _showSetDialog(context, controller, exercises[i]),
+                onTap: () => _showExerciseDetailSheet(
+                  context,
+                  controller,
+                  workout,
+                  exercises[i],
+                ),
               ),
           ],
         ),
@@ -547,28 +559,293 @@ class _ConditioningNote extends StatelessWidget {
   }
 }
 
-class _SagePill extends StatelessWidget {
-  const _SagePill({required this.label});
+Future<void> _showExerciseDetailSheet(
+  BuildContext context,
+  dynamic controller,
+  PlannedWorkout workout,
+  ExercisePrescription exercise,
+) async {
+  final media = exercise.media;
+  final setup = media?.setup.trim() ?? '';
+  final cues = [
+    if (exercise.displayPrimaryCue.isNotEmpty) exercise.displayPrimaryCue,
+    ...?media?.cues.where((item) => item.trim().isNotEmpty),
+  ];
+  final mistakes =
+      media?.commonMistakes.where((item) => item.trim().isNotEmpty).toList() ??
+      const <String>[];
+  final warning = exercise.displayWarningCue;
+  final detailNote = exercise.displayDetailNote;
+  final explainerUri = Uri.tryParse(media?.explainerUrl ?? '');
+  final hasVideo =
+      explainerUri != null &&
+      (explainerUri.scheme == 'http' || explainerUri.scheme == 'https');
+  final restLabel = _restLabel(exercise.restSeconds);
 
-  final String label;
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: AppColors.bg,
+    builder: (sheetContext) {
+      return SafeArea(
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.78,
+          minChildSize: 0.42,
+          maxChildSize: 0.92,
+          builder: (context, scrollController) {
+            return ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              children: [
+                Text(
+                  exercise.name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    height: 1.1,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _ExerciseMetaChip(
+                      text: '${exercise.sets} × ${exercise.reps}',
+                      maxWidth: 120,
+                    ),
+                    if (exercise.displayLoadLabel.isNotEmpty)
+                      _ExerciseMetaChip(
+                        text: exercise.displayLoadLabel,
+                        maxWidth: 120,
+                      ),
+                    _ExerciseMetaChip(
+                      text: 'RPE ${_rpeText(exercise.targetRpe)}',
+                      maxWidth: 90,
+                    ),
+                    if (restLabel != null)
+                      _ExerciseMetaChip(text: restLabel, muted: true),
+                  ],
+                ),
+                if (warning.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _DetailCallout(
+                    icon: CupertinoIcons.exclamationmark_triangle,
+                    color: AppColors.coral,
+                    text: warning,
+                  ),
+                ],
+                if (exercise.coachCue.trim().isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _DetailSection(
+                    title: 'Coach Cue',
+                    child: Text(
+                      exercise.coachCue.trim(),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.45,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.sage,
+                      ),
+                    ),
+                  ),
+                ],
+                if (detailNote.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _DetailSection(title: 'Agent Note', child: Text(detailNote)),
+                ],
+                if (setup.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _DetailSection(title: 'Setup', child: Text(setup)),
+                ],
+                if (cues.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _DetailSection(
+                    title: 'Cues',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final cue in cues)
+                          _DetailBullet(
+                            text: cue.trim(),
+                            color: AppColors.sage,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (mistakes.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _DetailSection(
+                    title: 'Fehler vermeiden',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final mistake in mistakes)
+                          _DetailBullet(
+                            text: mistake.trim(),
+                            color: AppColors.coral,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (exercise.targetLoad.trim().isNotEmpty &&
+                    exercise.targetLoad.trim() !=
+                        exercise.displayLoadLabel) ...[
+                  const SizedBox(height: 12),
+                  _DetailSection(
+                    title: 'Load',
+                    child: Text(exercise.targetLoad.trim()),
+                  ),
+                ],
+                if (workout.rationale.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _DetailSection(
+                    title: 'Rationale',
+                    child: Text(workout.rationale.trim()),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                          _showSetDialog(context, controller, exercise);
+                        },
+                        icon: const Icon(CupertinoIcons.plus_circle),
+                        label: const Text('Satz loggen'),
+                      ),
+                    ),
+                    if (hasVideo) ...[
+                      const SizedBox(width: 10),
+                      _VideoPill(
+                        onTap: () => launchUrl(
+                          _preferYoutubeShorts(explainerUri),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
+}
+
+class _DetailSection extends StatelessWidget {
+  const _DetailSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.sage.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: AppColors.sage.withValues(alpha: 0.33)),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
       ),
-      child: Text(
-        label.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.7,
-          color: AppColors.sage,
+      child: DefaultTextStyle(
+        style: TextStyle(
+          fontSize: 13,
+          height: 1.45,
+          color: AppColors.ink.withValues(alpha: 0.72),
         ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+              ),
+            ),
+            const SizedBox(height: 7),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailCallout extends StatelessWidget {
+  const _DetailCallout({
+    required this.icon,
+    required this.color,
+    required this.text,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailBullet extends StatelessWidget {
+  const _DetailBullet({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(CupertinoIcons.check_mark, size: 12, color: color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text)),
+        ],
       ),
     );
   }
@@ -639,9 +916,10 @@ class _ExerciseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pre =
-        '${exercise.sets} × ${exercise.reps}'
-        '${exercise.targetLoad.trim().isEmpty ? '' : ' · ${exercise.targetLoad}'}';
+    final loadLabel = exercise.displayLoadLabel;
+    final cue = exercise.displayPrimaryCue;
+    final restLabel = _restLabel(exercise.restSeconds);
+    final rpeText = _rpeText(exercise.targetRpe);
     final showRpeDot =
         !hasActiveWorkout || (!isRunning && !isPaused && !isStopped);
     return InkWell(
@@ -666,7 +944,7 @@ class _ExerciseRow extends StatelessWidget {
           ),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
               width: 16,
@@ -697,14 +975,35 @@ class _ExerciseRow extends StatelessWidget {
                       color: isFocused ? AppColors.sage : AppColors.ink,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    pre,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.ink.withValues(alpha: 0.43),
-                    ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 5,
+                    children: [
+                      _ExerciseMetaChip(
+                        text: '${exercise.sets} × ${exercise.reps}',
+                      ),
+                      if (loadLabel.isNotEmpty)
+                        _ExerciseMetaChip(text: loadLabel, maxWidth: 96),
+                      _ExerciseMetaChip(text: 'RPE $rpeText'),
+                      if (restLabel != null)
+                        _ExerciseMetaChip(text: restLabel, muted: true),
+                    ],
                   ),
+                  if (cue.isNotEmpty) ...[
+                    const SizedBox(height: 7),
+                    Text(
+                      cue,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.25,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.sage,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -738,10 +1037,68 @@ class _ExerciseRow extends StatelessWidget {
   }
 }
 
+class _ExerciseMetaChip extends StatelessWidget {
+  const _ExerciseMetaChip({
+    required this.text,
+    this.maxWidth = 88,
+    this.muted = false,
+  });
+
+  final String text;
+  final double maxWidth;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: muted
+              ? AppColors.ink.withValues(alpha: 0.04)
+              : AppColors.sage.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: muted
+                ? AppColors.ink.withValues(alpha: 0.08)
+                : AppColors.sage.withValues(alpha: 0.17),
+          ),
+        ),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1,
+            fontWeight: FontWeight.w800,
+            color: muted
+                ? AppColors.ink.withValues(alpha: 0.50)
+                : AppColors.ink.withValues(alpha: 0.72),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Color _rpeColor(double rpe) {
   if (rpe <= 4) return AppColors.sage;
   if (rpe <= 6) return AppColors.gold;
   return AppColors.coral;
+}
+
+String _rpeText(double rpe) => rpe == rpe.roundToDouble()
+    ? rpe.toStringAsFixed(0)
+    : rpe.toStringAsFixed(1);
+
+String? _restLabel(int seconds) {
+  if (seconds <= 0) return null;
+  if (seconds >= 60 && seconds % 60 == 0) return '${seconds ~/ 60} min';
+  if (seconds >= 60) return '${(seconds / 60).toStringAsFixed(1)} min';
+  return '${seconds}s';
 }
 
 class _ExerciseTimerControls extends StatelessWidget {
@@ -2274,73 +2631,26 @@ class _CoachPage extends StatefulWidget {
 }
 
 class _CoachPageState extends State<_CoachPage> {
-  int _focusIdx = 0;
-  final Set<int> _doneSet = <int>{};
-
   @override
   Widget build(BuildContext context) {
     final workout = widget.controller.nextWorkout as PlannedWorkout?;
     final block = widget.controller.activeBlock as TrainingBlock?;
     final data = widget.controller.data as FitnessData;
-    if (workout == null || block == null || workout.exercises.isEmpty) {
-      return _CoachEmptyState(controller: widget.controller);
-    }
-    final exercises = workout.exercises;
-    final i = _focusIdx.clamp(0, exercises.length - 1);
-    final ex = exercises[i];
 
     return ColoredBox(
       color: AppColors.bg,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
         children: [
-          _CoachHeader(week: workout.week, day: workout.day),
-          const SizedBox(height: 10),
-          _ProgressSegments(
-            count: exercises.length,
-            focusIdx: i,
-            doneSet: _doneSet,
+          _CoachOpsCard(
+            controller: widget.controller,
+            block: block,
+            workout: workout,
           ),
-          const SizedBox(height: 5),
-          Text(
-            workout.title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _FocusCard(
-            exercise: ex,
-            idx: i,
-            total: exercises.length,
-            focus: workout.focus,
-            canPrev: i > 0,
-            canNext: i < exercises.length - 1,
-            onPrev: () => setState(() {
-              if (_focusIdx > 0) _focusIdx -= 1;
-            }),
-            onNext: () => setState(() {
-              if (_focusIdx < exercises.length - 1) {
-                _doneSet.add(_focusIdx);
-                _focusIdx += 1;
-              }
-            }),
-          ),
-          const SizedBox(height: 10),
-          _SectionLabel(
-            label: AppLocalizations.of(context)!.sectionAlleUebungen,
-          ),
-          const SizedBox(height: 4),
-          for (var j = 0; j < exercises.length; j++)
-            _CoachExerciseRow(
-              exercise: exercises[j],
-              isActive: j == i,
-              isDone: _doneSet.contains(j),
-              isLast: j == exercises.length - 1,
-              onTap: () => setState(() => _focusIdx = j),
-            ),
+          if (workout != null && block != null) ...[
+            const SizedBox(height: 12),
+            _PlanReviewCard(block: block, workout: workout),
+          ],
           const SizedBox(height: AppSpacing.page),
           _MemoryWikiSection(
             controller: widget.controller,
@@ -2352,370 +2662,303 @@ class _CoachPageState extends State<_CoachPage> {
   }
 }
 
-class _CoachEmptyState extends StatelessWidget {
-  const _CoachEmptyState({required this.controller});
+class _CoachOpsCard extends StatelessWidget {
+  const _CoachOpsCard({
+    required this.controller,
+    required this.block,
+    required this.workout,
+  });
 
   final dynamic controller;
+  final TrainingBlock? block;
+  final PlannedWorkout? workout;
 
   @override
   Widget build(BuildContext context) {
-    final data = controller.data as FitnessData;
-    return ColoredBox(
-      color: AppColors.bg,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Text(
-              AppLocalizations.of(context)!.coachEmptyState,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-                fontSize: 14,
-                height: 1.5,
-              ),
+    final hasPending = controller.hasPendingCodexBlock as bool;
+    final bridge = controller.bridgeConfig as LocalBridgeConfig;
+    final workoutLabel = workout == null
+        ? 'Kein Workout geplant'
+        : 'W${workout!.week} D${workout!.day} · ${workout!.title}';
+    final blockLabel = block?.title ?? 'Kein aktiver Block';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(CupertinoIcons.sparkles, color: AppColors.sage),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    AppLocalizations.of(context)!.coachPageTitle,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                _SmallStatusPill(
+                  text: hasPending ? 'Import bereit' : 'Sync bereit',
+                  color: hasPending ? AppColors.coral : AppColors.sage,
+                ),
+              ],
             ),
-          ),
-          _MemoryWikiSection(controller: controller, memories: data.memories),
-        ],
+            const SizedBox(height: 10),
+            _CoachSignalRow(
+              icon: CupertinoIcons.calendar,
+              label: blockLabel,
+              sublabel: workoutLabel,
+            ),
+            const SizedBox(height: 8),
+            _CoachSignalRow(
+              icon: CupertinoIcons.dot_radiowaves_left_right,
+              label: bridge.isConfigured
+                  ? 'Self-hosted Server verbunden'
+                  : 'Self-hosted Server optional',
+              sublabel: bridge.isConfigured
+                  ? bridge.baseUrl
+                  : 'Setup und Agent-Handoff liegen in Settings.',
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: hasPending
+                      ? controller.importCodexBlockPlan
+                      : null,
+                  icon: const Icon(CupertinoIcons.arrow_down_doc),
+                  label: const Text('Import'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: controller.exportDailySnapshot,
+                  icon: const Icon(CupertinoIcons.square_arrow_up),
+                  label: const Text('Context'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: controller.checkForCodexUpdates,
+                  icon: const Icon(CupertinoIcons.refresh),
+                  label: const Text('Check'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _CoachHeader extends StatelessWidget {
-  const _CoachHeader({required this.week, required this.day});
+class _CoachSignalRow extends StatelessWidget {
+  const _CoachSignalRow({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+  });
 
-  final int week;
-  final int day;
+  final IconData icon;
+  final String label;
+  final String sublabel;
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(child: SizedBox()),
-        Text(
-          l.coachPageTitle,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w900,
-            color: AppColors.ink,
-          ),
-        ),
+        Icon(icon, size: 16, color: AppColors.ink.withValues(alpha: 0.48)),
+        const SizedBox(width: 9),
         Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              l.weekDay(week, day),
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProgressSegments extends StatelessWidget {
-  const _ProgressSegments({
-    required this.count,
-    required this.focusIdx,
-    required this.doneSet,
-  });
-
-  final int count;
-  final int focusIdx;
-  final Set<int> doneSet;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < count; i++) ...[
-          if (i > 0) const SizedBox(width: 4),
-          Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              height: 3,
-              decoration: BoxDecoration(
-                color: doneSet.contains(i)
-                    ? AppColors.sage
-                    : i == focusIdx
-                    ? AppColors.ink
-                    : AppColors.ink.withValues(alpha: AppOpacity.subtle),
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _FocusCard extends StatelessWidget {
-  const _FocusCard({
-    required this.exercise,
-    required this.idx,
-    required this.total,
-    required this.focus,
-    required this.canPrev,
-    required this.canNext,
-    required this.onPrev,
-    required this.onNext,
-  });
-
-  final ExercisePrescription exercise;
-  final int idx;
-  final int total;
-  final String focus;
-  final bool canPrev;
-  final bool canNext;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
-    final media = exercise.media;
-    final setup = media?.setup ?? '';
-    final cues = media?.cues ?? const <String>[];
-    final explainerUri = Uri.tryParse(media?.explainerUrl ?? '');
-    final hasVideo =
-        explainerUri != null &&
-        (explainerUri.scheme == 'http' || explainerUri.scheme == 'https');
-    final rest = exercise.restSeconds;
-    final restLabel = rest <= 0
-        ? null
-        : rest >= 60
-        ? '${rest ~/ 60} min'
-        : '${rest}s';
-    final rpe = exercise.targetRpe;
-    final rpeText = rpe == rpe.roundToDouble()
-        ? rpe.toStringAsFixed(0)
-        : rpe.toStringAsFixed(1);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.07),
-            blurRadius: 28,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                l.uebungProgress(idx + 1, total),
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                sublabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.1,
+                  fontSize: 12,
                   color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
                 ),
               ),
-              const Spacer(),
-              if (focus.isNotEmpty)
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 200),
-                  child: _SagePill(label: focus),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SmallStatusPill extends StatelessWidget {
+  const _SmallStatusPill({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanReviewCard extends StatelessWidget {
+  const _PlanReviewCard({required this.block, required this.workout});
+
+  final TrainingBlock block;
+  final PlannedWorkout workout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ExpansionTile(
+        leading: const Icon(CupertinoIcons.doc_text),
+        title: const Text(
+          'Plan Review',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          '${block.title} · W${workout.week} D${workout.day}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        children: [
+          if (workout.focus.trim().isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                workout.focus.trim(),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.sage,
                 ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            exercise.name.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              height: 1.0,
-              letterSpacing: -0.3,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _StatChip(label: l.statSaetze, value: '${exercise.sets}'),
-              const SizedBox(width: 5),
-              _StatChip(label: l.statWdhl, value: exercise.reps),
-              const SizedBox(width: 5),
-              _StatChip(
-                label: l.statLast,
-                value: exercise.targetLoad.isEmpty ? '—' : exercise.targetLoad,
-              ),
-              const SizedBox(width: 5),
-              _StatChip(label: l.statRpe, value: rpeText, accent: true),
-              if (restLabel != null) ...[
-                const SizedBox(width: 5),
-                _StatChip(label: l.statPause, value: restLabel),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            height: 1,
-            color: AppColors.ink.withValues(alpha: AppOpacity.subtle),
-          ),
-          const SizedBox(height: 10),
-          if (exercise.coachCue.trim().isNotEmpty) ...[
-            Text(
-              '"${exercise.coachCue}"',
-              style: const TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                height: 1.45,
-                color: AppColors.sage,
               ),
             ),
+          if (workout.rationale.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
-          ],
-          if (setup.isNotEmpty) ...[
             Text(
-              setup,
+              workout.rationale.trim(),
               style: TextStyle(
                 fontSize: 12,
-                height: 1.45,
+                height: 1.4,
                 color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
               ),
             ),
-            const SizedBox(height: 10),
           ],
-          if (cues.isNotEmpty) ...[
-            for (final cue in cues)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 2),
-                      child: Text(
-                        '—',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.sage,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        cue,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          height: 1.35,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 10),
+          const SizedBox(height: 10),
+          for (final exercise in workout.exercises)
+            _PlanReviewExerciseRow(exercise: exercise),
+          if (workout.conditioning.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DetailCallout(
+              icon: Icons.schedule,
+              color: AppColors.sage,
+              text: workout.conditioning.trim(),
+            ),
           ],
-          Row(
-            children: [
-              if (hasVideo)
-                _VideoPill(
-                  onTap: () => launchUrl(
-                    _preferYoutubeShorts(explainerUri),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                )
-              else
-                const SizedBox.shrink(),
-              const Spacer(),
-              _RoundNavButton(
-                enabled: canPrev,
-                primary: false,
-                icon: CupertinoIcons.arrow_left,
-                onTap: onPrev,
-              ),
-              const SizedBox(width: 6),
-              _RoundNavButton(
-                enabled: canNext,
-                primary: true,
-                icon: CupertinoIcons.arrow_right,
-                onTap: onNext,
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 }
 
-class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.label,
-    required this.value,
-    this.accent = false,
-  });
+class _PlanReviewExerciseRow extends StatelessWidget {
+  const _PlanReviewExerciseRow({required this.exercise});
 
-  final String label;
-  final String value;
-  final bool accent;
+  final ExercisePrescription exercise;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-        decoration: BoxDecoration(
-          color: accent
-              ? AppColors.sage.withValues(alpha: 0.08)
-              : AppColors.ink.withValues(alpha: AppOpacity.subtle),
-          borderRadius: BorderRadius.circular(8),
-          border: accent
-              ? Border.all(color: AppColors.sage.withValues(alpha: 0.2))
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
-                height: 1.0,
-                color: accent ? AppColors.sage : AppColors.ink,
-              ),
+    final cue = exercise.displayPrimaryCue;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 7),
+            decoration: const BoxDecoration(
+              color: AppColors.sage,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 3),
-            Text(
-              label.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.0,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-              ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  exercise.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    '${exercise.sets} × ${exercise.reps}',
+                    if (exercise.displayLoadLabel.isNotEmpty)
+                      exercise.displayLoadLabel,
+                    'RPE ${_rpeText(exercise.targetRpe)}',
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.ink.withValues(alpha: 0.52),
+                  ),
+                ),
+                if (cue.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    cue,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.sage),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -2761,184 +3004,6 @@ class _VideoPill extends StatelessWidget {
   }
 }
 
-class _RoundNavButton extends StatelessWidget {
-  const _RoundNavButton({
-    required this.enabled,
-    required this.primary,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final bool enabled;
-  final bool primary;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = primary
-        ? (enabled
-              ? AppColors.ink
-              : AppColors.ink.withValues(alpha: AppOpacity.subtle))
-        : (enabled
-              ? AppColors.ink.withValues(alpha: AppOpacity.subtle)
-              : AppColors.transparent);
-    final fg = primary
-        ? (enabled ? AppColors.paper : AppColors.ink.withValues(alpha: 0.22))
-        : (enabled ? AppColors.ink : AppColors.ink.withValues(alpha: 0.22));
-    final border = primary
-        ? null
-        : Border.all(
-            color: AppColors.ink.withValues(
-              alpha: enabled ? AppOpacity.borderTint : AppOpacity.subtle,
-            ),
-          );
-    return Material(
-      color: AppColors.transparent,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(99),
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: bg,
-            shape: BoxShape.circle,
-            border: border,
-          ),
-          child: Icon(icon, size: 16, color: fg),
-        ),
-      ),
-    );
-  }
-}
-
-class _CoachExerciseRow extends StatelessWidget {
-  const _CoachExerciseRow({
-    required this.exercise,
-    required this.isActive,
-    required this.isDone,
-    required this.isLast,
-    required this.onTap,
-  });
-
-  final ExercisePrescription exercise;
-  final bool isActive;
-  final bool isDone;
-  final bool isLast;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final pre = exercise.sets == 1
-        ? exercise.reps
-        : '${exercise.sets} × ${exercise.reps}';
-    final color = isDone
-        ? AppColors.ink.withValues(alpha: AppOpacity.mutedText)
-        : isActive
-        ? AppColors.ink
-        : AppColors.ink.withValues(alpha: AppOpacity.mutedIcon);
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isLast
-                  ? AppColors.transparent
-                  : AppColors.ink.withValues(alpha: AppOpacity.subtle),
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            _StatusDot(isActive: isActive, isDone: isDone),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Text(
-                exercise.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isActive ? FontWeight.w900 : FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ),
-            Text(
-              pre,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusDot extends StatelessWidget {
-  const _StatusDot({required this.isActive, required this.isDone});
-
-  final bool isActive;
-  final bool isDone;
-
-  @override
-  Widget build(BuildContext context) {
-    if (isDone) {
-      return Container(
-        width: 19,
-        height: 19,
-        decoration: const BoxDecoration(
-          color: AppColors.sage,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          CupertinoIcons.check_mark,
-          size: 11,
-          color: AppColors.white,
-        ),
-      );
-    }
-    if (isActive) {
-      return Container(
-        width: 19,
-        height: 19,
-        decoration: const BoxDecoration(
-          color: AppColors.ink,
-          shape: BoxShape.circle,
-        ),
-        child: Center(
-          child: Container(
-            width: 5,
-            height: 5,
-            decoration: const BoxDecoration(
-              color: AppColors.paper,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-      );
-    }
-    return SizedBox(
-      width: 19,
-      height: 19,
-      child: CustomPaint(
-        painter: _DashedCirclePainter(
-          color: AppColors.ink.withValues(alpha: 0.22),
-          strokeWidth: 1.5,
-          dashLength: 3,
-          gapLength: 2,
-        ),
-      ),
-    );
-  }
-}
-
 Uri _preferYoutubeShorts(Uri uri) {
   final host = uri.host.toLowerCase();
   final isYoutube =
@@ -2960,47 +3025,6 @@ Uri _preferYoutubeShorts(Uri uri) {
   }
   if (id == null || id.isEmpty) return uri;
   return Uri.parse('https://www.youtube.com/shorts/$id');
-}
-
-class _DashedCirclePainter extends CustomPainter {
-  _DashedCirclePainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.dashLength,
-    required this.gapLength,
-  });
-
-  final Color color;
-  final double strokeWidth;
-  final double dashLength;
-  final double gapLength;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..color = color;
-    final rect = Offset.zero & size;
-    final path = Path()..addOval(rect.deflate(strokeWidth / 2));
-    for (final metric in path.computeMetrics()) {
-      var d = 0.0;
-      while (d < metric.length) {
-        final n = d + dashLength > metric.length
-            ? metric.length
-            : d + dashLength;
-        canvas.drawPath(metric.extractPath(d, n), paint);
-        d = n + gapLength;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedCirclePainter old) =>
-      old.color != color ||
-      old.strokeWidth != strokeWidth ||
-      old.dashLength != dashLength ||
-      old.gapLength != gapLength;
 }
 
 class _MemoryWikiSection extends StatelessWidget {
@@ -3794,6 +3818,7 @@ class _StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = _compactStatusLabel(text);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -3804,14 +3829,73 @@ class _StatusBar extends StatelessWidget {
         ).colorScheme.primary.withValues(alpha: AppOpacity.wash),
         borderRadius: BorderRadius.circular(AppRadii.small),
       ),
-      child: Text(
-        text,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w700),
+      child: Row(
+        children: [
+          Icon(label.$2, size: 15, color: label.$3),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label.$1,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+(String, IconData, Color) _compactStatusLabel(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) {
+    return ('Bereit', CupertinoIcons.check_mark_circled, AppColors.sage);
+  }
+  final lower = text.toLowerCase();
+  if (lower.contains('failed') ||
+      lower.contains('error') ||
+      lower.contains('denied') ||
+      lower.contains('invalid')) {
+    return (
+      'Aktion fehlgeschlagen',
+      CupertinoIcons.exclamationmark_triangle,
+      AppColors.coral,
+    );
+  }
+  if (lower.contains('exchange folder')) {
+    return ('Exchange-Ordner bereit', CupertinoIcons.folder, AppColors.sage);
+  }
+  if (lower.contains('exported')) {
+    return (
+      'Context exportiert',
+      CupertinoIcons.square_arrow_up,
+      AppColors.sage,
+    );
+  }
+  if (lower.contains('imported') || lower.contains('accepted')) {
+    return (
+      'Import abgeschlossen',
+      CupertinoIcons.check_mark_circled,
+      AppColors.sage,
+    );
+  }
+  if (lower.contains('new codex training block')) {
+    return ('Neuer Block bereit', CupertinoIcons.bell_fill, AppColors.coral);
+  }
+  if (lower.contains('no training_block_plan')) {
+    return ('Kein neuer Block', CupertinoIcons.doc_text_search, AppColors.gold);
+  }
+  if (lower.contains('workout started')) {
+    return ('Workout aktiv', CupertinoIcons.play_circle_fill, AppColors.coral);
+  }
+  if (lower.contains('local-first coaching data loaded')) {
+    return ('Lokal geladen', CupertinoIcons.check_mark_circled, AppColors.sage);
+  }
+  if (text.length > 42 || text.contains('/')) {
+    return ('Status aktualisiert', CupertinoIcons.info_circle, AppColors.sage);
+  }
+  return (text, CupertinoIcons.info_circle, AppColors.sage);
 }
 
 String _agentHandoffPayload(String exchangePath) {

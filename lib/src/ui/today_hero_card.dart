@@ -81,9 +81,7 @@ class TodayHeroCard extends StatelessWidget {
           stops: [0.0, 0.52, 1.0],
         ),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: AppColors.paper.withValues(alpha: 0.08),
-        ),
+        border: Border.all(color: AppColors.paper.withValues(alpha: 0.08)),
         boxShadow: [
           BoxShadow(
             color: AppColors.ink.withValues(alpha: 0.30),
@@ -174,10 +172,22 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color, bgAlpha, borderAlpha, live) = switch (status) {
-      HeroWorkoutStatus.bereit => ('● BEREIT', AppColors.gold, 0.12, 0.30, false),
+      HeroWorkoutStatus.bereit => (
+        '● BEREIT',
+        AppColors.gold,
+        0.12,
+        0.30,
+        false,
+      ),
       HeroWorkoutStatus.aktiv => ('● AKTIV', AppColors.coral, 0.12, 0.30, true),
       HeroWorkoutStatus.pause => ('⏸ PAUSE', AppColors.gold, 0.12, 0.30, false),
-      HeroWorkoutStatus.fertig => ('✓ FERTIG', AppColors.sage, 0.14, 0.30, false),
+      HeroWorkoutStatus.fertig => (
+        '✓ FERTIG',
+        AppColors.sage,
+        0.14,
+        0.30,
+        false,
+      ),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
@@ -248,10 +258,8 @@ class _LivePulseState extends State<_LivePulse>
     if (!widget.enabled) return widget.child;
     return AnimatedBuilder(
       animation: _c,
-      builder: (_, child) => Opacity(
-        opacity: 0.35 + 0.65 * (1 - _c.value),
-        child: child,
-      ),
+      builder: (_, child) =>
+          Opacity(opacity: 0.35 + 0.65 * (1 - _c.value), child: child),
       child: widget.child,
     );
   }
@@ -396,7 +404,9 @@ class _HeroOverview extends StatelessWidget {
         Row(
           children: [
             for (var i = 0; i < stats.length; i++) ...[
-              Expanded(child: _StatTile(label: stats[i].$1, value: stats[i].$2)),
+              Expanded(
+                child: _StatTile(label: stats[i].$1, value: stats[i].$2),
+              ),
               if (i < stats.length - 1) const SizedBox(width: 8),
             ],
           ],
@@ -409,9 +419,7 @@ class _HeroOverview extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.sage.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(
-                color: AppColors.sage.withValues(alpha: 0.22),
-              ),
+              border: Border.all(color: AppColors.sage.withValues(alpha: 0.22)),
             ),
             child: const Text(
               '✓ ABGESCHLOSSEN',
@@ -584,9 +592,7 @@ class _OverviewActiveControls extends StatelessWidget {
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.coral.withValues(alpha: 0.13),
               foregroundColor: AppColors.coral,
-              side: BorderSide(
-                color: AppColors.coral.withValues(alpha: 0.28),
-              ),
+              side: BorderSide(color: AppColors.coral.withValues(alpha: 0.28)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(13),
               ),
@@ -633,7 +639,7 @@ class _HeroExercise extends StatelessWidget {
     final paper = AppColors.paper;
     final pre =
         '${exercise.sets} × ${exercise.reps}'
-        '${exercise.targetLoad.trim().isEmpty ? '' : ' · ${exercise.targetLoad}'}';
+        '${exercise.displayLoadLabel.isEmpty ? '' : ' · ${exercise.displayLoadLabel}'}';
     final rpeColor = _rpeColor(exercise.targetRpe);
     final words = exercise.name.split(' ').where((w) => w.isNotEmpty);
 
@@ -645,8 +651,9 @@ class _HeroExercise extends StatelessWidget {
         Row(
           children: [
             _StatusPill(
-              status:
-                  isPaused ? HeroWorkoutStatus.pause : HeroWorkoutStatus.aktiv,
+              status: isPaused
+                  ? HeroWorkoutStatus.pause
+                  : HeroWorkoutStatus.aktiv,
             ),
             const Spacer(),
             Text(
@@ -744,7 +751,7 @@ class _HeroExercise extends StatelessWidget {
             ),
           ],
         ),
-        if (exercise.coachCue.trim().isNotEmpty) ...[
+        if (exercise.displayPrimaryCue.isNotEmpty) ...[
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
@@ -754,7 +761,7 @@ class _HeroExercise extends StatelessWidget {
               border: Border.all(color: paper.withValues(alpha: 0.09)),
             ),
             child: Text(
-              '"${exercise.coachCue}"',
+              '"${exercise.displayPrimaryCue}"',
               style: TextStyle(
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
@@ -785,9 +792,7 @@ String _fmtElapsed(Duration d) {
   final s = total % 60;
   final mm = m.toString().padLeft(2, '0');
   final ss = s.toString().padLeft(2, '0');
-  return h > 0
-      ? '${h.toString().padLeft(2, '0')}:$mm:$ss'
-      : '$mm:$ss';
+  return h > 0 ? '${h.toString().padLeft(2, '0')}:$mm:$ss' : '$mm:$ss';
 }
 
 Color _rpeColor(double rpe) {
@@ -1114,7 +1119,9 @@ class GhostExerciseSection extends StatelessWidget {
                           children: [
                             Container(
                               width:
-                                  MediaQuery.of(context).size.width * rows[i] * 0.55,
+                                  MediaQuery.of(context).size.width *
+                                  rows[i] *
+                                  0.55,
                               height: 10,
                               decoration: BoxDecoration(
                                 color: AppColors.ink.withValues(alpha: 0.10),
@@ -1123,8 +1130,7 @@ class GhostExerciseSection extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Container(
-                              width:
-                                  MediaQuery.of(context).size.width * 0.20,
+                              width: MediaQuery.of(context).size.width * 0.20,
                               height: 7,
                               decoration: BoxDecoration(
                                 color: AppColors.ink.withValues(alpha: 0.06),

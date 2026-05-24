@@ -21,18 +21,14 @@ class WatchSyncService {
   Stream<Map<String, dynamic>> get events {
     return _events ??= _eventChannel
         .receiveBroadcastStream()
-        .where((event) {
-          if (event is! Map) return false;
-          return event['type'] == 'watchWorkoutCompleted';
-        })
-        .map((event) {
-          return (event as Map).cast<String, dynamic>();
-        });
+        .where((event) => event is Map && event['type'] is String)
+        .map((event) => (event as Map).cast<String, dynamic>());
   }
 
   Map<String, dynamic> buildWorkoutPayload({
     required PlannedWorkout workout,
     WorkoutLog? activeLog,
+    WorkoutLog? completedLog,
     DateTime? sentAt,
   }) {
     return {
@@ -40,16 +36,22 @@ class WatchSyncService {
       'sentAt': (sentAt ?? DateTime.now()).toIso8601String(),
       'workout': workout.toJson(),
       if (activeLog != null) 'activeLog': activeLog.toJson(),
+      if (completedLog != null) 'completedLog': completedLog.toJson(),
     };
   }
 
   Future<String> syncWorkout({
     required PlannedWorkout workout,
     WorkoutLog? activeLog,
+    WorkoutLog? completedLog,
   }) async {
     final result = await _methodChannel.invokeMethod<String>(
       'syncWorkout',
-      buildWorkoutPayload(workout: workout, activeLog: activeLog),
+      buildWorkoutPayload(
+        workout: workout,
+        activeLog: activeLog,
+        completedLog: completedLog,
+      ),
     );
     return result ?? 'watch_sync_sent';
   }
@@ -57,6 +59,13 @@ class WatchSyncService {
   Future<void> markCompletionHandled(String completionId) async {
     await _methodChannel.invokeMethod<void>('markCompletionHandled', {
       'completionId': completionId,
+    });
+  }
+
+  Future<void> endWatchWorkout(String workoutId) async {
+    if (workoutId.isEmpty) return;
+    await _methodChannel.invokeMethod<void>('endWatchWorkout', {
+      'workoutId': workoutId,
     });
   }
 }

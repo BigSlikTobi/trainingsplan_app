@@ -275,6 +275,10 @@ class ExercisePrescription {
     required this.targetRpe,
     required this.restSeconds,
     required this.coachCue,
+    this.loadLabel,
+    this.primaryCue,
+    this.detailNote,
+    this.warningCue,
     this.media,
   });
 
@@ -286,7 +290,27 @@ class ExercisePrescription {
   final double targetRpe;
   final int restSeconds;
   final String coachCue;
+  final String? loadLabel;
+  final String? primaryCue;
+  final String? detailNote;
+  final String? warningCue;
   final ExerciseMedia? media;
+
+  String get displayLoadLabel {
+    final compact = loadLabel?.trim();
+    if (compact != null && compact.isNotEmpty) return compact;
+    return targetLoad.trim();
+  }
+
+  String get displayPrimaryCue {
+    final compact = primaryCue?.trim();
+    if (compact != null && compact.isNotEmpty) return compact;
+    return coachCue.trim();
+  }
+
+  String get displayDetailNote => detailNote?.trim() ?? '';
+
+  String get displayWarningCue => warningCue?.trim() ?? '';
 
   Map<String, dynamic> toJson() => {
     'exerciseId': exerciseId,
@@ -297,6 +321,10 @@ class ExercisePrescription {
     'targetRpe': targetRpe,
     'restSeconds': restSeconds,
     'coachCue': coachCue,
+    if (loadLabel?.trim().isNotEmpty ?? false) 'loadLabel': loadLabel,
+    if (primaryCue?.trim().isNotEmpty ?? false) 'primaryCue': primaryCue,
+    if (detailNote?.trim().isNotEmpty ?? false) 'detailNote': detailNote,
+    if (warningCue?.trim().isNotEmpty ?? false) 'warningCue': warningCue,
     if (media != null) 'media': media!.toJson(),
   };
 
@@ -310,6 +338,10 @@ class ExercisePrescription {
       targetRpe: _doubleValue(json['targetRpe'], 7),
       restSeconds: _intValue(json['restSeconds'], 90),
       coachCue: json['coachCue'] as String? ?? '',
+      loadLabel: json['loadLabel'] as String?,
+      primaryCue: json['primaryCue'] as String?,
+      detailNote: json['detailNote'] as String?,
+      warningCue: json['warningCue'] as String?,
       media: _exerciseMediaValue(json),
     );
   }
@@ -646,7 +678,7 @@ class WorkoutLog {
     'workoutId': workoutId,
     'title': title,
     'startedAt': startedAt.toIso8601String(),
-    'completedAt': completedAt?.toIso8601String(),
+    if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
     if (pausedAt != null) 'pausedAt': pausedAt!.toIso8601String(),
     if (pausedSeconds > 0) 'pausedSeconds': pausedSeconds,
     if (totalDurationSeconds != null)
@@ -1070,21 +1102,13 @@ class MealSuggestion {
 }
 
 class MealIdea {
-  const MealIdea({
-    required this.tag,
-    required this.name,
-    required this.why,
-  });
+  const MealIdea({required this.tag, required this.name, required this.why});
 
   final String tag;
   final String name;
   final String why;
 
-  Map<String, dynamic> toJson() => {
-    'tag': tag,
-    'name': name,
-    'why': why,
-  };
+  Map<String, dynamic> toJson() => {'tag': tag, 'name': name, 'why': why};
 
   factory MealIdea.fromJson(Map<String, dynamic> json) {
     return MealIdea(

@@ -183,6 +183,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sectionAlleUebungen => 'All Exercises';
 
   @override
+  String get coachNotiz => 'Coach Note';
+
+  @override
+  String get sectionConditioning => 'Conditioning';
+
+  @override
+  String get fehlerVermeiden => 'Avoid mistakes';
+
+  @override
   String get erklaervideo => 'Tutorial';
 
   @override

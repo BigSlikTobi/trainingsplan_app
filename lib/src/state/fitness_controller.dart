@@ -46,6 +46,10 @@ class FitnessController extends ChangeNotifier {
   WorkoutLog? _justCompletedLog;
   LocalBridgeConfig _bridgeConfig = const LocalBridgeConfig();
   StreamSubscription<Map<String, dynamic>>? _watchEvents;
+  String? _activeWatchSessionWorkoutId;
+
+  @visibleForTesting
+  String? get debugActiveWatchSessionWorkoutId => _activeWatchSessionWorkoutId;
 
   FitnessData get data => _data;
   bool get isLoading => _isLoading;
@@ -65,22 +69,70 @@ class FitnessController extends ChangeNotifier {
   LocalBridgeConfig get bridgeConfig => _bridgeConfig;
 
   Future<void> syncWorkoutToWatch() async {
-    final workout = nextWorkout;
+    // What the watch should show is derived from persisted state, not a
+    // transient flag — otherwise any completion path that doesn't happen to
+    // set _justCompletedLog (e.g. completeCurrentWorkout) ends up syncing
+    // nextWorkout with no completedLog, which the watch reads as "fresh
+    // workout, show Start". Priority:
+    //   1) an active (uncompleted) log → sync that workout in active state
+    //   2) any completed log → sync the most recently completed workout
+    //      with its completedLog, so the watch shows the Done card
+    //   3) fall back to nextWorkout for brand-new state
+    PlannedWorkout? workout;
+    WorkoutLog? activeLog;
+    WorkoutLog? completedLog;
+
+    final active = _activeWorkoutLog();
+    if (active != null) {
+      workout = _findWorkoutById(active.workoutId);
+      activeLog = active;
+    } else {
+      final recent = _mostRecentCompletedLog();
+      if (recent != null) {
+        workout = _findWorkoutById(recent.workoutId);
+        completedLog = recent;
+      }
+    }
+    workout ??= nextWorkout;
     if (workout == null) {
       _status = 'No workout available for Apple Watch sync';
       notifyListeners();
       return;
     }
+    // If we fell back to nextWorkout, fill completedLog from the data so a
+    // pre-existing completion is still recognised.
+    completedLog ??= _completedWorkoutLog(workout);
 
     try {
       _status = await _watchSync.syncWorkout(
         workout: workout,
-        activeLog: _activeWorkoutLog(),
+        activeLog: activeLog,
+        completedLog: completedLog,
       );
     } on Object catch (error) {
       _status = 'Apple Watch sync failed: $error';
     }
     notifyListeners();
+  }
+
+  PlannedWorkout? _findWorkoutById(String workoutId) {
+    for (final block in _data.blocks) {
+      for (final workout in block.workouts) {
+        if (workout.id == workoutId) return workout;
+      }
+    }
+    return null;
+  }
+
+  WorkoutLog? _mostRecentCompletedLog() {
+    WorkoutLog? best;
+    for (final log in _data.logs) {
+      if (log.completedAt == null) continue;
+      if (best == null || log.completedAt!.isAfter(best.completedAt!)) {
+        best = log;
+      }
+    }
+    return best;
   }
 
   Future<void> handleWatchWorkoutCompleted(Map<String, dynamic> payload) async {
@@ -89,6 +141,9 @@ class FitnessController extends ChangeNotifier {
       _status = 'Ignored invalid Apple Watch workout payload';
       notifyListeners();
       return;
+    }
+    if (_activeWatchSessionWorkoutId == completion.workoutId) {
+      _activeWatchSessionWorkoutId = null;
     }
 
     final logs = [..._data.logs];
@@ -130,6 +185,9 @@ class FitnessController extends ChangeNotifier {
     _captureWorkoutMemory(_justCompletedLog!);
     await _persist('Imported Apple Watch workout');
     await _exportDayContext(notify: false);
+    // Push the completion back to the watch so its UI flips from "Start"
+    // to "Done" without waiting for the next user-triggered sync.
+    unawaited(syncWorkoutToWatch());
 
     _markWatchCompletionHandled(payload);
   }
@@ -233,9 +291,19 @@ class FitnessController extends ChangeNotifier {
     _status = 'Local-first coaching data loaded';
     try {
       _watchEvents ??= _watchSync.events.listen((event) {
-        final payload = (event['payload'] as Map?)?.cast<String, dynamic>();
-        if (payload != null) {
-          unawaited(handleWatchWorkoutCompleted(payload));
+        switch (event['type']) {
+          case 'watchWorkoutCompleted':
+            final payload = (event['payload'] as Map?)?.cast<String, dynamic>();
+            if (payload != null) {
+              unawaited(handleWatchWorkoutCompleted(payload));
+            }
+          case 'watchSessionActive':
+            final workoutId = event['workoutId'] as String?;
+            if (workoutId != null && workoutId.isNotEmpty) {
+              _activeWatchSessionWorkoutId = workoutId;
+            }
+          case 'watchSessionEnded':
+            _activeWatchSessionWorkoutId = null;
         }
       }, onError: (_) {});
     } on Object {
@@ -570,6 +638,10 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> startCurrentWorkout() async {
+    // Starting a new session means the user has moved past the previous
+    // completion — release the watch from the "Done" parked state so it
+    // syncs the new active workout.
+    _justCompletedLog = null;
     final workout = nextWorkout;
     if (workout == null) {
       _status = 'No workout available to start';
@@ -841,6 +913,9 @@ class FitnessController extends ChangeNotifier {
     if (_justCompletedLog == null) return;
     _justCompletedLog = null;
     notifyListeners();
+    // Advance the watch to the next planned workout now that the user has
+    // acknowledged the completed one on the phone.
+    unawaited(syncWorkoutToWatch());
   }
 
   Future<void> updateCompletedLog(
@@ -1082,6 +1157,7 @@ class FitnessController extends ChangeNotifier {
     final logs = [..._data.logs]..[index] = completed;
     _data = _data.copyWith(logs: logs);
     _captureWorkoutMemory(completed);
+    _justCompletedLog = completed;
     await _persist('Completed ${workout.title}');
     await _exportDayContext(notify: false);
     unawaited(syncWorkoutToWatch());
@@ -1254,6 +1330,17 @@ class FitnessController extends ChangeNotifier {
     return index < 0 ? null : _data.logs[index];
   }
 
+  WorkoutLog? _completedWorkoutLog(PlannedWorkout workout) {
+    WorkoutLog? latest;
+    for (final log in _data.logs) {
+      if (log.workoutId != workout.id || log.completedAt == null) continue;
+      if (latest == null || log.completedAt!.isAfter(latest.completedAt!)) {
+        latest = log;
+      }
+    }
+    return latest;
+  }
+
   void _startUiTicker() {
     _uiTicker?.cancel();
     _uiTicker = Timer.periodic(
@@ -1283,6 +1370,10 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<WorkoutLog> _syncCompletedWorkout(WorkoutLog completed) async {
+    if (_activeWatchSessionWorkoutId == completed.workoutId) {
+      unawaited(_watchSync.endWatchWorkout(completed.workoutId));
+      return completed.copyWith(healthWriteStatus: 'pending_watch_completion');
+    }
     try {
       final match = await _health.readCompletedWorkoutMatch(completed);
       if (match != null) {

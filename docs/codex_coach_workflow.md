@@ -5,7 +5,26 @@ Claude, or another agent and then exchanged with the iPhone app through iCloud.
 The app UI still uses Codex wording in several places, and the JSON file names
 remain unchanged.
 
-## Conversation flow
+## Daily Conversation Flow
+
+Daily coaching means one workout for the next training day. This is the default
+agent workflow unless the user explicitly asks for a full multi-day or
+multi-week training block.
+
+1. Read `day_context.json` first, then use `daily_snapshot.json`,
+   `athlete_profile.json`, active block, next workout, recent logs, nutrition,
+   HealthKit activity, and `memoryWiki` as supporting context.
+2. Decide whether the next training day should `progress`, `hold`,
+   `substitute`, `deload`, or `rest`.
+3. Write exactly one `next_day_plan.json` to the iCloud exchange folder through
+   `python3 tools/write_next_day_plan.py plan.json`.
+4. The app imports `next_day_plan.json` into the active block as the next
+   workout.
+
+Do not write `training_block_plan.json` during the daily workflow. That file
+replaces/imports a full block and should only be used for a full block request.
+
+## Full Block Conversation Flow
 
 1. In the agent session, discuss the plan brief before writing JSON. Clarify at least:
    - sport or goal, for example American Football, mountain climbing, boxing, hypertrophy, conditioning
@@ -43,7 +62,51 @@ Use this printed path as the canonical exchange folder. If another helper
 resolves a different folder on a local machine, pass the canonical path with
 `--exchange-dir` or `TRAININGSPLAN_EXCHANGE_DIR`.
 
-## Output contract
+## Daily Plan Contract
+
+The daily plan file is:
+
+```text
+next_day_plan.json
+```
+
+The app imports either a raw `PlannedWorkout` object or:
+
+```json
+{
+  "schema": "next_day_plan.v1",
+  "workout": {
+    "id": "t4l_daily_2026_05_25_hip_safe_strength",
+    "week": 1,
+    "day": 3,
+    "title": "Hip-Safe Recovery Strength",
+    "focus": "Hold/substitute day with upper body, core, carry, and easy conditioning.",
+    "rationale": "Fresh day_context shows high activity and a still-limited right hip flexor.",
+    "conditioning": "10-20 min easy walk, bike, or crosstrainer at RPE 3.",
+    "exercises": []
+  }
+}
+```
+
+Each daily workout must include `id`, `week`, `day`, `title`, `focus`,
+`rationale`, `conditioning`, and a non-empty `exercises` list. Each exercise
+must include `exerciseId`, `name`, `sets`, `reps`, `targetLoad`, `targetRpe`,
+`restSeconds`, and `coachCue`.
+
+For the daily plan, include the mobile display fields for every exercise unless
+there is a specific reason not to:
+
+- `loadLabel`: compact load chip for the Today screen.
+- `primaryCue`: 3-8 words for the visible row cue.
+- `detailNote`: longer execution note, progression rule, or substitution
+  guidance.
+- `warningCue`: short pain, range-of-motion, or safety boundary when relevant.
+
+For imported/custom exercises, also include `media.setup`, `media.cues`, and
+`media.commonMistakes` whenever possible. Imported plans do not rely on the
+built-in exercise library at render time.
+
+## Full Block Contract
 
 The app imports either a raw `TrainingBlock` object or:
 
@@ -68,6 +131,32 @@ Valid `style` values are `rugby`, `boxer`, `hybrid`, `strengthHypertrophy`, `con
 
 Each workout must include `id`, `week`, `day`, `title`, `focus`, `rationale`, `conditioning`, and a non-empty `exercises` list. Each exercise must include `exerciseId`, `name`, `sets`, `reps`, `targetLoad`, `targetRpe`, `restSeconds`, and `coachCue`.
 
+Exercises may include optional mobile display fields:
+
+- `loadLabel`: compact load chip for the workout screen, for example `12-24 kg`
+- `primaryCue`: one short visible cue on the workout row
+- `detailNote`: longer coaching or agent explanation shown in exercise details
+- `warningCue`: short pain, range-of-motion, or safety warning shown in exercise details
+
+If `loadLabel` or `primaryCue` is omitted, the app falls back to `targetLoad`
+and `coachCue`. Keep `targetLoad` and `coachCue` complete enough for logs and
+agent review; use the display fields to keep the phone workout screen compact.
+
+When authoring a new `training_block_plan.json`, include the mobile display
+fields for every exercise unless there is a specific reason not to:
+
+- `targetLoad`: full loading instruction for logs and future agent review.
+- `loadLabel`: short chip text, ideally a weight range or `Bodyweight`.
+- `coachCue`: complete technical cue or coaching intent.
+- `primaryCue`: 3-8 words for the Today screen.
+- `detailNote`: longer execution note, progression rule, or substitution
+  guidance that would clutter the Today screen.
+- `warningCue`: short pain, range-of-motion, or safety boundary when relevant.
+
+For imported/custom exercises, also include `media.setup`, `media.cues`, and
+`media.commonMistakes` whenever possible, because imported plans do not rely on
+the built-in exercise library at render time.
+
 Exercises may also include a `media` object. The app uses this to populate the
 expanded `Cues und Fehler` section for Codex-imported plans. Imported exercises
 do not fall back to the built-in exercise library at render time. Include
@@ -81,9 +170,13 @@ do not fall back to the built-in exercise library at render time. Include
   "sets": 3,
   "reps": "8-10",
   "targetLoad": "24 kg",
+  "loadLabel": "24 kg",
   "targetRpe": 7.5,
   "restSeconds": 90,
   "coachCue": "Brace before each rep.",
+  "primaryCue": "Brace before each rep.",
+  "detailNote": "Use a controlled eccentric and pause if depth changes.",
+  "warningCue": "Stop if knee pain increases.",
   "media": {
     "youtubeUrl": "https://www.youtube.com/watch?v=example",
     "setup": "Kettlebell tight to sternum, feet rooted.",
@@ -95,7 +188,7 @@ do not fall back to the built-in exercise library at render time. Include
 
 ## Agent-side write command
 
-After drafting a plan JSON:
+After drafting a full block JSON:
 
 ```bash
 python3 tools/write_training_block_plan.py plan.json
@@ -283,10 +376,14 @@ Use this loop for the default morning planning workflow:
 6. Give food-based nutrition guidance for today from the goal, body metrics,
    active block, yesterday's intake pattern, training load, recovery, and known
    preferences. Do not set fixed targets unless the user asks for them.
-7. If the user asks for an app-importable training block, write
+7. For the default daily coaching workflow, write exactly one
+   `next_day_plan.json` containing a single `workout` object through
+   `python3 tools/write_next_day_plan.py plan.json`. Do not write
+   `training_block_plan.json` unless the user explicitly requests a full block.
+8. If the user asks for an app-importable full training block, write
    `training_block_plan.json` through
    `python3 tools/write_training_block_plan.py plan.json`.
-8. If the user exports a meal analysis request, write
+9. If the user exports a meal analysis request, write
    `nutrition_analysis_result.json` through
    `python3 tools/write_nutrition_analysis_result.py --exchange-dir
    "/absolute/path/to/CodexFitnessExchange" result.json`.

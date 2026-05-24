@@ -5,6 +5,7 @@ struct WatchWorkoutEnvelope: Codable {
   let sentAt: String
   let workout: WatchPlannedWorkout
   let activeLog: WatchActiveLog?
+  let completedLog: WatchCompletedLog?
 }
 
 struct WatchActiveLog: Codable {
@@ -13,6 +14,17 @@ struct WatchActiveLog: Codable {
   let startedAt: String
   let pausedAt: String?
   let pausedSeconds: Int?
+}
+
+struct WatchCompletedLog: Codable {
+  let id: String
+  let workoutId: String
+  let title: String
+  let startedAt: String
+  let completedAt: String?
+  let totalDurationSeconds: Int?
+  let pausedSeconds: Int?
+  let healthMetrics: WatchHealthMetrics?
 }
 
 struct WatchPlannedWorkout: Codable, Identifiable {
@@ -77,4 +89,12 @@ struct WatchCompletionPayload: Codable {
   let exerciseTimings: [WatchExerciseTiming]
   let healthMetrics: WatchHealthMetrics?
   let healthWriteStatus: String
+}
+
+struct WatchWorkoutSummary {
+  let title: String
+  let totalTime: TimeInterval
+  let averageHeartRate: Double?
+  let totalCalories: Double?
+  let completedAt: Date
 }

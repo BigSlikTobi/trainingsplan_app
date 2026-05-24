@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and write a Codex training block plan to the app exchange folder."""
+"""Validate and write a next_day_plan.json payload to the app exchange folder."""
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ from typing import Any
 
 APP_BUNDLE_ID = "com.tobiaslatta.trainingsplanapp"
 EXCHANGE_FOLDER = "CodexFitnessExchange"
-OUTPUT_FILE = "training_block_plan.json"
+OUTPUT_FILE = "next_day_plan.json"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Validate a training_block_plan.json payload and write it to the "
+            "Validate a next_day_plan.json payload and write it to the "
             "iCloud exchange folder used by the iPhone app."
         )
     )
@@ -26,7 +26,7 @@ def main() -> int:
         "plan",
         nargs="?",
         type=Path,
-        help="Path to the plan JSON. Reads stdin when omitted.",
+        help="Path to the next-day plan JSON. Reads stdin when omitted.",
     )
     parser.add_argument(
         "--exchange-dir",
@@ -46,8 +46,8 @@ def main() -> int:
         return 0
 
     payload = read_payload(args.plan)
-    block = extract_block(payload)
-    validate_block(block)
+    workout = extract_workout(payload)
+    validate_workout(workout)
 
     exchange_dir.mkdir(parents=True, exist_ok=True)
     output_path = exchange_dir / OUTPUT_FILE
@@ -68,58 +68,18 @@ def read_payload(path: Path | None) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Invalid JSON: {exc}") from exc
     if not isinstance(decoded, dict):
-        raise SystemExit("Plan JSON must be an object.")
+        raise SystemExit("Next-day plan JSON must be an object.")
     return decoded
 
 
-def extract_block(payload: dict[str, Any]) -> dict[str, Any]:
-    block = payload.get("block", payload)
-    if not isinstance(block, dict):
-        raise SystemExit("Plan must be either a block object or {'block': {...}}.")
-    return block
+def extract_workout(payload: dict[str, Any]) -> dict[str, Any]:
+    workout = payload.get("workout", payload)
+    if not isinstance(workout, dict):
+        raise SystemExit("Plan must be either a workout object or {'workout': {...}}.")
+    return workout
 
 
-def validate_block(block: dict[str, Any]) -> None:
-    required = [
-        "id",
-        "style",
-        "title",
-        "durationWeeks",
-        "currentWeek",
-        "weeklyFocus",
-        "measurableTargets",
-        "workouts",
-        "createdBy",
-        "createdAt",
-    ]
-    missing = [key for key in required if key not in block]
-    if missing:
-        raise SystemExit(f"Missing block keys: {', '.join(missing)}")
-
-    if block["style"] not in {
-        "rugby",
-        "boxer",
-        "hybrid",
-        "strengthHypertrophy",
-        "conditioning",
-        "custom",
-    }:
-        raise SystemExit("style must match a TrainingStyle enum name.")
-
-    if not isinstance(block["durationWeeks"], int) or block["durationWeeks"] < 1:
-        raise SystemExit("durationWeeks must be an integer greater than 0.")
-
-    workouts = block["workouts"]
-    if not isinstance(workouts, list) or not workouts:
-        raise SystemExit("workouts must be a non-empty list.")
-
-    for index, workout in enumerate(workouts, start=1):
-        if not isinstance(workout, dict):
-            raise SystemExit(f"Workout {index} must be an object.")
-        validate_workout(workout, index)
-
-
-def validate_workout(workout: dict[str, Any], index: int) -> None:
+def validate_workout(workout: dict[str, Any]) -> None:
     required = [
         "id",
         "week",
@@ -132,17 +92,15 @@ def validate_workout(workout: dict[str, Any], index: int) -> None:
     ]
     missing = [key for key in required if key not in workout]
     if missing:
-        raise SystemExit(f"Workout {index} missing keys: {', '.join(missing)}")
+        raise SystemExit(f"Workout missing keys: {', '.join(missing)}")
 
     exercises = workout["exercises"]
     if not isinstance(exercises, list) or not exercises:
-        raise SystemExit(f"Workout {index} exercises must be a non-empty list.")
+        raise SystemExit("Workout exercises must be a non-empty list.")
 
     for exercise_index, exercise in enumerate(exercises, start=1):
         if not isinstance(exercise, dict):
-            raise SystemExit(
-                f"Workout {index} exercise {exercise_index} must be an object."
-            )
+            raise SystemExit(f"Exercise {exercise_index} must be an object.")
         missing = [
             key
             for key in [
@@ -159,35 +117,26 @@ def validate_workout(workout: dict[str, Any], index: int) -> None:
         ]
         if missing:
             raise SystemExit(
-                f"Workout {index} exercise {exercise_index} missing keys: "
-                f"{', '.join(missing)}"
+                f"Exercise {exercise_index} missing keys: {', '.join(missing)}"
             )
         for optional_key in ["loadLabel", "primaryCue", "detailNote", "warningCue"]:
             if optional_key in exercise and not isinstance(exercise[optional_key], str):
                 raise SystemExit(
-                    f"Workout {index} exercise {exercise_index} {optional_key} "
-                    "must be a string."
+                    f"Exercise {exercise_index} {optional_key} must be a string."
                 )
-        validate_exercise_media(exercise, index, exercise_index)
+        validate_exercise_media(exercise, exercise_index)
 
 
-def validate_exercise_media(
-    exercise: dict[str, Any], workout_index: int, exercise_index: int
-) -> None:
+def validate_exercise_media(exercise: dict[str, Any], exercise_index: int) -> None:
     media = exercise.get("media")
     if media is None:
         return
     if not isinstance(media, dict):
-        raise SystemExit(
-            f"Workout {workout_index} exercise {exercise_index} media must be an object."
-        )
+        raise SystemExit(f"Exercise {exercise_index} media must be an object.")
 
     for key in ["explainerUrl", "youtubeUrl", "videoUrl", "setup"]:
         if key in media and not isinstance(media[key], str):
-            raise SystemExit(
-                f"Workout {workout_index} exercise {exercise_index} media.{key} "
-                "must be a string."
-            )
+            raise SystemExit(f"Exercise {exercise_index} media.{key} must be a string.")
 
     for key in ["cues", "commonMistakes"]:
         if key not in media:
@@ -196,8 +145,7 @@ def validate_exercise_media(
             isinstance(item, str) for item in media[key]
         ):
             raise SystemExit(
-                f"Workout {workout_index} exercise {exercise_index} media.{key} "
-                "must be a list of strings."
+                f"Exercise {exercise_index} media.{key} must be a list of strings."
             )
 
 
@@ -211,10 +159,14 @@ def resolve_exchange_dir(override: Path | None) -> Path:
 
     mobile_documents = Path.home() / "Library" / "Mobile Documents"
     default = mobile_documents / f"iCloud.{APP_BUNDLE_ID}" / "Documents" / EXCHANGE_FOLDER
+    tilde_container = "iCloud~" + APP_BUNDLE_ID.replace(".", "~")
+    tilde_default = mobile_documents / tilde_container / "Documents" / EXCHANGE_FOLDER
     if default.exists():
         return default
+    if tilde_default.exists():
+        return tilde_default
 
-    candidates = sorted(mobile_documents.glob(f"iCloud.*/Documents/{EXCHANGE_FOLDER}"))
+    candidates = sorted(mobile_documents.glob(f"iCloud*/Documents/{EXCHANGE_FOLDER}"))
     plan_candidates = [path for path in candidates if (path / OUTPUT_FILE).exists()]
     if plan_candidates:
         return plan_candidates[0]

@@ -185,6 +185,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sectionAlleUebungen => 'Alle Übungen';
 
   @override
+  String get coachNotiz => 'Coach Notiz';
+
+  @override
+  String get sectionConditioning => 'Conditioning';
+
+  @override
+  String get fehlerVermeiden => 'Fehler vermeiden';
+
+  @override
   String get erklaervideo => 'Erklärvideo';
 
   @override

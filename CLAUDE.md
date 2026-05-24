@@ -34,6 +34,7 @@ Codex-side helpers (write JSON into the iCloud exchange folder):
 ```bash
 python3 tools/write_training_block_plan.py plan.json
 python3 tools/write_training_block_plan.py --print-dir       # show resolved exchange dir
+python3 tools/write_next_day_plan.py plan.json
 python3 tools/write_nutrition_analysis_result.py result.json
 TRAININGSPLAN_EXCHANGE_DIR=/abs/path python3 tools/write_training_block_plan.py plan.json   # override location
 ```
@@ -54,10 +55,13 @@ Single-page Material 3 app rooted at `lib/main.dart` → `lib/src/app.dart`. Sta
 
 ### Codex JSON exchange (critical contract)
 
-The desktop ↔ app handoff is **file-based JSON in an iCloud folder**, not an API. Two flows:
+The desktop ↔ app handoff is **file-based JSON in an iCloud folder**, not an API. Three flows:
 
-1. **Training block**: app exports `training_block_request.json` + `athlete_profile.json` → Codex writes `training_block_plan.json` → app imports as active block. Schema is enforced both by `tools/write_training_block_plan.py` and by parsing in `coach_exchange_service.dart` / `fitness_models.dart`. Valid `style`: `rugby`, `boxer`, `hybrid`, `strengthHypertrophy`, `conditioning`, `custom`. Workouts require `id, week, day, title, focus, rationale, conditioning, exercises[]`; exercises require `exerciseId, name, sets, reps, targetLoad, targetRpe, restSeconds, coachCue` plus optional `media{ setup, cues[], commonMistakes[], explainerUrl|youtubeUrl|videoUrl }`.
-2. **Nutrition**: app writes `nutrition_analysis_request.json` (+ image into `meal_images/`) → Codex writes `nutrition_analysis_result.json` → app shows result for review → on accept, persists locally + HealthKit. Required result fields: `calories` (positive), `protein/carbs/fat` (non-negative ints), optional `confidence` (0–1). Codex (not the app) infers the calorie target for this workflow.
+1. **Daily next-day plan, default**: app exports `day_context.json` + `daily_snapshot.json` → Codex writes exactly one `next_day_plan.json` containing a single `workout` object through `python3 tools/write_next_day_plan.py plan.json` → app imports it into the active block. Do not write `training_block_plan.json` for daily coaching.
+2. **Training block, explicit full-block request only**: app exports `training_block_request.json` + `athlete_profile.json` → Codex writes `training_block_plan.json` → app imports as active block. Schema is enforced both by `tools/write_training_block_plan.py` and by parsing in `coach_exchange_service.dart` / `fitness_models.dart`. Valid `style`: `rugby`, `boxer`, `hybrid`, `strengthHypertrophy`, `conditioning`, `custom`.
+3. **Nutrition**: app writes `nutrition_analysis_request.json` (+ image into `meal_images/`) → Codex writes `nutrition_analysis_result.json` → app shows result for review → on accept, persists locally + HealthKit. Required result fields: `calories` (positive), `protein/carbs/fat` (non-negative ints), optional `confidence` (0–1). Codex (not the app) infers the calorie target for this workflow.
+
+For both `next_day_plan.json` and `training_block_plan.json`, workouts require `id, week, day, title, focus, rationale, conditioning, exercises[]`; exercises require `exerciseId, name, sets, reps, targetLoad, targetRpe, restSeconds, coachCue` plus optional mobile fields `loadLabel`, `primaryCue`, `detailNote`, `warningCue`, and optional `media{ setup, cues[], commonMistakes[], explainerUrl|youtubeUrl|videoUrl }`. When generating plans, keep `targetLoad` and `coachCue` complete for logs, use `loadLabel` and `primaryCue` for compact phone display, and move longer guidance into `detailNote` or `media`.
 
 Full schema lives in `docs/codex_coach_workflow.md`. When changing model fields, update *all four* sites: model class, Python helper validator, exchange-service parser, and the doc.
 

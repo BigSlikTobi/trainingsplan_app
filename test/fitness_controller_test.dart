@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -510,6 +511,70 @@ void main() {
     expect(workoutJson['exercises'], isNotEmpty);
   });
 
+  test('watch payload includes completed log when workout is already done', () {
+    final service = WatchSyncService();
+    final data = sampleFitnessData();
+    final workout = data.nextWorkout!;
+    final completed = WorkoutLog(
+      id: 'log_done',
+      workoutId: workout.id,
+      title: workout.title,
+      startedAt: DateTime.utc(2026, 5, 23, 8),
+      completedAt: DateTime.utc(2026, 5, 23, 9),
+      readiness: 3,
+      soreness: 2,
+      notes: '',
+      sets: const [],
+      healthWriteStatus: 'watch_health_synced',
+      healthMetrics: LiveHealthMetrics(
+        updatedAt: DateTime.utc(2026, 5, 23, 9),
+        sampleCount: 12,
+        heartRateBpm: 121,
+        activeEnergyKcal: 245,
+      ),
+    );
+
+    final payload = service.buildWorkoutPayload(
+      workout: workout,
+      completedLog: completed,
+      sentAt: DateTime.utc(2026, 5, 23, 9, 1),
+    );
+
+    final completedJson = payload['completedLog'] as Map<String, dynamic>;
+    expect(completedJson['workoutId'], workout.id);
+    expect(completedJson['completedAt'], '2026-05-23T09:00:00.000Z');
+    expect(completedJson['totalDurationSeconds'], 3600);
+    expect(
+      (completedJson['healthMetrics']
+          as Map<String, dynamic>)['activeEnergyKcal'],
+      245,
+    );
+  });
+
+  test('iPhone completion syncs completed workout to watch', () async {
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: _MemoryStore(),
+      health: _TimerHealthSync(),
+      watchSync: watch,
+    );
+    await controller.load();
+    final workout = controller.nextWorkout!;
+    final exercise = workout.exercises.first;
+
+    await controller.logSet(exercise, 20, 8, 6);
+    await controller.completeCurrentWorkout();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.nextWorkout?.id, isNot(workout.id));
+    final payload = watch.sentPayloads.last;
+    expect((payload['workout'] as Map<String, dynamic>)['id'], workout.id);
+    expect(payload, isNot(contains('activeLog')));
+    final completedJson = payload['completedLog'] as Map<String, dynamic>;
+    expect(completedJson['workoutId'], workout.id);
+    expect(completedJson['completedAt'], isNotNull);
+  });
+
   test('imports completed watch workout into logs', () async {
     final watch = _FakeWatchSync();
     final controller = FitnessController(
@@ -556,6 +621,39 @@ void main() {
         _watchCompletionPayload(workout, exercise, setCount: 3),
       );
       expect(controller.data.logs.single.sets, hasLength(3));
+    },
+  );
+
+  test(
+    'phone defers HealthKit write and ends watch session when watch is active',
+    () async {
+      final watch = _FakeWatchSync();
+      final health = _MatchingHealthSync();
+      final controller = FitnessController(
+        store: _MemoryStore(),
+        health: health,
+        watchSync: watch,
+      );
+      await controller.load();
+      final workout = controller.nextWorkout!;
+      final exercise = workout.exercises.first;
+
+      watch.eventsController.add({
+        'type': 'watchSessionActive',
+        'workoutId': workout.id,
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.debugActiveWatchSessionWorkoutId, workout.id);
+
+      await controller.logSet(exercise, 20, 8, 6);
+      await controller.completeCurrentWorkout();
+
+      expect(watch.endedWorkoutIds, [workout.id]);
+      expect(health.writeCount, 0);
+      expect(
+        controller.data.logs.single.healthWriteStatus,
+        'pending_watch_completion',
+      );
     },
   );
 
@@ -642,23 +740,35 @@ class _CapturingBridgeService extends LocalBridgeService {
 
 class _FakeWatchSync extends WatchSyncService {
   final sentPayloads = <Map<String, dynamic>>[];
+  final endedWorkoutIds = <String>[];
+  final eventsController = StreamController<Map<String, dynamic>>.broadcast();
 
   @override
-  Stream<Map<String, dynamic>> get events => const Stream.empty();
+  Stream<Map<String, dynamic>> get events => eventsController.stream;
 
   @override
   Future<String> syncWorkout({
     required PlannedWorkout workout,
     WorkoutLog? activeLog,
+    WorkoutLog? completedLog,
   }) async {
     sentPayloads.add(
-      buildWorkoutPayload(workout: workout, activeLog: activeLog),
+      buildWorkoutPayload(
+        workout: workout,
+        activeLog: activeLog,
+        completedLog: completedLog,
+      ),
     );
     return 'Apple Watch workout synced';
   }
 
   @override
   Future<void> markCompletionHandled(String completionId) async {}
+
+  @override
+  Future<void> endWatchWorkout(String workoutId) async {
+    endedWorkoutIds.add(workoutId);
+  }
 }
 
 Map<String, dynamic> _watchCompletionPayload(

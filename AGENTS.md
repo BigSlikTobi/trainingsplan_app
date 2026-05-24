@@ -50,6 +50,8 @@ flutter run \
   and iCloud exchange directory services.
 - `tools/write_training_block_plan.py`: Helper for validating and writing a
   Codex-generated `training_block_plan.json`.
+- `tools/write_next_day_plan.py`: Helper for validating and writing a
+  daily `next_day_plan.json`.
 - `docs/setup.md`: first-read setup and daily agent handoff guide.
 - `docs/codex_coach_workflow.md`: JSON exchange workflow and schema contract.
 
@@ -81,13 +83,38 @@ flutter run \
 Full setup and daily processing guidance lives in `docs/setup.md` and
 `docs/codex_coach_workflow.md`.
 
+Default daily coaching writes one workout, not a full block:
+
+1. Read `day_context.json` first, then use `daily_snapshot.json`,
+   `athlete_profile.json`, active block, next workout, recent logs, nutrition,
+   HealthKit activity, and `memoryWiki` as supporting context.
+2. Decide whether the next training day should `progress`, `hold`,
+   `substitute`, `deload`, or `rest`.
+3. Write exactly one `next_day_plan.json` with a single `workout` object using:
+
+```bash
+python3 tools/write_next_day_plan.py plan.json
+```
+
+4. Include mobile exercise fields when useful: `loadLabel`, `primaryCue`,
+   `detailNote`, `warningCue`, plus `media.setup`, `media.cues`, and
+   `media.commonMistakes` for imported/custom exercises.
+5. Do not write `training_block_plan.json` during daily coaching.
+
 When working with exported training block requests:
 
 1. Read `training_block_request.json` and `athlete_profile.json` from the
    exchange folder.
 2. Discuss the training goal, schedule, equipment, constraints, and measurable
    target before writing final JSON.
-3. Write the final plan using:
+3. Author the plan for mobile execution:
+   - Keep `targetLoad` and `coachCue` complete for logs and future agent
+     review.
+   - Add `loadLabel`, `primaryCue`, `detailNote`, and `warningCue` when useful
+     so the Today screen stays compact and longer guidance moves into details.
+   - For imported/custom exercises, include `media.setup`, `media.cues`, and
+     `media.commonMistakes` whenever possible.
+4. Write the final plan using:
 
 ```bash
 python3 tools/write_training_block_plan.py plan.json

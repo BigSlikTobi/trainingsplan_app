@@ -6,6 +6,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
 
   private let session: WCSession?
   private var onWorkout: ((WatchWorkoutEnvelope) -> Void)?
+  private var onEndWorkout: ((String?) -> Void)?
   private let pendingKey = "pendingWatchWorkoutCompletions"
 
   override init() {
@@ -21,6 +22,29 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
 
   func observeWorkouts(_ handler: @escaping (WatchWorkoutEnvelope) -> Void) {
     onWorkout = handler
+  }
+
+  func observeEndWorkout(_ handler: @escaping (String?) -> Void) {
+    onEndWorkout = handler
+  }
+
+  func notifySessionActive(workoutId: String) {
+    sendStateMessage(["watchSessionActive": workoutId])
+  }
+
+  func notifySessionEnded(workoutId: String) {
+    sendStateMessage(["watchSessionEnded": workoutId])
+  }
+
+  private func sendStateMessage(_ message: [String: Any]) {
+    guard let session else { return }
+    if session.isReachable {
+      session.sendMessage(message, replyHandler: nil, errorHandler: { [weak self] _ in
+        self?.session?.transferUserInfo(message)
+      })
+    } else {
+      session.transferUserInfo(message)
+    }
   }
 
   func sendCompletion(_ payload: WatchCompletionPayload) {
@@ -123,12 +147,18 @@ extension WatchConnectivityManager: WCSessionDelegate {
       receiveWorkout(workout)
     } else if let completionId = message["completionHandled"] as? String {
       markCompletionHandled(completionId)
+    } else if message["endWorkout"] != nil {
+      let workoutId = message["endWorkout"] as? String
+      DispatchQueue.main.async { self.onEndWorkout?(workoutId) }
     }
   }
 
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     if let workout = userInfo["currentWorkout"] {
       receiveWorkout(workout)
+    } else if userInfo["endWorkout"] != nil {
+      let workoutId = userInfo["endWorkout"] as? String
+      DispatchQueue.main.async { self.onEndWorkout?(workoutId) }
     }
   }
 }

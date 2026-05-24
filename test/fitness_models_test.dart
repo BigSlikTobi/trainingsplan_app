@@ -248,6 +248,44 @@ void main() {
     expect(exercise.media?.commonMistakes, ['Hips sag']);
   });
 
+  test('exercise prescription display fields are optional with fallbacks', () {
+    final legacy = ExercisePrescription.fromJson({
+      'exerciseId': 'squat',
+      'name': 'Squat',
+      'targetLoad': 'Use the heaviest load that keeps tempo consistent.',
+      'coachCue': 'Brace and keep pressure through the midfoot.',
+    });
+    final mobile = ExercisePrescription.fromJson({
+      'exerciseId': 'press',
+      'name': 'Press',
+      'targetLoad':
+          'Ramp across sets from 12 kg to 24 kg if RPE stays below 8.',
+      'loadLabel': '12-24 kg',
+      'coachCue': 'Press without rib flare and keep the lockout stacked.',
+      'primaryCue': 'Ribs down',
+      'detailNote': 'Use the long note in details, not on the row.',
+      'warningCue': 'Stop for shoulder pinch.',
+    });
+
+    expect(
+      legacy.displayLoadLabel,
+      'Use the heaviest load that keeps tempo consistent.',
+    );
+    expect(
+      legacy.displayPrimaryCue,
+      'Brace and keep pressure through the midfoot.',
+    );
+    expect(mobile.displayLoadLabel, '12-24 kg');
+    expect(mobile.displayPrimaryCue, 'Ribs down');
+    expect(
+      mobile.displayDetailNote,
+      'Use the long note in details, not on the row.',
+    );
+    expect(mobile.displayWarningCue, 'Stop for shoulder pinch.');
+    expect(mobile.toJson()['loadLabel'], '12-24 kg');
+    expect(mobile.toJson()['primaryCue'], 'Ribs down');
+  });
+
   test('FuelGuidance round-trips through toJson / fromJson', () {
     final guidance = FuelGuidance(
       issuedAt: DateTime.utc(2026, 5, 20, 7),
@@ -290,7 +328,10 @@ void main() {
     expect(decoded.todayAdvice, contains('Protein'));
     expect(decoded.mealSuggestion.name, 'Spaghetti Carbonara');
     expect(decoded.mealSuggestion.timing, 'post-training');
-    expect(decoded.yesterdayRead, 'Solide Basis — passt zum heutigen Krafttraining.');
+    expect(
+      decoded.yesterdayRead,
+      'Solide Basis — passt zum heutigen Krafttraining.',
+    );
     expect(decoded.mealIdeas, hasLength(3));
     expect(decoded.mealIdeas.first.tag, 'pre-training');
     expect(decoded.mealIdeas.first.name, 'Haferflocken + Banane');
@@ -339,4 +380,5 @@ void main() {
     expect(decoded.fuelGuidance?.validFor, '2026-05-20');
     expect(decoded.fuelGuidance?.mealSuggestion.name, 'Haferflocken + Banane');
     expect(decoded.fuelGuidance?.mealIdeas, isEmpty);
-  });}
+  });
+}

@@ -78,6 +78,10 @@ restart the server and reconnect with the newly printed URL/API key.
      active `memoryWiki` entries.
    - Decide whether today's training should progress, hold, substitute,
      deload, or rest.
+   - For the daily workflow, write one `next_day_plan.json` workout through
+     `python3 tools/write_next_day_plan.py plan.json`. Do not write
+     `training_block_plan.json` unless the user explicitly asks for a full
+     training block.
    - Give concise food-based nutrition guidance based on today's training,
      yesterday's intake pattern, recovery, preferences, and digestion context.
    - Ask the user before changing direction when goals, constraints, schedule,
@@ -118,7 +122,9 @@ For Claude, Gemini, or another agent, use the same operating contract:
 
 - Give the agent the local instructions repo and the server folder.
 - Require it to inspect the exchange files before coaching.
-- Require validated writes:
+- Require the daily plan write:
+  - `python3 tools/write_next_day_plan.py plan.json`
+- Require validated writes for full block and nutrition artifacts:
   - `python3 tools/write_training_block_plan.py plan.json`
   - `python3 tools/write_nutrition_analysis_result.py --exchange-dir
     "/absolute/path/to/CodexFitnessExchange" result.json`

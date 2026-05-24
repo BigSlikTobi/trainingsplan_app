@@ -4,12 +4,15 @@ import HealthKit
 final class WatchWorkoutManager: NSObject, ObservableObject {
   @Published private(set) var healthStatus = "watch_health_unavailable"
   @Published private(set) var metrics: WatchHealthMetrics?
+  @Published private(set) var currentHeartRateBpm: Double?
+  @Published private(set) var activeEnergyKcal: Double?
 
   private let healthStore = HKHealthStore()
   private var session: HKWorkoutSession?
   private var builder: HKLiveWorkoutBuilder?
   private var workoutStartedAt: Date?
   private var latestHeartRate: Double?
+  private var averageHeartRate: Double?
   private var latestEnergy: Double?
   private var sampleCount = 0
   private var canWriteActiveEnergy = false
@@ -73,8 +76,14 @@ final class WatchWorkoutManager: NSObject, ObservableObject {
       self.builder = builder
       workoutStartedAt = date
       latestHeartRate = nil
+      averageHeartRate = nil
       latestEnergy = nil
       sampleCount = 0
+      await MainActor.run {
+        currentHeartRateBpm = nil
+        activeEnergyKcal = nil
+        metrics = nil
+      }
       session.startActivity(with: date)
       try await builder.beginCollection(at: date)
     } catch {
@@ -115,11 +124,13 @@ final class WatchWorkoutManager: NSObject, ObservableObject {
     let metrics = WatchHealthMetrics(
       updatedAt: now,
       sampleCount: sampleCount,
-      heartRateBpm: latestHeartRate,
+      heartRateBpm: averageHeartRate ?? latestHeartRate,
       activeEnergyKcal: latestEnergy
     )
     await MainActor.run {
       self.metrics = metrics
+      currentHeartRateBpm = latestHeartRate
+      activeEnergyKcal = latestEnergy
     }
   }
 
@@ -151,6 +162,9 @@ final class WatchWorkoutManager: NSObject, ObservableObject {
     try await addSamples([sample], to: builder)
     latestEnergy = estimatedKcal
     sampleCount += 1
+    await MainActor.run {
+      activeEnergyKcal = estimatedKcal
+    }
   }
 
   private func latestBodyMassKg() async -> Double? {
@@ -225,6 +239,9 @@ extension WatchWorkoutManager: HKLiveWorkoutBuilderDelegate {
       case HKQuantityTypeIdentifier.heartRate.rawValue:
         latestHeartRate = statistics?
           .mostRecentQuantity()?
+          .doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
+        averageHeartRate = statistics?
+          .averageQuantity()?
           .doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
         sampleCount += 1
       case HKQuantityTypeIdentifier.activeEnergyBurned.rawValue:

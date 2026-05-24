@@ -79,6 +79,9 @@
 
   "sectionAlleUebungen": "All Exercises",
   "erklaervideo": "Tutorial",
+  "coachNotiz": "Coach Note",
+  "sectionConditioning": "Conditioning",
+  "fehlerVermeiden": "Avoid mistakes",
 
   "coachEmptyState": "No active workout. Select a block to start the Coach.",
 

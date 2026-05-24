@@ -428,6 +428,24 @@ abstract class AppLocalizations {
   /// **'Alle Übungen'**
   String get sectionAlleUebungen;
 
+  /// Coach note eyebrow label on rationale block
+  ///
+  /// In de, this message translates to:
+  /// **'Coach Notiz'**
+  String get coachNotiz;
+
+  /// Section label: conditioning block
+  ///
+  /// In de, this message translates to:
+  /// **'Conditioning'**
+  String get sectionConditioning;
+
+  /// Toggle label to reveal common mistakes
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler vermeiden'**
+  String get fehlerVermeiden;
+
   /// Video pill label
   ///
   /// In de, this message translates to:

@@ -183,6 +183,15 @@
   "sectionAlleUebungen": "Alle Übungen",
   "@sectionAlleUebungen": { "description": "Section label: all exercises in coach page" },
 
+  "coachNotiz": "Coach Notiz",
+  "@coachNotiz": { "description": "Coach note eyebrow label on rationale block" },
+
+  "sectionConditioning": "Conditioning",
+  "@sectionConditioning": { "description": "Section label: conditioning block" },
+
+  "fehlerVermeiden": "Fehler vermeiden",
+  "@fehlerVermeiden": { "description": "Toggle label to reveal common mistakes" },
+
   "erklaervideo": "Erklärvideo",
   "@erklaervideo": { "description": "Video pill label" },
 

@@ -21,6 +21,7 @@
 		C0D300000000000000000018 /* WatchWorkoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D30000000000000000000F /* WatchWorkoutManager.swift */; };
 		C0D300000000000000000019 /* WatchWorkoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000010 /* WatchWorkoutStore.swift */; };
 		C0D30000000000000000001A /* DictionaryCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000011 /* DictionaryCoding.swift */; };
+		C0D300000000000000000026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000027 /* Assets.xcassets */; };
 		C0D300000000000000000021 /* WatchSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000020 /* WatchSyncCoordinator.swift */; };
 		C0D300000000000000000022 /* T4LTrainerWatchApp.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000001 /* T4LTrainerWatchApp.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E05E2E00B5A50745818B429E /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B80712EF8897869BE470B8E5 /* Pods_Runner.framework */; };
@@ -101,6 +102,7 @@
 		C0D300000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C0D300000000000000000013 /* T4LTrainerWatchApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = T4LTrainerWatchApp.entitlements; sourceTree = "<group>"; };
 		C0D300000000000000000020 /* WatchSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSyncCoordinator.swift; sourceTree = "<group>"; };
+		C0D300000000000000000027 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E7F4D2A17B71D872DC94B8A9 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		E99C9BEABB3EE03ABDC47818 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		FA0887F7FF3791FC2EDAC6FF /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -211,6 +213,7 @@
 				C0D30000000000000000000F /* WatchWorkoutManager.swift */,
 				C0D300000000000000000010 /* WatchWorkoutStore.swift */,
 				C0D300000000000000000011 /* DictionaryCoding.swift */,
+				C0D300000000000000000027 /* Assets.xcassets */,
 				C0D300000000000000000012 /* Info.plist */,
 				C0D300000000000000000013 /* T4LTrainerWatchApp.entitlements */,
 			);
@@ -360,6 +363,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0D300000000000000000026 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -814,6 +818,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = T4LTrainerWatchApp/T4LTrainerWatchApp.entitlements;
@@ -845,6 +850,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = T4LTrainerWatchApp/T4LTrainerWatchApp.entitlements;
@@ -877,6 +883,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = T4LTrainerWatchApp/T4LTrainerWatchApp.entitlements;

@@ -36,8 +36,10 @@ Common files:
 - `training_block_request.json`: request for a new training block.
 - `nutrition_analysis_request.json`: meal analysis request, with optional image
   path in `meal_images/`.
+- `next_day_plan.json`: app-importable single workout for the default daily
+  coaching flow.
 - `training_block_plan.json`: app-importable training block written by the
-  agent.
+  agent only for a full block request.
 - `nutrition_analysis_result.json`: app-importable nutrition result written by
   the agent.
 
@@ -198,7 +200,22 @@ with generic fitness advice.
 
 If the user asks for app-importable JSON:
 
+- Write `next_day_plan.json` for the default daily coaching workflow. It should
+  contain exactly one workout, either as a raw `PlannedWorkout` object or as
+  `{ "schema": "next_day_plan.v1", "workout": { ... } }`.
+- Use `python3 tools/write_next_day_plan.py plan.json` when the repository
+  helper is available.
+- Do not write `training_block_plan.json` during daily coaching.
 - Write `training_block_plan.json` only when producing a full training block.
+- For every exercise in `training_block_plan.json`, keep `targetLoad` and
+  `coachCue` complete for logs and future review, and add compact mobile fields
+  when useful: `loadLabel`, `primaryCue`, `detailNote`, and `warningCue`.
+- Use the same exercise display rules for `next_day_plan.json`: keep
+  `targetLoad` and `coachCue` complete, add compact `loadLabel` and
+  `primaryCue`, and put longer coaching text in `detailNote` or `media`.
+- For imported/custom exercises, include `media.setup`, `media.cues`, and
+  `media.commonMistakes` whenever possible so the app can show useful detail
+  without relying on the built-in exercise library.
 - Write `nutrition_analysis_result.json` only when responding to a meal
   analysis request.
 - If repository helper scripts are available, use their validators before
