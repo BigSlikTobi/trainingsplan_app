@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trainingsplan_app/src/data/local_store.dart';
@@ -48,17 +47,25 @@ void main() {
   );
 
   test('workout completion refreshes day context export', () async {
-    final store = _MemoryStore();
+    final store = _MemoryStore()
+      ..bridgeConfig = const LocalBridgeConfig(
+        baseUrl: 'http://127.0.0.1:8787',
+        token: '123-456',
+      );
     final health = _DayContextHealthSync();
-    final controller = FitnessController(store: store, health: health);
+    final bridge = _CapturingBridgeService();
+    final controller = FitnessController(
+      store: store,
+      health: health,
+      bridge: bridge,
+    );
     await controller.load();
     final exercise = controller.nextWorkout!.exercises.first;
 
     await controller.logSet(exercise, 20, 8, 6);
     await controller.completeCurrentWorkout();
 
-    expect(store.jsonFiles, contains('day_context.json'));
-    final payload = store.jsonFiles['day_context.json']!;
+    final payload = bridge.dayContext!;
     expect(payload['schema'], 'day_context.v1');
     final summary = payload['activitySummary'] as Map<String, dynamic>;
     expect(summary['readStatus'], 'ok');
@@ -69,31 +76,44 @@ void main() {
 
   test('imports meal analysis for review before saving nutrition', () async {
     final store = _MemoryStore()
-      ..jsonFiles['nutrition_analysis_result.json'] = {
-        'schema': 'nutrition_analysis_result.v1',
-        'result': {
-          'requestId': 'meal_request_test',
-          'mealDescription': 'Chicken rice bowl',
-          'calories': 780,
-          'protein': 48,
-          'carbs': 82,
-          'fat': 28,
-          'bodyWeightKg': 82,
-          'confidence': .72,
-          'target': {
-            'dailyCalories': 2750,
-            'protein': 175,
-            'carbs': 320,
-            'fat': 80,
-            'goalMode': 'Codex inferred recomposition',
-            'rationale': 'Training load supports maintenance.',
-            'updatedAt': '2026-05-19T13:00:00.000',
-            'source': 'Codex',
+      ..bridgeConfig = const LocalBridgeConfig(
+        baseUrl: 'http://127.0.0.1:8787',
+        token: '123-456',
+      );
+    final bridge = _ResultBridgeService(
+      pendingKinds: const ['nutrition_analysis_result'],
+      results: {
+        'nutrition_analysis_result': {
+          'schema': 'nutrition_analysis_result.v1',
+          'result': {
+            'requestId': 'meal_request_test',
+            'mealDescription': 'Chicken rice bowl',
+            'calories': 780,
+            'protein': 48,
+            'carbs': 82,
+            'fat': 28,
+            'bodyWeightKg': 82,
+            'confidence': .72,
+            'target': {
+              'dailyCalories': 2750,
+              'protein': 175,
+              'carbs': 320,
+              'fat': 80,
+              'goalMode': 'T4L Gym Bro inferred recomposition',
+              'rationale': 'Training load supports maintenance.',
+              'updatedAt': '2026-05-19T13:00:00.000',
+              'source': 'T4L Gym Bro',
+            },
           },
         },
-      };
+      },
+    );
     final health = _NutritionHealthSync();
-    final controller = FitnessController(store: store, health: health);
+    final controller = FitnessController(
+      store: store,
+      health: health,
+      bridge: bridge,
+    );
     await controller.load();
 
     await controller.checkForNutritionAnalysisResult();
@@ -124,10 +144,7 @@ void main() {
       ),
       isTrue,
     );
-    expect(
-      store.jsonFiles.containsKey('nutrition_analysis_result.json'),
-      isFalse,
-    );
+    expect(bridge.consumedKinds, ['nutrition_analysis_result']);
   });
 
   test('manual memory actions add edit toggle and delete entries', () async {
@@ -162,83 +179,6 @@ void main() {
       isFalse,
     );
   });
-
-  test('imports coach memory wiki entries from exchange context', () async {
-    final store = _MemoryStore()
-      ..jsonFiles['day_context.json'] = {
-        'schema': 'day_context.v1',
-        'memoryWiki': {
-          'entries': [
-            {
-              'category': 'constraint',
-              'title': 'Right hip flexor',
-              'summary': 'No sprints or split squats until pain-free.',
-              'source': 'manual_codex_decision',
-              'confidence': 1.0,
-              'updatedAt': '2026-05-21T10:35:00+02:00',
-            },
-          ],
-        },
-      };
-    final controller = FitnessController(store: store);
-
-    await controller.load();
-    await controller.importExchangeMemoryWiki();
-    await controller.importExchangeMemoryWiki();
-
-    final matches = controller.data.memories.where(
-      (item) =>
-          item.category == MemoryCategory.constraint &&
-          item.source == 'manual_codex_decision' &&
-          item.title == 'Right hip flexor',
-    );
-    expect(matches, hasLength(1));
-    expect(store.saved?.memories.first.summary, contains('No sprints'));
-  });
-
-  test(
-    'imports next-day plan into the active block during update checks',
-    () async {
-      final store = _MemoryStore()
-        ..jsonFiles['next_day_plan.json'] = {
-          'schema': 'next_day_plan.v1',
-          'workout': {
-            'id': 'daily_2026_05_25',
-            'week': 1,
-            'day': 3,
-            'title': 'Tomorrow Strength',
-            'focus': 'Upper body strength with easy conditioning.',
-            'rationale': 'Daily coach adjustment from fresh context.',
-            'conditioning': '10 min easy walk',
-            'exercises': [
-              {
-                'exerciseId': 'push_up',
-                'name': 'Push-Up',
-                'sets': 3,
-                'reps': '8-12',
-                'targetLoad': 'Bodyweight',
-                'targetRpe': 7,
-                'restSeconds': 75,
-                'coachCue': 'Brace and move as one line.',
-              },
-            ],
-          },
-        };
-      final controller = FitnessController(store: store);
-
-      await controller.load();
-
-      final activeBlock = controller.data.activeBlock!;
-      expect(activeBlock.workouts.first.id, 'daily_2026_05_25');
-      expect(activeBlock.workouts.first.title, 'Tomorrow Strength');
-      expect(
-        activeBlock.workouts.where((item) => item.id == 'daily_2026_05_25'),
-        hasLength(1),
-      );
-      expect(store.jsonFiles.containsKey('next_day_plan.json'), isFalse);
-      expect(store.saved?.activeBlock?.workouts.first.id, 'daily_2026_05_25');
-    },
-  );
 
   test('bridge config persists outside fitness data', () async {
     final store = _MemoryStore();
@@ -310,7 +250,6 @@ void main() {
         'Server Tomorrow',
       );
       expect(bridge.consumedKinds, ['next_day_plan']);
-      expect(store.jsonFiles.containsKey('next_day_plan.json'), isFalse);
     },
   );
 
@@ -534,9 +473,15 @@ void main() {
   test(
     'updateCompletedLog persists notes and re-exports day context',
     () async {
-      final store = _MemoryStore();
+      final store = _MemoryStore()
+        ..bridgeConfig = const LocalBridgeConfig(
+          baseUrl: 'http://127.0.0.1:8787',
+          token: '123-456',
+        );
+      final bridge = _CapturingBridgeService();
       final controller = FitnessController(
         store: store,
+        bridge: bridge,
         health: _TimerHealthSync(),
       );
       await controller.load();
@@ -562,7 +507,7 @@ void main() {
       expect(stored.readiness, 5);
       expect(stored.soreness, 1);
 
-      final payload = store.jsonFiles['day_context.json']!;
+      final payload = bridge.dayContext!;
       final logs = payload['trainingLogs'] as List<dynamic>;
       final exported =
           logs.firstWhere(
@@ -733,6 +678,141 @@ void main() {
     expect(completedJson['completedAt'], isNotNull);
   });
 
+  test('iPhone completion can finish workout without active log', () async {
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: _MemoryStore(),
+      health: _TimerHealthSync(),
+      watchSync: watch,
+    );
+    await controller.load();
+    final workout = controller.nextWorkout!;
+
+    await controller.completeCurrentWorkout();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.data.logs, hasLength(1));
+    final log = controller.data.logs.single;
+    expect(log.workoutId, workout.id);
+    expect(log.completedAt, isNotNull);
+    expect(log.sets, isEmpty);
+    expect(controller.nextWorkout?.id, isNot(workout.id));
+    expect(watch.sentPayloads.last, contains('completedLog'));
+  });
+
+  test(
+    'clearing completed workout syncs next planned workout to watch',
+    () async {
+      final watch = _FakeWatchSync();
+      final controller = FitnessController(
+        store: _MemoryStore(),
+        health: _TimerHealthSync(),
+        watchSync: watch,
+      );
+      await controller.load();
+      final completedWorkout = controller.nextWorkout!;
+      final exercise = completedWorkout.exercises.first;
+
+      await controller.logSet(exercise, 20, 8, 6);
+      await controller.completeCurrentWorkout();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        (watch.sentPayloads.last['workout'] as Map<String, dynamic>)['id'],
+        completedWorkout.id,
+      );
+      expect(watch.sentPayloads.last, contains('completedLog'));
+
+      controller.clearJustCompleted();
+      await Future<void>.delayed(Duration.zero);
+
+      final payload = watch.sentPayloads.last;
+      expect(
+        (payload['workout'] as Map<String, dynamic>)['id'],
+        'sample_w1_d2',
+      );
+      expect(payload, isNot(contains('completedLog')));
+    },
+  );
+
+  test(
+    'imported next-day plan syncs to watch after a completed workout',
+    () async {
+      final watch = _FakeWatchSync();
+      final controller = FitnessController(
+        store: _MemoryStore(),
+        health: _TimerHealthSync(),
+        watchSync: watch,
+      );
+      await controller.load();
+      final completedWorkout = controller.nextWorkout!;
+      final exercise = completedWorkout.exercises.first;
+
+      await controller.logSet(exercise, 20, 8, 6);
+      await controller.completeCurrentWorkout();
+      await Future<void>.delayed(Duration.zero);
+      final imported = PlannedWorkout.fromJson({
+        ...completedWorkout.toJson(),
+        'id': 'coach_next_day',
+        'title': 'Coach Next Day',
+        'day': 3,
+      });
+
+      await controller.importNextDayWorkout(imported, source: 'test');
+      await Future<void>.delayed(Duration.zero);
+
+      final payload = watch.sentPayloads.last;
+      expect((payload['workout'] as Map<String, dynamic>)['id'], imported.id);
+      expect(payload, isNot(contains('completedLog')));
+    },
+  );
+
+  test('iPhone set logging syncs active workout progress to watch', () async {
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: _MemoryStore(),
+      watchSync: watch,
+    );
+    await controller.load();
+    final workout = controller.nextWorkout!;
+    final exercise = workout.exercises.first;
+
+    await controller.logSet(exercise, 20, 8, 6);
+    await Future<void>.delayed(Duration.zero);
+
+    final payload = watch.sentPayloads.last;
+    expect((payload['workout'] as Map<String, dynamic>)['id'], workout.id);
+    final activeJson = payload['activeLog'] as Map<String, dynamic>;
+    expect(activeJson['workoutId'], workout.id);
+    expect(activeJson['sets'], hasLength(1));
+    expect(payload, isNot(contains('completedLog')));
+  });
+
+  test('imports Apple Watch progress before workout completion', () async {
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: _MemoryStore(),
+      watchSync: watch,
+    );
+    await controller.load();
+    final workout = controller.nextWorkout!;
+    final exercise = workout.exercises.first;
+
+    await controller.handleWatchWorkoutProgress(
+      _watchProgressPayload(workout, exercise, revision: 1),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final log = controller.activeWorkoutLog;
+    expect(log, isNotNull);
+    expect(log!.workoutId, workout.id);
+    expect(log.completedAt, isNull);
+    expect(log.exerciseTimings.single.exerciseId, exercise.exerciseId);
+    expect(log.exerciseTimings.single.completedAt, isNull);
+    expect(controller.debugActiveWatchSessionWorkoutId, workout.id);
+    expect(watch.sentPayloads.last['activeLog'], isNotNull);
+  });
+
   test('imports completed watch workout into logs', () async {
     final watch = _FakeWatchSync();
     final controller = FitnessController(
@@ -841,7 +921,6 @@ void main() {
 class _MemoryStore extends LocalFitnessStore {
   FitnessData? saved;
   LocalBridgeConfig bridgeConfig = const LocalBridgeConfig();
-  final jsonFiles = <String, Map<String, dynamic>>{};
 
   @override
   Future<FitnessData> load() async => saved ?? sampleFitnessData();
@@ -858,34 +937,17 @@ class _MemoryStore extends LocalFitnessStore {
   Future<void> saveBridgeConfig(LocalBridgeConfig config) async {
     bridgeConfig = config;
   }
-
-  @override
-  Future<File> writeExchangeJson(
-    String fileName,
-    Map<String, dynamic> payload,
-  ) async {
-    jsonFiles[fileName] = payload;
-    return File(fileName);
-  }
-
-  @override
-  Future<Map<String, dynamic>?> readExchangeJson(String fileName) async {
-    return jsonFiles[fileName];
-  }
-
-  @override
-  Future<bool> exchangeJsonExists(String fileName) async {
-    return jsonFiles.containsKey(fileName);
-  }
-
-  @override
-  Future<void> deleteExchangeJson(String fileName) async {
-    jsonFiles.remove(fileName);
-  }
 }
 
 class _CapturingBridgeService extends LocalBridgeService {
   Map<String, dynamic>? snapshot;
+  Map<String, dynamic>? dayContext;
+  Map<String, dynamic>? dailySnapshot;
+
+  @override
+  Future<List<String>> pendingResultKinds(LocalBridgeConfig config) async {
+    return const [];
+  }
 
   @override
   Future<void> uploadAppSnapshot(
@@ -893,6 +955,22 @@ class _CapturingBridgeService extends LocalBridgeService {
     Map<String, dynamic> payload,
   ) async {
     snapshot = payload;
+  }
+
+  @override
+  Future<void> uploadDayContext(
+    LocalBridgeConfig config,
+    Map<String, dynamic> payload,
+  ) async {
+    dayContext = payload;
+  }
+
+  @override
+  Future<void> uploadDailySnapshot(
+    LocalBridgeConfig config,
+    Map<String, dynamic> payload,
+  ) async {
+    dailySnapshot = payload;
   }
 }
 
@@ -905,7 +983,7 @@ class _ResultBridgeService extends LocalBridgeService {
 
   @override
   Future<List<String>> pendingResultKinds(LocalBridgeConfig config) async {
-    return pendingKinds;
+    return pendingKinds.where((kind) => !consumedKinds.contains(kind)).toList();
   }
 
   @override
@@ -993,6 +1071,35 @@ Map<String, dynamic> _watchCompletionPayload(
         'startedAt': started.toIso8601String(),
         'completedAt': completed.toIso8601String(),
         'pausedSeconds': 30,
+      },
+    ],
+  };
+}
+
+Map<String, dynamic> _watchProgressPayload(
+  PlannedWorkout workout,
+  ExercisePrescription exercise, {
+  required int revision,
+}) {
+  final started = DateTime.utc(2026, 5, 22, 8);
+  return {
+    'schemaVersion': WatchSyncService.schemaVersion,
+    'revision': revision,
+    'sentAt': started.add(const Duration(minutes: 5)).toIso8601String(),
+    'workoutId': workout.id,
+    'title': workout.title,
+    'startedAt': started.toIso8601String(),
+    'pausedSeconds': 0,
+    'activeExerciseId': exercise.exerciseId,
+    'exerciseIndex': 0,
+    'healthWriteStatus': 'watch_progress',
+    'sets': const [],
+    'exerciseTimings': [
+      {
+        'exerciseId': exercise.exerciseId,
+        'exerciseName': exercise.name,
+        'startedAt': started.toIso8601String(),
+        'pausedSeconds': 0,
       },
     ],
   };

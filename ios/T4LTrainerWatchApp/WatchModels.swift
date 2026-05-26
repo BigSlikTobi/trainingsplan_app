@@ -14,6 +14,8 @@ struct WatchActiveLog: Codable {
   let startedAt: String
   let pausedAt: String?
   let pausedSeconds: Int?
+  let sets: [WatchLoggedSet]?
+  let exerciseTimings: [WatchExerciseTiming]?
 }
 
 struct WatchCompletedLog: Codable {
@@ -66,7 +68,8 @@ struct WatchExerciseTiming: Codable {
   let exerciseId: String
   let exerciseName: String
   let startedAt: String
-  let completedAt: String
+  let completedAt: String?
+  let pausedAt: String?
   let pausedSeconds: Int
 }
 
@@ -85,6 +88,23 @@ struct WatchCompletionPayload: Codable {
   let startedAt: String
   let completedAt: String
   let pausedSeconds: Int
+  let sets: [WatchLoggedSet]
+  let exerciseTimings: [WatchExerciseTiming]
+  let healthMetrics: WatchHealthMetrics?
+  let healthWriteStatus: String
+}
+
+struct WatchProgressPayload: Codable {
+  let schemaVersion: Int
+  let revision: Int
+  let sentAt: String
+  let workoutId: String
+  let title: String
+  let startedAt: String
+  let pausedAt: String?
+  let pausedSeconds: Int
+  let activeExerciseId: String?
+  let exerciseIndex: Int
   let sets: [WatchLoggedSet]
   let exerciseTimings: [WatchExerciseTiming]
   let healthMetrics: WatchHealthMetrics?

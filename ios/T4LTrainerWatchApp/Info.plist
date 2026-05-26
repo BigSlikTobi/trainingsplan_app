@@ -28,5 +28,9 @@
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.tobiaslatta.trainingsplanapp</string>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
 </dict>
 </plist>

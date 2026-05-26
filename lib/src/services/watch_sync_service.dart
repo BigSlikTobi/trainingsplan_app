@@ -7,9 +7,9 @@ import '../models/fitness_models.dart';
 class WatchSyncService {
   WatchSyncService({MethodChannel? methodChannel, EventChannel? eventChannel})
     : _methodChannel =
-          methodChannel ?? const MethodChannel('codex_fitness/watch_sync'),
+          methodChannel ?? const MethodChannel('t4l_trainer/watch_sync'),
       _eventChannel =
-          eventChannel ?? const EventChannel('codex_fitness/watch_events');
+          eventChannel ?? const EventChannel('t4l_trainer/watch_events');
 
   static const int schemaVersion = 1;
 

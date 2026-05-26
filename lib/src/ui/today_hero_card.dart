@@ -26,6 +26,7 @@ class TodayHeroCard extends StatelessWidget {
     required this.canDismissFocus,
     required this.totalExercises,
     required this.onStart,
+    required this.onComplete,
     required this.onPause,
     required this.onResume,
     required this.onStop,
@@ -55,6 +56,7 @@ class TodayHeroCard extends StatelessWidget {
   final int totalExercises;
 
   final VoidCallback onStart;
+  final VoidCallback onComplete;
   final VoidCallback onPause;
   final VoidCallback onResume;
   final VoidCallback onStop;
@@ -149,6 +151,7 @@ class TodayHeroCard extends StatelessWidget {
                         sessionElapsed: sessionElapsed,
                         avgRpe: avgRpe,
                         onStart: onStart,
+                        onComplete: onComplete,
                         onPause: onPause,
                         onResume: onResume,
                         onStop: onStop,
@@ -282,6 +285,7 @@ class _HeroOverview extends StatelessWidget {
     required this.sessionElapsed,
     required this.avgRpe,
     required this.onStart,
+    required this.onComplete,
     required this.onPause,
     required this.onResume,
     required this.onStop,
@@ -299,6 +303,7 @@ class _HeroOverview extends StatelessWidget {
   final Duration? sessionElapsed;
   final double? avgRpe;
   final VoidCallback onStart;
+  final VoidCallback onComplete;
   final VoidCallback onPause;
   final VoidCallback onResume;
   final VoidCallback onStop;
@@ -369,7 +374,7 @@ class _HeroOverview extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          block.title.toUpperCase(),
+          workout.title.toUpperCase(),
           style: TextStyle(
             fontSize: 34,
             height: 0.95,
@@ -439,7 +444,7 @@ class _HeroOverview extends StatelessWidget {
             onStop: onStop,
           )
         else
-          _OverviewStartButton(onTap: onStart),
+          _OverviewReadyControls(onStart: onStart, onComplete: onComplete),
       ],
     );
   }
@@ -534,6 +539,46 @@ class _OverviewStartButton extends StatelessWidget {
   }
 }
 
+class _OverviewReadyControls extends StatelessWidget {
+  const _OverviewReadyControls({
+    required this.onStart,
+    required this.onComplete,
+  });
+
+  final VoidCallback onStart;
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final paper = AppColors.paper;
+    return Column(
+      children: [
+        _OverviewStartButton(onTap: onStart),
+        const SizedBox(height: 9),
+        SizedBox(
+          width: double.infinity,
+          height: 46,
+          child: OutlinedButton.icon(
+            onPressed: onComplete,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: paper.withValues(alpha: 0.72),
+              side: BorderSide(color: paper.withValues(alpha: 0.18)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
+            ),
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: const Text(
+              'WORKOUT ABSCHLIESSEN',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OverviewActiveControls extends StatelessWidget {
   const _OverviewActiveControls({
     required this.isPaused,
@@ -584,21 +629,28 @@ class _OverviewActiveControls extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 9),
-        SizedBox(
-          width: 52,
-          height: 52,
-          child: FilledButton(
-            onPressed: onStop,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.coral.withValues(alpha: 0.13),
-              foregroundColor: AppColors.coral,
-              side: BorderSide(color: AppColors.coral.withValues(alpha: 0.28)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
+        Expanded(
+          child: SizedBox(
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: onStop,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.coral.withValues(alpha: 0.13),
+                foregroundColor: AppColors.coral,
+                side: BorderSide(
+                  color: AppColors.coral.withValues(alpha: 0.28),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                padding: EdgeInsets.zero,
               ),
-              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text(
+                'FERTIG',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+              ),
             ),
-            child: const Icon(Icons.stop, size: 18),
           ),
         ),
       ],
@@ -1082,12 +1134,12 @@ class GhostExerciseSection extends StatelessWidget {
       opacity: 0.5,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.paper.withValues(alpha: 0.06)),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           child: Column(
             children: [
               for (var i = 0; i < rows.length; i++)
@@ -1097,7 +1149,7 @@ class GhostExerciseSection extends StatelessWidget {
                     border: Border(
                       bottom: BorderSide(
                         color: i < rows.length - 1
-                            ? AppColors.ink.withValues(alpha: 0.05)
+                            ? AppColors.paper.withValues(alpha: 0.06)
                             : AppColors.transparent,
                       ),
                     ),
@@ -1124,7 +1176,7 @@ class GhostExerciseSection extends StatelessWidget {
                                   0.55,
                               height: 10,
                               decoration: BoxDecoration(
-                                color: AppColors.ink.withValues(alpha: 0.10),
+                                color: AppColors.paper.withValues(alpha: 0.10),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -1133,19 +1185,11 @@ class GhostExerciseSection extends StatelessWidget {
                               width: MediaQuery.of(context).size.width * 0.20,
                               height: 7,
                               decoration: BoxDecoration(
-                                color: AppColors.ink.withValues(alpha: 0.06),
+                                color: AppColors.paper.withValues(alpha: 0.06),
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: AppColors.ink.withValues(alpha: 0.06),
-                          shape: BoxShape.circle,
                         ),
                       ),
                     ],

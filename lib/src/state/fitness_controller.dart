@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../data/local_store.dart';
 import '../data/seed_data.dart';
 import '../models/fitness_models.dart';
-import '../services/coach_exchange_service.dart';
+import '../services/coach_payload_service.dart';
 import '../services/health_sync_service.dart';
 import '../services/local_bridge_service.dart';
 import '../services/media_capture_service.dart';
@@ -24,7 +25,7 @@ class FitnessController extends ChangeNotifier {
        _media = media ?? MediaCaptureService(),
        _bridge = bridge ?? LocalBridgeService(),
        _watchSync = watchSync ?? WatchSyncService() {
-    _coach = CoachExchangeService(_store);
+    _coach = CoachPayloadService();
   }
 
   final LocalFitnessStore _store;
@@ -32,11 +33,11 @@ class FitnessController extends ChangeNotifier {
   final MediaCaptureService _media;
   final LocalBridgeService _bridge;
   final WatchSyncService _watchSync;
-  late final CoachExchangeService _coach;
+  late final CoachPayloadService _coach;
 
   FitnessData _data = createEmptyFitnessData();
   bool _isLoading = true;
-  bool _hasPendingCodexBlock = false;
+  bool _hasPendingCoachBlock = false;
   bool _hasPendingNutritionAnalysis = false;
   bool _isHealthTracking = false;
   LiveHealthMetrics? _liveHealthMetrics;
@@ -45,15 +46,17 @@ class FitnessController extends ChangeNotifier {
   String _status = 'Loading local training data...';
   WorkoutLog? _justCompletedLog;
   LocalBridgeConfig _bridgeConfig = const LocalBridgeConfig();
+  Map<String, dynamic>? _pendingTrainingBlockPlanPayload;
   StreamSubscription<Map<String, dynamic>>? _watchEvents;
   String? _activeWatchSessionWorkoutId;
+  final Map<String, int> _watchProgressRevisions = {};
 
   @visibleForTesting
   String? get debugActiveWatchSessionWorkoutId => _activeWatchSessionWorkoutId;
 
   FitnessData get data => _data;
   bool get isLoading => _isLoading;
-  bool get hasPendingCodexBlock => _hasPendingCodexBlock;
+  bool get hasPendingCoachBlock => _hasPendingCoachBlock;
   bool get hasPendingNutritionAnalysis => _hasPendingNutritionAnalysis;
   bool get isHealthTracking => _isHealthTracking;
   LiveHealthMetrics? get liveHealthMetrics => _liveHealthMetrics;
@@ -66,18 +69,16 @@ class FitnessController extends ChangeNotifier {
   MealAnalysisRequest? get pendingMealRequest => _data.pendingMealRequest;
   MealAnalysisResult? get pendingMealResult => _data.pendingMealResult;
   FuelGuidance? get fuelGuidance => _data.fuelGuidance;
+  FuelCheckIn? get latestFuelCheckIn => _data.latestFuelCheckIn;
   LocalBridgeConfig get bridgeConfig => _bridgeConfig;
 
   Future<void> syncWorkoutToWatch() async {
-    // What the watch should show is derived from persisted state, not a
-    // transient flag — otherwise any completion path that doesn't happen to
-    // set _justCompletedLog (e.g. completeCurrentWorkout) ends up syncing
-    // nextWorkout with no completedLog, which the watch reads as "fresh
-    // workout, show Start". Priority:
+    // Priority:
     //   1) an active (uncompleted) log → sync that workout in active state
-    //   2) any completed log → sync the most recently completed workout
-    //      with its completedLog, so the watch shows the Done card
-    //   3) fall back to nextWorkout for brand-new state
+    //   2) the just-completed log → keep the watch on its Done card until the
+    //      phone summary is acknowledged or a new plan arrives
+    //   3) nextWorkout → normal planned-workout state
+    //   4) most recent completed log → fallback when no next workout exists
     PlannedWorkout? workout;
     WorkoutLog? activeLog;
     WorkoutLog? completedLog;
@@ -86,22 +87,25 @@ class FitnessController extends ChangeNotifier {
     if (active != null) {
       workout = _findWorkoutById(active.workoutId);
       activeLog = active;
+    } else if (_justCompletedLog?.completedAt != null) {
+      final justCompleted = _justCompletedLog!;
+      completedLog = justCompleted;
+      workout = _findWorkoutById(justCompleted.workoutId);
     } else {
-      final recent = _mostRecentCompletedLog();
-      if (recent != null) {
-        workout = _findWorkoutById(recent.workoutId);
-        completedLog = recent;
+      workout = nextWorkout;
+      if (workout == null) {
+        final recent = _mostRecentCompletedLog();
+        if (recent != null) {
+          workout = _findWorkoutById(recent.workoutId);
+          completedLog = recent;
+        }
       }
     }
-    workout ??= nextWorkout;
     if (workout == null) {
       _status = 'No workout available for Apple Watch sync';
       notifyListeners();
       return;
     }
-    // If we fell back to nextWorkout, fill completedLog from the data so a
-    // pre-existing completion is still recognised.
-    completedLog ??= _completedWorkoutLog(workout);
 
     try {
       _status = await _watchSync.syncWorkout(
@@ -192,6 +196,49 @@ class FitnessController extends ChangeNotifier {
     _markWatchCompletionHandled(payload);
   }
 
+  Future<void> handleWatchWorkoutProgress(Map<String, dynamic> payload) async {
+    final progress = _watchProgressLog(payload);
+    if (progress == null) {
+      _status = 'Ignored invalid Apple Watch progress payload';
+      notifyListeners();
+      return;
+    }
+    if (progress.completedAt != null) {
+      await handleWatchWorkoutCompleted(payload);
+      return;
+    }
+
+    final revision = _payloadInt(payload['revision'], 0);
+    if (revision > 0) {
+      final lastRevision = _watchProgressRevisions[progress.workoutId] ?? 0;
+      if (revision <= lastRevision) return;
+      _watchProgressRevisions[progress.workoutId] = revision;
+    }
+
+    _activeWatchSessionWorkoutId = progress.workoutId;
+    final logs = [..._data.logs];
+    final activeIndex = logs.indexWhere(
+      (log) => log.workoutId == progress.workoutId && log.completedAt == null,
+    );
+    final completedIndex = logs.indexWhere(
+      (log) => log.workoutId == progress.workoutId && log.completedAt != null,
+    );
+
+    if (completedIndex >= 0) return;
+    if (activeIndex >= 0) {
+      logs[activeIndex] = _mergeWatchProgress(
+        existing: logs[activeIndex],
+        incoming: progress,
+      );
+    } else {
+      logs.insert(0, progress);
+    }
+
+    _data = _data.copyWith(logs: logs);
+    await _persist('Imported Apple Watch progress');
+    unawaited(syncWorkoutToWatch());
+  }
+
   void _markWatchCompletionHandled(Map<String, dynamic> payload) {
     final completionId = payload['completionId'] as String?;
     if (completionId != null && completionId.isNotEmpty) {
@@ -275,13 +322,6 @@ class FitnessController extends ChangeNotifier {
     await _persist(active ? 'Memory activated' : 'Memory paused');
   }
 
-  Future<String> exchangeDirectoryPath() async {
-    final dir = await _store.getExchangeDirectory();
-    _status = 'Exchange folder: ${dir.path}';
-    notifyListeners();
-    return dir.path;
-  }
-
   Future<void> load() async {
     _isLoading = true;
     notifyListeners();
@@ -297,6 +337,11 @@ class FitnessController extends ChangeNotifier {
             if (payload != null) {
               unawaited(handleWatchWorkoutCompleted(payload));
             }
+          case 'watchWorkoutProgress':
+            final payload = (event['payload'] as Map?)?.cast<String, dynamic>();
+            if (payload != null) {
+              unawaited(handleWatchWorkoutProgress(payload));
+            }
           case 'watchSessionActive':
             final workoutId = event['workoutId'] as String?;
             if (workoutId != null && workoutId.isNotEmpty) {
@@ -310,24 +355,33 @@ class FitnessController extends ChangeNotifier {
       _watchEvents = null;
     }
     notifyListeners();
-    await checkForCodexUpdates();
+    if (_bridgeConfig.isConfigured) {
+      await checkForCoachUpdates();
+    }
   }
 
   Future<String> exportDailySnapshot() async {
-    await _exportDayContext();
-    final path = await _coach.exportDailySnapshot(_data);
-    _status = 'Exported day_context.json and daily_snapshot.json to $path';
+    if (!_bridgeConfig.isConfigured) {
+      _status = 'Enter the self-hosted server URL and API key first';
+      notifyListeners();
+      return '';
+    }
+    final dayContext = await _exportDayContext(notify: false);
+    final dailySnapshot = _coach.buildDailySnapshot(_data);
+    await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
+    _status = 'Pushed T4L Gym Bro day context and daily snapshot';
     notifyListeners();
-    return path;
+    return dayContext['dayKey'] as String? ?? '';
   }
 
-  Future<void> importCodexBlockPlan() async {
-    final block = await _coach.readTrainingBlockPlan();
-    if (block == null) {
-      _status = 'No training_block_plan.json found in exchange folder';
+  Future<void> importCoachBlockPlan() async {
+    final payload = _pendingTrainingBlockPlanPayload;
+    if (payload == null) {
+      _status = 'No T4L Gym Bro training block found on the server';
       notifyListeners();
       return;
     }
+    final block = _coach.parseTrainingBlockPlan(payload);
     _data = _data.copyWith(
       blocks: [block, ..._data.blocks],
       activeBlockId: block.id,
@@ -335,36 +389,23 @@ class FitnessController extends ChangeNotifier {
         CoachDecision(
           id: newId('decision'),
           createdAt: DateTime.now(),
-          title: 'Imported Codex block',
+          title: 'Imported T4L Gym Bro block',
           rationale:
-              'Codex block import passed schema validation and is now the active plan.',
+              'T4L Gym Bro block import passed schema validation and is now the active plan.',
           safetyFlags: const [],
           accepted: true,
         ),
         ..._data.coachDecisions,
       ],
     );
-    await _coach.clearTrainingBlockPlan();
-    _hasPendingCodexBlock = false;
-    await _persist('Imported Codex block plan');
+    _pendingTrainingBlockPlanPayload = null;
+    _hasPendingCoachBlock = false;
+    await _bridge.markResultConsumed(_bridgeConfig, 'training_block_plan');
+    await _persist('Imported T4L Gym Bro block plan');
   }
 
-  Future<void> checkForCodexBlockPlan() async {
-    final hasPlan = await _coach.hasTrainingBlockPlan();
-    if (_hasPendingCodexBlock == hasPlan) return;
-    _hasPendingCodexBlock = hasPlan;
-    if (hasPlan) {
-      _status = 'New Codex training block available';
-    }
-    notifyListeners();
-  }
-
-  Future<void> checkForCodexUpdates() async {
-    await checkForCodexBlockPlan();
-    await checkForNextDayPlan();
-    await checkForNutritionAnalysisResult();
-    await importFuelGuidance();
-    await importExchangeMemoryWiki();
+  Future<void> checkForCoachUpdates() {
+    return pullBridgeResults();
   }
 
   Future<void> saveBridgeConfig({
@@ -405,18 +446,15 @@ class FitnessController extends ChangeNotifier {
       return;
     }
     try {
-      await _exportDayContext(notify: false);
-      await _coach.exportDailySnapshot(_data);
-      final dayContext = await _store.readExchangeJson('day_context.json');
-      final dailySnapshot = await _store.readExchangeJson(
-        'daily_snapshot.json',
-      );
+      final dayContext = await _exportDayContext(notify: false);
+      final dailySnapshot = _coach.buildDailySnapshot(_data);
+      await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
       await _bridge.uploadAppSnapshot(_bridgeConfig, {
         'schema': 't4l_app_snapshot.v1',
         'createdAt': DateTime.now().toIso8601String(),
         'fitnessData': _data.toJson(),
-        'dayContext': ?dayContext,
-        'dailySnapshot': ?dailySnapshot,
+        'dayContext': dayContext,
+        'dailySnapshot': dailySnapshot,
       });
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
@@ -436,48 +474,18 @@ class FitnessController extends ChangeNotifier {
     }
     try {
       await _exportDayContext(notify: false);
-      await _coach.exportDailySnapshot(_data);
+      final dailySnapshot = _coach.buildDailySnapshot(_data);
       await _bridge.uploadProfile(_bridgeConfig, {
         'schema': 'athlete_profile.v1',
         'createdAt': DateTime.now().toIso8601String(),
         'profile': _data.profile.toJson(),
       });
-      final uploaded = <String>['athlete_profile.json'];
-      final dayContext = await _store.readExchangeJson('day_context.json');
-      if (dayContext != null) {
-        await _bridge.uploadDayContext(_bridgeConfig, dayContext);
-        uploaded.add('day_context.json');
-      }
-      final dailySnapshot = await _store.readExchangeJson(
-        'daily_snapshot.json',
-      );
-      if (dailySnapshot != null) {
-        await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
-        uploaded.add('daily_snapshot.json');
-      }
-      for (final fileName in const [
-        'training_block_request.json',
-        'nutrition_analysis_request.json',
-      ]) {
-        final payload = await _store.readExchangeJson(fileName);
-        if (payload == null) continue;
-        await _bridge.uploadJson(_bridgeConfig, fileName, payload);
-        uploaded.add(fileName);
-      }
-      final exchangeDir = await _store.getExchangeDirectory();
-      final imagesDir = Directory('${exchangeDir.path}/meal_images');
-      if (imagesDir.existsSync()) {
-        for (final entity in imagesDir.listSync()) {
-          if (entity is! File) continue;
-          final name = entity.uri.pathSegments.last;
-          await _bridge.uploadBytes(
-            _bridgeConfig,
-            'meal_images/$name',
-            await entity.readAsBytes(),
-          );
-          uploaded.add('meal_images/$name');
-        }
-      }
+      await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
+      final uploaded = <String>[
+        'athlete_profile',
+        'day_context',
+        'daily_snapshot',
+      ];
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
       _status = 'Pushed ${uploaded.join(', ')} to self-hosted server';
@@ -499,12 +507,13 @@ class FitnessController extends ChangeNotifier {
       for (final kind in pendingKinds) {
         final payload = await _bridge.downloadResult(_bridgeConfig, kind);
         if (payload == null) continue;
-        final resultLabel = await _importBridgeResult(kind, payload);
-        if (resultLabel == null) continue;
-        await _bridge.markResultConsumed(_bridgeConfig, kind);
-        downloaded.add(resultLabel);
+        final imported = await _importBridgeResult(kind, payload);
+        if (imported == null) continue;
+        if (imported.consume) {
+          await _bridge.markResultConsumed(_bridgeConfig, kind);
+        }
+        downloaded.add(imported.label);
       }
-      await checkForCodexUpdates();
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
       _status = downloaded.isEmpty
@@ -516,90 +525,34 @@ class FitnessController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> importExchangeMemoryWiki() async {
-    try {
-      final incoming = await _coach.readExchangeMemoryWikiEntries();
-      if (incoming.isEmpty) return;
-      final existingKeys = _data.memories.map(_memoryImportKey).toSet();
-      final imported = <MemoryEntry>[];
-      for (final memory in incoming) {
-        final key = _memoryImportKey(memory);
-        if (existingKeys.add(key)) {
-          imported.add(memory);
-        }
-      }
-      if (imported.isEmpty) return;
-      _data = _data.copyWith(memories: [...imported, ..._data.memories]);
-      await _persist(
-        'Imported ${imported.length} coach memory '
-        '${imported.length == 1 ? 'entry' : 'entries'}',
-      );
-    } on Object catch (error) {
-      _status = 'Memory wiki import failed: $error';
-      notifyListeners();
-    }
-  }
-
-  Future<void> importFuelGuidance() async {
-    final hasFuel = await _coach.hasFuelGuidance();
-    if (!hasFuel) return;
-    try {
-      final guidance = await _coach.readFuelGuidance();
-      if (guidance == null) return;
-      _data = _data.copyWith(fuelGuidance: guidance);
-      await _coach.clearFuelGuidance();
-      await _persist('Imported fuel guidance from coach');
-    } on Object catch (error) {
-      _status = 'Fuel guidance import failed: $error';
-      notifyListeners();
-    }
-  }
-
-  Future<void> checkForNextDayPlan() async {
-    final hasPlan = await _coach.hasNextDayPlan();
-    if (!hasPlan) return;
-    try {
-      await importNextDayPlan();
-    } on Object catch (error) {
-      _status = 'Next-day plan import failed: $error';
-      notifyListeners();
-    }
-  }
-
-  Future<String?> _importBridgeResult(
+  Future<({String label, bool consume})?> _importBridgeResult(
     String kind,
     Map<String, dynamic> payload,
   ) async {
     switch (kind) {
       case 'next_day_plan':
-        final workout = _plannedWorkoutFromResult(payload);
+        final workout = _coach.parseNextDayPlan(payload);
         await importNextDayWorkout(workout, source: 'T4L server');
-        return 'next_day_plan';
+        return (label: 'next_day_plan', consume: true);
       case 'training_block_plan':
-        await _store.writeExchangeJson('training_block_plan.json', payload);
-        return 'training_block_plan.json';
+        _coach.parseTrainingBlockPlan(payload);
+        _pendingTrainingBlockPlanPayload = payload;
+        _hasPendingCoachBlock = true;
+        _status = 'New T4L Gym Bro training block available';
+        return (label: 'training_block_plan', consume: false);
       case 'nutrition_analysis_result':
-        await _store.writeExchangeJson(
-          'nutrition_analysis_result.json',
-          payload,
-        );
-        return 'nutrition_analysis_result.json';
+        final result = _coach.parseNutritionAnalysisResult(payload);
+        _data = _data.copyWith(pendingMealResult: result);
+        _hasPendingNutritionAnalysis = true;
+        await _store.save(_data);
+        return (label: 'nutrition_analysis_result', consume: true);
       case 'fuel_guidance':
-        await _store.writeExchangeJson('fuel_guidance.json', payload);
-        return 'fuel_guidance.json';
+        final guidance = _coach.parseFuelGuidance(payload);
+        _data = _data.copyWith(fuelGuidance: guidance);
+        await _store.save(_data);
+        return (label: 'fuel_guidance', consume: true);
     }
     return null;
-  }
-
-  Future<void> importNextDayPlan() async {
-    final workout = await _coach.readNextDayPlan();
-    if (workout == null) {
-      _status = 'No next_day_plan.json found or no active block exists';
-      notifyListeners();
-      return;
-    }
-    await importNextDayWorkout(workout, source: 'Codex');
-    await _coach.clearNextDayPlan();
   }
 
   Future<void> importNextDayWorkout(
@@ -635,7 +588,9 @@ class FitnessController extends ChangeNotifier {
           ..._data.coachDecisions,
         ],
       );
+      _justCompletedLog = null;
       await _persist('Imported next-day plan from $source');
+      unawaited(syncWorkoutToWatch());
       return;
     }
     final updatedBlock = block.copyWith(
@@ -660,7 +615,9 @@ class FitnessController extends ChangeNotifier {
         ..._data.coachDecisions,
       ],
     );
+    _justCompletedLog = null;
     await _persist('Imported next-day plan from $source');
+    unawaited(syncWorkoutToWatch());
   }
 
   Future<void> logSet(
@@ -709,6 +666,7 @@ class FitnessController extends ChangeNotifier {
     }
     _data = _data.copyWith(logs: logs);
     await _persist('Logged ${exercise.name} set');
+    unawaited(syncWorkoutToWatch());
   }
 
   Future<void> startCurrentWorkout() async {
@@ -793,6 +751,7 @@ class FitnessController extends ChangeNotifier {
     final logs = [..._data.logs]..[index] = updated;
     _data = _data.copyWith(logs: logs);
     await _persist('Started timer: $exerciseName');
+    unawaited(syncWorkoutToWatch());
   }
 
   Future<void> pauseExerciseTimer(String exerciseId) async {
@@ -802,6 +761,7 @@ class FitnessController extends ChangeNotifier {
     );
     if (mutated != null) {
       await _persist('Paused timer: ${mutated.exerciseName}');
+      unawaited(syncWorkoutToWatch());
     }
   }
 
@@ -816,6 +776,7 @@ class FitnessController extends ChangeNotifier {
     });
     if (mutated != null) {
       await _persist('Resumed timer: ${mutated.exerciseName}');
+      unawaited(syncWorkoutToWatch());
     }
   }
 
@@ -857,6 +818,7 @@ class FitnessController extends ChangeNotifier {
     final logs = [..._data.logs]..[index] = updated;
     _data = _data.copyWith(logs: logs);
     await _persist('Stopped timer: ${current.exerciseName}');
+    unawaited(syncWorkoutToWatch());
     if (autoCloseWorkout) await _maybeAutoCloseWorkout();
   }
 
@@ -1204,13 +1166,35 @@ class FitnessController extends ChangeNotifier {
     int soreness = 2,
   }) async {
     final workout = nextWorkout;
-    if (workout == null) return;
+    if (workout == null) {
+      _status = 'No workout available to complete';
+      notifyListeners();
+      return;
+    }
     final index = _data.logs.indexWhere(
       (log) => log.workoutId == workout.id && log.completedAt == null,
     );
     if (index < 0) {
-      _status = 'Log at least one set before completing the workout';
-      notifyListeners();
+      final now = DateTime.now();
+      var completed = WorkoutLog(
+        id: newId('log'),
+        workoutId: workout.id,
+        title: workout.title,
+        startedAt: now,
+        completedAt: now,
+        readiness: readiness,
+        soreness: soreness,
+        notes: notes,
+        sets: const [],
+        healthWriteStatus: 'not_synced',
+      );
+      completed = await _syncCompletedWorkout(completed);
+      _data = _data.copyWith(logs: [completed, ..._data.logs]);
+      _captureWorkoutMemory(completed);
+      _justCompletedLog = completed;
+      await _persist('Completed ${workout.title}');
+      await _exportDayContext(notify: false);
+      unawaited(syncWorkoutToWatch());
       return;
     }
     if (_isHealthTracking || _data.logs[index].sets.isEmpty) {
@@ -1252,9 +1236,36 @@ class FitnessController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> submitFuelCheckIn({
+    required String guidanceValidFor,
+    required int score,
+    String context = '',
+  }) async {
+    _data = _data.copyWith(
+      latestFuelCheckIn: FuelCheckIn(
+        guidanceValidFor: guidanceValidFor,
+        score: score.clamp(1, 10),
+        context: context.trim(),
+        createdAt: DateTime.now(),
+      ),
+    );
+    await _store.save(_data);
+    try {
+      if (_bridgeConfig.isConfigured) {
+        await _exportDayContext(notify: false);
+        _status = 'Sent Fuel check-in to T4L Gym Bro';
+      } else {
+        _status = 'Saved Fuel check-in locally';
+      }
+    } on Object catch (error) {
+      _status = 'Fuel check-in saved locally, server push failed: $error';
+    }
+    notifyListeners();
+  }
+
   Future<void> updateProfile(AthleteProfile profile) async {
     _data = _data.copyWith(profile: profile);
-    await _persist('Profile updated for Codex nutrition context');
+    await _persist('Profile updated for T4L Gym Bro nutrition context');
   }
 
   Future<String?> pickMealImageFromGallery() {
@@ -1275,45 +1286,31 @@ class FitnessController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (!_bridgeConfig.isConfigured) {
+      _status = 'Enter the self-hosted server URL and API key first';
+      notifyListeners();
+      return;
+    }
     await _exportDayContext(notify: false);
-    final (request, path) = await _coach.exportNutritionAnalysisRequest(
+    final remoteImagePath = await _uploadMealImage(imagePath);
+    final (request, payload) = _coach.buildNutritionAnalysisRequest(
       data: _data,
       description: description,
-      imagePath: imagePath,
+      imagePath: remoteImagePath,
     );
+    await _bridge.uploadNutritionAnalysisRequest(_bridgeConfig, payload);
     _data = _data.copyWith(
       pendingMealRequest: request,
       pendingMealResult: null,
     );
     _hasPendingNutritionAnalysis = false;
     await _store.save(_data);
-    _status = 'Exported nutrition_analysis_request.json to $path';
+    _status = 'Sent meal analysis request to T4L Gym Bro';
     notifyListeners();
   }
 
-  Future<void> checkForNutritionAnalysisResult() async {
-    final hasResult = await _coach.hasNutritionAnalysisResult();
-    if (!hasResult) {
-      if (_hasPendingNutritionAnalysis) {
-        _hasPendingNutritionAnalysis = false;
-        notifyListeners();
-      }
-      return;
-    }
-    if (_data.pendingMealResult != null && _hasPendingNutritionAnalysis) {
-      return;
-    }
-    try {
-      final result = await _coach.readNutritionAnalysisResult();
-      if (result == null) return;
-      _data = _data.copyWith(pendingMealResult: result);
-      _hasPendingNutritionAnalysis = true;
-      _status = 'Codex nutrition analysis ready for review';
-      await _store.save(_data);
-    } on Object catch (error) {
-      _status = 'Nutrition analysis import failed: $error';
-    }
-    notifyListeners();
+  Future<void> checkForNutritionAnalysisResult() {
+    return checkForCoachUpdates();
   }
 
   Future<void> acceptMealAnalysis({
@@ -1357,21 +1354,17 @@ class FitnessController extends ChangeNotifier {
       pendingMealRequest: null,
       pendingMealResult: null,
     );
-    await _coach.clearNutritionAnalysisResult();
-    await _coach.clearNutritionAnalysisRequest();
     _hasPendingNutritionAnalysis = false;
     _captureMealMemory(accepted, notes);
     await saveNutrition(accepted.toNutritionLog(notes: notes));
-    _status = 'Accepted Codex nutrition analysis and saved calories';
+    _status = 'Accepted T4L Gym Bro nutrition analysis and saved calories';
     notifyListeners();
   }
 
   Future<void> discardMealAnalysis() async {
     _data = _data.copyWith(pendingMealRequest: null, pendingMealResult: null);
     _hasPendingNutritionAnalysis = false;
-    await _coach.clearNutritionAnalysisResult();
-    await _coach.clearNutritionAnalysisRequest();
-    await _persist('Discarded Codex nutrition analysis');
+    await _persist('Discarded T4L Gym Bro nutrition analysis');
   }
 
   Future<void> connectHealth() async {
@@ -1404,17 +1397,7 @@ class FitnessController extends ChangeNotifier {
     return index < 0 ? null : _data.logs[index];
   }
 
-  WorkoutLog? _completedWorkoutLog(PlannedWorkout workout) {
-    WorkoutLog? latest;
-    for (final log in _data.logs) {
-      if (log.workoutId != workout.id || log.completedAt == null) continue;
-      if (latest == null || log.completedAt!.isAfter(latest.completedAt!)) {
-        latest = log;
-      }
-    }
-    return latest;
-  }
-
+  // ignore: unused_element
   void _startUiTicker() {
     _uiTicker?.cancel();
     _uiTicker = Timer.periodic(
@@ -1463,19 +1446,40 @@ class FitnessController extends ChangeNotifier {
     }
   }
 
-  Future<String> _exportDayContext({bool notify = true}) async {
+  Future<Map<String, dynamic>> _exportDayContext({bool notify = true}) async {
     final now = DateTime.now();
     final activityReport = await _health.readDayActivityReport(now);
-    final path = await _coach.exportDayContext(
+    final payload = _coach.buildDayContext(
       data: _data,
       activityReport: activityReport,
       day: now,
     );
+    if (_bridgeConfig.isConfigured) {
+      await _bridge.uploadDayContext(_bridgeConfig, payload);
+    }
     if (notify) {
-      _status = 'Exported day_context.json to $path';
+      _status = _bridgeConfig.isConfigured
+          ? 'Pushed day context to T4L Gym Bro'
+          : 'Enter the self-hosted server URL and API key first';
       notifyListeners();
     }
-    return path;
+    return payload;
+  }
+
+  Future<String?> _uploadMealImage(String? imagePath) async {
+    if (imagePath == null || imagePath.trim().isEmpty) return null;
+    final source = File(imagePath.trim());
+    if (!source.existsSync()) return imagePath.trim();
+    final extension = p.extension(source.path).isEmpty
+        ? '.jpg'
+        : p.extension(source.path);
+    final fileName = '${newId('meal_image')}$extension';
+    await _bridge.uploadMealImage(
+      _bridgeConfig,
+      fileName,
+      await source.readAsBytes(),
+    );
+    return 'meal_images/$fileName';
   }
 
   WorkoutLog? _watchCompletionLog(Map<String, dynamic> payload) {
@@ -1516,6 +1520,42 @@ class FitnessController extends ChangeNotifier {
     );
   }
 
+  WorkoutLog? _watchProgressLog(Map<String, dynamic> payload) {
+    if (payload['schemaVersion'] != WatchSyncService.schemaVersion) {
+      return null;
+    }
+    final workoutId = payload['workoutId'] as String? ?? '';
+    if (workoutId.isEmpty) return null;
+    final startedAt = DateTime.tryParse(payload['startedAt'] as String? ?? '');
+    if (startedAt == null) return null;
+
+    final title =
+        payload['title'] as String? ?? nextWorkout?.title ?? 'Workout';
+    return WorkoutLog(
+      id: payload['logId'] as String? ?? newId('watch_log'),
+      workoutId: workoutId,
+      title: title,
+      startedAt: startedAt,
+      completedAt: DateTime.tryParse(payload['completedAt'] as String? ?? ''),
+      pausedAt: DateTime.tryParse(payload['pausedAt'] as String? ?? ''),
+      readiness: _payloadInt(payload['readiness'], 3),
+      soreness: _payloadInt(payload['soreness'], 2),
+      notes: payload['notes'] as String? ?? '',
+      sets: _payloadObjects(payload['sets'], LoggedSet.fromJson),
+      healthWriteStatus:
+          payload['healthWriteStatus'] as String? ?? 'watch_progress',
+      healthMetrics: _payloadObject(
+        payload['healthMetrics'],
+        LiveHealthMetrics.fromJson,
+      ),
+      exerciseTimings: _payloadObjects(
+        payload['exerciseTimings'],
+        ExerciseTiming.fromJson,
+      ),
+      pausedSeconds: _payloadInt(payload['pausedSeconds'], 0),
+    );
+  }
+
   WorkoutLog _mergeWatchCompletion({
     required WorkoutLog existing,
     required WorkoutLog incoming,
@@ -1531,6 +1571,29 @@ class FitnessController extends ChangeNotifier {
           : existing.exerciseTimings,
       clearPausedAt: true,
       pausedSeconds: incoming.pausedSeconds,
+    );
+  }
+
+  WorkoutLog _mergeWatchProgress({
+    required WorkoutLog existing,
+    required WorkoutLog incoming,
+  }) {
+    return existing.copyWith(
+      notes: incoming.notes.isNotEmpty ? incoming.notes : existing.notes,
+      sets: incoming.sets.length >= existing.sets.length
+          ? incoming.sets
+          : existing.sets,
+      healthWriteStatus: incoming.healthWriteStatus,
+      healthMetrics: incoming.healthMetrics ?? existing.healthMetrics,
+      exerciseTimings:
+          incoming.exerciseTimings.length >= existing.exerciseTimings.length
+          ? incoming.exerciseTimings
+          : existing.exerciseTimings,
+      pausedAt: incoming.pausedAt,
+      clearPausedAt: incoming.pausedAt == null,
+      pausedSeconds: incoming.pausedSeconds > existing.pausedSeconds
+          ? incoming.pausedSeconds
+          : existing.pausedSeconds,
     );
   }
 
@@ -1630,45 +1693,6 @@ class FitnessController extends ChangeNotifier {
     await _store.save(_data);
     notifyListeners();
   }
-}
-
-String _memoryImportKey(MemoryEntry memory) {
-  return [
-    memory.category.name,
-    memory.source.trim().toLowerCase(),
-    memory.title.trim().toLowerCase(),
-    memory.summary.trim().toLowerCase(),
-  ].join('\n');
-}
-
-PlannedWorkout _plannedWorkoutFromResult(Map<String, dynamic> payload) {
-  final workoutJson = _workoutPayloadObject(payload);
-  final workout = PlannedWorkout.fromJson(workoutJson);
-  if (workout.exercises.isEmpty) {
-    throw const FormatException('next_day_plan result has no exercises.');
-  }
-  return workout;
-}
-
-Map<String, dynamic> _workoutPayloadObject(Map<String, dynamic> payload) {
-  final workout = (payload['workout'] as Map?)?.cast<String, dynamic>();
-  if (workout != null) return workout;
-
-  final plan = (payload['plan'] as Map?)?.cast<String, dynamic>();
-  if (plan != null) {
-    final planWorkout = (plan['workout'] as Map?)?.cast<String, dynamic>();
-    if (planWorkout != null) return planWorkout;
-    if (plan['exercises'] is List) return plan;
-  }
-
-  final result = (payload['result'] as Map?)?.cast<String, dynamic>();
-  if (result != null) {
-    final resultWorkout = (result['workout'] as Map?)?.cast<String, dynamic>();
-    if (resultWorkout != null) return resultWorkout;
-    if (result['exercises'] is List) return result;
-  }
-
-  return payload;
 }
 
 int _payloadInt(Object? value, int fallback) {

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trainingsplan_app/src/app.dart';
@@ -9,19 +7,20 @@ import 'package:trainingsplan_app/src/models/fitness_models.dart';
 import 'package:trainingsplan_app/src/services/local_bridge_service.dart';
 import 'package:trainingsplan_app/src/state/fitness_controller.dart';
 import 'package:trainingsplan_app/src/ui/dashboard.dart';
+import 'package:trainingsplan_app/src/ui/workout_summary_screen.dart';
 
 import 'helpers/sample_fitness_data.dart';
 
 void main() {
   testWidgets('shows coached fitness app navigation', (tester) async {
-    await tester.pumpWidget(const CodexCoachApp());
+    await tester.pumpWidget(const T4LTrainerApp());
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
   });
 
-  testWidgets('nutrition page exposes Codex meal analysis flow', (
+  testWidgets('nutrition page exposes T4L Gym Bro meal analysis flow', (
     tester,
   ) async {
     final controller = FitnessController(store: _WidgetStore());
@@ -39,16 +38,10 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Fuel'));
-    await tester.pump();
+    await tester.tap(find.text('Fuel').last);
+    await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Mahlzeit analysieren'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-
-    expect(find.text('Mahlzeit analysieren'), findsOneWidget);
+    expect(find.text('Fuel + Recovery'), findsWidgets);
   });
 
   testWidgets('setup page exposes agent handoff details', (tester) async {
@@ -80,7 +73,9 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Complete Agent Handoff'), findsOneWidget);
-    expect(find.textContaining('CodexFitnessExchange'), findsWidgets);
+    await tester.tap(find.text('Complete Agent Handoff'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('t4l-server serve'), findsWidgets);
   });
 
   testWidgets('blocks page shows active block workout previews', (
@@ -146,6 +141,106 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('today hero title uses workout title for daily coach plans', (
+    tester,
+  ) async {
+    final controller = FitnessController(
+      store: _WidgetStore(_dailyCoachPlanData()),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('PUSH PULL RESET'), findsOneWidget);
+    expect(find.text('DAILY COACH PLANS'), findsNothing);
+  });
+
+  testWidgets('today tab shows next workout after one completed today', (
+    tester,
+  ) async {
+    final controller = FitnessController(
+      store: _WidgetStore(_dataWithCompletedFirstWorkoutToday()),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Sample focus B'), findsOneWidget);
+    expect(find.byType(WorkoutSummaryView), findsNothing);
+  });
+
+  testWidgets('today shows completed workout summary when no workout is open', (
+    tester,
+  ) async {
+    final controller = FitnessController(
+      store: _WidgetStore(_dataWithCompletedBlock()),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(WorkoutSummaryView), findsOneWidget);
+    expect(find.text('DEIN'), findsNothing);
+    expect(find.text('ERSTER'), findsNothing);
+    expect(find.text('TAG.'), findsNothing);
+  });
+
+  testWidgets(
+    'completed summary hero uses workout title for daily coach plans',
+    (tester) async {
+      final controller = FitnessController(
+        store: _WidgetStore(_completedDailyCoachPlanData()),
+      );
+      await controller.load();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('de'),
+          home: FitnessScope(
+            controller: controller,
+            child: const CoachDashboard(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(WorkoutSummaryView), findsOneWidget);
+      expect(find.text('PUSH PULL RESET'), findsOneWidget);
+      expect(find.text('DAILY COACH PLANS'), findsNothing);
+    },
+  );
+
   testWidgets('coach tab prioritizes setup memory and plan review', (
     tester,
   ) async {
@@ -192,22 +287,6 @@ class _WidgetStore extends LocalFitnessStore {
   @override
   Future<void> saveBridgeConfig(LocalBridgeConfig config) async {
     bridgeConfig = config;
-  }
-
-  @override
-  Future<File> writeExchangeJson(
-    String fileName,
-    Map<String, dynamic> payload,
-  ) async {
-    return File(fileName);
-  }
-
-  @override
-  Future<bool> exchangeJsonExists(String fileName) async => false;
-
-  @override
-  Future<Directory> getExchangeDirectory() async {
-    return Directory('/tmp/CodexFitnessExchange');
   }
 }
 
@@ -270,4 +349,88 @@ FitnessData _longCoachData() {
     createdAt: block.createdAt,
   );
   return base.copyWith(blocks: [updatedBlock], activeBlockId: updatedBlock.id);
+}
+
+FitnessData _dataWithCompletedFirstWorkoutToday() {
+  final base = sampleFitnessData();
+  final firstWorkout = base.activeBlock!.workouts.first;
+  final completed = WorkoutLog(
+    id: 'log-completed-today',
+    workoutId: firstWorkout.id,
+    title: firstWorkout.title,
+    startedAt: DateTime.now().subtract(const Duration(minutes: 45)),
+    completedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+    readiness: 3,
+    soreness: 2,
+    notes: '',
+    sets: const [],
+    healthWriteStatus: 'not_synced',
+  );
+  return base.copyWith(logs: [completed]);
+}
+
+FitnessData _dataWithCompletedBlock() {
+  final base = sampleFitnessData();
+  final logs = [
+    for (final workout in base.activeBlock!.workouts)
+      WorkoutLog(
+        id: 'log-${workout.id}',
+        workoutId: workout.id,
+        title: workout.title,
+        startedAt: DateTime.now().subtract(const Duration(minutes: 45)),
+        completedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        readiness: 3,
+        soreness: 2,
+        notes: '',
+        sets: const [],
+        healthWriteStatus: 'not_synced',
+      ),
+  ];
+  return base.copyWith(logs: logs);
+}
+
+FitnessData _dailyCoachPlanData() {
+  final base = sampleFitnessData();
+  final workout = base.activeBlock!.workouts.first;
+  final dailyWorkout = PlannedWorkout(
+    id: 'daily_push_pull_reset',
+    week: 1,
+    day: 1,
+    title: 'Push Pull Reset',
+    focus: workout.focus,
+    rationale: workout.rationale,
+    exercises: workout.exercises,
+    conditioning: workout.conditioning,
+  );
+  final dailyBlock = TrainingBlock(
+    id: 'block_daily',
+    style: TrainingStyle.custom,
+    title: 'Daily Coach Plans',
+    durationWeeks: 1,
+    currentWeek: 1,
+    weeklyFocus: const ['Daily coach adjustment'],
+    measurableTargets: const [],
+    workouts: [dailyWorkout],
+    createdBy: 'T4L server',
+    createdAt: DateTime(2026, 5, 26),
+  );
+  return base.copyWith(blocks: [dailyBlock], activeBlockId: dailyBlock.id);
+}
+
+FitnessData _completedDailyCoachPlanData() {
+  final data = _dailyCoachPlanData();
+  final workout = data.activeBlock!.workouts.single;
+  final completed = WorkoutLog(
+    id: 'log-completed-daily',
+    workoutId: workout.id,
+    title: 'Daily Coach Plans',
+    startedAt: DateTime.now().subtract(const Duration(minutes: 45)),
+    completedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+    readiness: 3,
+    soreness: 2,
+    notes: '',
+    sets: const [],
+    healthWriteStatus: 'not_synced',
+  );
+  return data.copyWith(logs: [completed]);
 }

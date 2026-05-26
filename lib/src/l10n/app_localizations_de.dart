@@ -42,14 +42,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get btnStarten => 'Starten';
 
   @override
-  String get btnCodexPlanImportieren => 'Codex Plan importieren';
+  String get btnCoachPlanImportieren => 'T4L Gym Bro Plan importieren';
 
   @override
   String get keinAktiverBlock => 'Kein aktiver Block';
 
   @override
   String get keinAktiverBlockSubtitle =>
-      'Importiere deinen Codex Plan, um zu starten.';
+      'Importiere deinen T4L Gym Bro Plan, um zu starten.';
 
   @override
   String get labelCoach => 'COACH';
@@ -152,8 +152,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get mahlzeitAnalysieren => 'Mahlzeit analysieren';
 
   @override
-  String get codexBewertetTrainingsauswirkung =>
-      'Codex bewertet Trainingsauswirkung';
+  String get coachBewertetTrainingsauswirkung =>
+      'T4L Gym Bro bewertet Trainingsauswirkung';
 
   @override
   String get mahlzeit => 'Mahlzeit';
@@ -201,10 +201,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Kein aktives Workout. Wähle einen Block, um den Coach zu starten.';
 
   @override
-  String get pendingMealTitle => 'Codex Meal Analyse wartet';
+  String get pendingMealTitle => 'T4L Gym Bro Meal Analyse wartet';
 
   @override
-  String get neuerCodexBlock => 'Neuer Codex Trainingsblock verfuegbar';
+  String get neuerCoachBlock => 'Neuer T4L Gym Bro Trainingsblock verfuegbar';
 
   @override
   String get btnImport => 'Import';
@@ -237,7 +237,7 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get dialogCompleteNotes => 'Notizen fuer Codex';
+  String get dialogCompleteNotes => 'Notizen fuer T4L Gym Bro';
 
   @override
   String get btnFertig => 'Fertig';
@@ -259,10 +259,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get btnKamera => 'Kamera';
 
   @override
-  String get btnAnCodexSenden => 'An Codex senden';
+  String get btnAnCoachSenden => 'An T4L Gym Bro senden';
 
   @override
-  String get dialogMealResultTitle => 'Codex Analyse pruefen';
+  String get dialogMealResultTitle => 'T4L Gym Bro Analyse pruefen';
 
   @override
   String get dialogMealResultKalorien => 'Kalorien';
@@ -310,7 +310,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get memoryWikiSubtitle =>
-      'Aktive Memories gehen in Codex Snapshots und Meal Analysen.';
+      'Aktive Memories gehen in T4L Gym Bro Kontext und Meal Analysen.';
 
   @override
   String get memoryWikiEmpty => 'Noch keine Memories gespeichert.';
@@ -343,17 +343,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get dialogMemoryMarkdown => 'Markdown Details';
 
   @override
-  String get dialogMemoryAktivFuerCodex => 'Aktiv fuer Codex';
+  String get dialogMemoryAktivFuerCoach => 'Aktiv fuer T4L Gym Bro';
 
   @override
   String get blocksHeroTitle => '8-Week Training Blocks';
 
   @override
-  String get blocksHeroSubtitle => 'Codex plant, die App fuehrt aus';
+  String get blocksHeroSubtitle => 'T4L Gym Bro plant, die App fuehrt aus';
 
   @override
   String get blocksHeroBody =>
-      'Importiere den Block, den Codex in iCloud bereitstellt.';
+      'Importiere den Block, den T4L Gym Bro ueber deinen Server bereitstellt.';
 
   @override
   String blocksCount(int count) {
@@ -361,7 +361,7 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get btnImportTrainingJson => 'training_block_plan.json importieren';
+  String get btnImportTrainingJson => 'Server-Trainingsblock importieren';
 
   @override
   String blockCardWeeks(int weeks, String createdBy) {
@@ -383,7 +383,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get progressHeroBody =>
-      'Diese Kennzahlen gehen in den naechsten Codex Snapshot.';
+      'Diese Kennzahlen gehen in den naechsten T4L Gym Bro Kontext-Push.';
 
   @override
   String progressDone(int count) {
@@ -399,11 +399,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsHeroTitle => 'Agent Setup';
 
   @override
-  String get settingsHeroSubtitle => 'Codex, Claude oder anderer Coach';
+  String get settingsHeroSubtitle => 'T4L Gym Bro Server';
 
   @override
   String get settingsHeroBody =>
-      'Alle Infos, die ein neuer Agent braucht: iCloud Ordner, Startprompt, Tagesablauf und Schreibbefehle.';
+      'Alles fuer T4L Gym Bro: Server URL, API Key, Context Push und Result Checks.';
 
   @override
   String get settingsHeroReady => 'Ready';
@@ -412,7 +412,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsHeroLoading => 'Loading';
 
   @override
-  String get settingsExchangeFolder => 'iCloud Exchange Folder';
+  String get settingsExchangeFolder => 'T4L Server';
 
   @override
   String get settingsBootstrapUrl => 'Agent Bootstrap URL';
@@ -433,7 +433,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get snackbarKopiert => 'Kopiert';
 
   @override
-  String get exchangeFolderLoading => 'Exchange folder wird geladen...';
+  String get exchangeFolderLoading => 'Server Setup wird geladen...';
 
   @override
   String get noGuidanceTitle => 'Warte auf Fuel Guidance vom Coach';

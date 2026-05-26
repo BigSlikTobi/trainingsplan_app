@@ -9,11 +9,7 @@ class SetLogResult {
     required this.reps,
     required this.rpe,
   }) : delete = false;
-  const SetLogResult.delete()
-      : weightKg = 0,
-        reps = 0,
-        rpe = 0,
-        delete = true;
+  const SetLogResult.delete() : weightKg = 0, reps = 0, rpe = 0, delete = true;
 
   final double weightKg;
   final int reps;
@@ -111,14 +107,15 @@ class _SetLogSheetState extends State<_SetLogSheet> {
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          boxShadow: [
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: AppColors.paper.withValues(alpha: 0.06)),
+          boxShadow: const [
             BoxShadow(
-              color: Color(0x21000000),
-              blurRadius: 32,
-              offset: Offset(0, -6),
+              color: Color(0x80000000),
+              blurRadius: 48,
+              offset: Offset(0, -12),
             ),
           ],
         ),
@@ -179,25 +176,21 @@ class _SetLogSheetState extends State<_SetLogSheet> {
                     style: TextStyle(
                       fontSize: 11,
                       fontStyle: FontStyle.italic,
-                      color: AppColors.ink.withValues(alpha: 0.42),
+                      color: AppColors.paper.withValues(alpha: 0.28),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            _RpeChips(
-              value: _rpe,
-              onChanged: (r) => setState(() => _rpe = r),
-            ),
+            _RpeChips(value: _rpe, onChanged: (r) => setState(() => _rpe = r)),
             const SizedBox(height: 18),
             Row(
               children: [
                 if (widget.allowDelete) ...[
                   _DeleteIconButton(
-                    onTap: () => Navigator.of(context).pop(
-                      const SetLogResult.delete(),
-                    ),
+                    onTap: () =>
+                        Navigator.of(context).pop(const SetLogResult.delete()),
                   ),
                   const SizedBox(width: 10),
                 ],
@@ -233,7 +226,7 @@ class _Handle extends StatelessWidget {
       height: 4,
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: AppColors.ink.withValues(alpha: 0.13),
+        color: AppColors.paper.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(99),
       ),
     );
@@ -261,7 +254,7 @@ class _Header extends StatelessWidget {
             style: const TextStyle(
               fontSize: 21,
               fontWeight: FontWeight.w900,
-              color: AppColors.ink,
+              color: AppColors.paper,
               letterSpacing: -0.2,
               height: 1.05,
             ),
@@ -313,7 +306,7 @@ class _PrescriptionLine extends StatelessWidget {
       'Ziel: ${parts.join(' · ')}',
       style: TextStyle(
         fontSize: 12,
-        color: AppColors.ink.withValues(alpha: 0.42),
+        color: AppColors.paper.withValues(alpha: 0.28),
       ),
     );
   }
@@ -326,14 +319,14 @@ class _HistoryStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (history.isEmpty) return const SizedBox.shrink();
-    final muted = AppColors.ink.withValues(alpha: 0.42);
+    final muted = AppColors.paper.withValues(alpha: 0.28);
     final sorted = [...history]
       ..sort((a, b) => a.setNumber.compareTo(b.setNumber));
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.ink.withValues(alpha: 0.07),
+        color: AppColors.surface2,
         borderRadius: BorderRadius.circular(8),
       ),
       child: SingleChildScrollView(
@@ -360,7 +353,7 @@ class _HistoryStrip extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
+                        color: AppColors.paper,
                       ),
                     ),
                     TextSpan(
@@ -397,7 +390,7 @@ class _Label extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.1,
-          color: AppColors.ink.withValues(alpha: 0.42),
+          color: AppColors.paper.withValues(alpha: 0.28),
         ),
       ),
     );
@@ -423,8 +416,8 @@ class _StepperRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = AppColors.ink.withValues(alpha: 0.13);
-    final faint = AppColors.ink.withValues(alpha: 0.07);
+    final borderColor = AppColors.paper.withValues(alpha: 0.06);
+    final faint = AppColors.surface2;
     return Container(
       height: 52,
       decoration: BoxDecoration(
@@ -439,7 +432,7 @@ class _StepperRow extends StatelessWidget {
             background: faint,
             borderRightColor: borderColor,
             label: '−',
-            color: AppColors.ink,
+            color: AppColors.paper,
             onTap: () {
               final next = (value - step).clamp(min, max);
               if (next != value) onChanged(_round(next));
@@ -447,14 +440,14 @@ class _StepperRow extends StatelessWidget {
           ),
           Expanded(
             child: Container(
-              color: AppColors.white,
+              color: AppColors.surface3,
               alignment: Alignment.center,
               child: Text(
                 format(value),
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
-                  color: AppColors.ink,
+                  color: AppColors.paper,
                   letterSpacing: -0.2,
                 ),
               ),
@@ -462,7 +455,7 @@ class _StepperRow extends StatelessWidget {
           ),
           _StepButton(
             width: 52,
-            background: AppColors.ink,
+            background: AppColors.sage,
             label: '+',
             color: AppColors.paper,
             onTap: () {
@@ -533,7 +526,9 @@ class _RpeChips extends StatelessWidget {
       children: [
         for (final r in const [6, 7, 8, 9, 10]) ...[
           if (r != 6) const SizedBox(width: 6),
-          Expanded(child: _RpeChip(value: r, selected: r == value, onTap: onChanged)),
+          Expanded(
+            child: _RpeChip(value: r, selected: r == value, onTap: onChanged),
+          ),
         ],
       ],
     );
@@ -620,16 +615,16 @@ class _LogButton extends StatelessWidget {
       child: Container(
         height: 52,
         decoration: BoxDecoration(
-          color: AppColors.ink,
-          borderRadius: BorderRadius.circular(12),
+          color: AppColors.paper,
+          borderRadius: BorderRadius.circular(13),
         ),
         alignment: Alignment.center,
         child: Text(
           label.toUpperCase(),
           style: const TextStyle(
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: FontWeight.w900,
-            color: AppColors.paper,
+            color: AppColors.bg,
             letterSpacing: 1.0,
           ),
         ),
@@ -701,6 +696,8 @@ Color _rpeColor(int rpe) {
 }
 
 String _fmtKg(double v) {
-  final n = v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+  final n = v == v.roundToDouble()
+      ? v.toStringAsFixed(0)
+      : v.toStringAsFixed(1);
   return '$n kg';
 }

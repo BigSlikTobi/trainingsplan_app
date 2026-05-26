@@ -2,8 +2,8 @@
 
 The repository includes a native SwiftUI watchOS companion target named
 `T4LTrainerWatchApp`. The Flutter iPhone app remains the source of truth for
-plans and history; the watch app executes the current workout and syncs the
-completed log back through WatchConnectivity.
+plans and history; the watch app executes the current workout and syncs
+in-progress exercise state plus the completed log back through WatchConnectivity.
 
 ## First Run
 
@@ -24,8 +24,12 @@ completed log back through WatchConnectivity.
 - Rest uses the exercise `restSeconds` value and plays a haptic when complete.
 - Finishing the workout writes a functional strength training workout through
   HealthKit when permission is available.
-- If the phone is unreachable, the watch keeps the completed result queued and
-  retries through WatchConnectivity.
+- During an active watch-started workout, the watch target declares
+  `WKBackgroundModes = workout-processing` so watchOS can keep the app in the
+  workout/frontmost lifecycle while the display sleeps.
+- If the phone is unreachable, the watch sends the latest progress through
+  WatchConnectivity when delivery becomes available and keeps the completed
+  result queued until the iPhone acknowledges it.
 
 ## Validation Commands
 

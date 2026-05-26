@@ -28,6 +28,8 @@ final class WatchWorkoutStore: ObservableObject {
   private var timings: [WatchExerciseTiming] = []
   private var pausedAt: Date?
   private var pausedSeconds = 0
+  private var activeExercisePausedSeconds = 0
+  private var progressRevision = 0
 
   init() {
     if let cached = UserDefaults.standard.data(forKey: "cachedWatchWorkout"),
@@ -115,16 +117,20 @@ final class WatchWorkoutStore: ObservableObject {
     isPaused = true
     pausedAt = Date()
     workoutManager.pause()
+    sendProgress()
   }
 
   func resume() {
     guard isExerciseRunning, isPaused else { return }
     if let pausedAt {
-      pausedSeconds += max(0, Int(Date().timeIntervalSince(pausedAt)))
+      let added = max(0, Int(Date().timeIntervalSince(pausedAt)))
+      pausedSeconds += added
+      activeExercisePausedSeconds += added
     }
     self.pausedAt = nil
     isPaused = false
     workoutManager.resume()
+    sendProgress()
   }
 
   func startNextExercise() {
@@ -134,6 +140,7 @@ final class WatchWorkoutStore: ObservableObject {
     completedPendingSync = false
     let now = Date()
     activeExerciseStartedAt = now
+    activeExercisePausedSeconds = 0
     isPaused = false
 
     if startedAt != nil {
@@ -142,6 +149,7 @@ final class WatchWorkoutStore: ObservableObject {
       // HKWorkoutSession that stays paused stops counting toward both the
       // Apple Fitness duration and active energy.
       workoutManager.resume()
+      sendProgress()
       return
     }
     pausedAt = nil
@@ -154,6 +162,7 @@ final class WatchWorkoutStore: ObservableObject {
       await workoutManager.start(at: now)
       await MainActor.run {
         connectivity.notifySessionActive(workoutId: workoutId)
+        self.sendProgress()
       }
     }
   }
@@ -166,7 +175,9 @@ final class WatchWorkoutStore: ObservableObject {
     // duration or calories in Apple Fitness.
     if isPaused {
       if let pausedAt {
-        pausedSeconds += max(0, Int(Date().timeIntervalSince(pausedAt)))
+        let added = max(0, Int(Date().timeIntervalSince(pausedAt)))
+        pausedSeconds += added
+        activeExercisePausedSeconds += added
       }
       pausedAt = nil
       isPaused = false
@@ -178,6 +189,8 @@ final class WatchWorkoutStore: ObservableObject {
     }
     if !hasRemainingExercises {
       finish()
+    } else {
+      sendProgress()
     }
   }
 
@@ -250,10 +263,12 @@ final class WatchWorkoutStore: ObservableObject {
         exerciseName: exercise.name,
         startedAt: iso(activeExerciseStartedAt),
         completedAt: iso(completed),
-        pausedSeconds: 0
+        pausedAt: nil,
+        pausedSeconds: activeExercisePausedSeconds
       )
     )
     self.activeExerciseStartedAt = nil
+    activeExercisePausedSeconds = 0
     isPaused = false
     pausedAt = nil
     WKInterfaceDevice.current().play(.success)
@@ -265,6 +280,7 @@ final class WatchWorkoutStore: ObservableObject {
     isPaused = false
     pausedAt = nil
     pausedSeconds = 0
+    activeExercisePausedSeconds = 0
     self.summary = summary
   }
 
@@ -272,8 +288,39 @@ final class WatchWorkoutStore: ObservableObject {
     guard let activeLog else { return }
     startedAt = parseDate(activeLog.startedAt)
     pausedSeconds = activeLog.pausedSeconds ?? 0
-    isPaused = activeLog.pausedAt != nil
-    pausedAt = parseDate(activeLog.pausedAt)
+    if let incomingSets = activeLog.sets {
+      sets = incomingSets
+    }
+    if let incomingTimings = activeLog.exerciseTimings {
+      timings = incomingTimings.filter { $0.completedAt != nil }
+      applyExerciseProgress(incomingTimings, workout: workout)
+    } else {
+      isPaused = activeLog.pausedAt != nil
+      pausedAt = parseDate(activeLog.pausedAt)
+    }
+  }
+
+  private func applyExerciseProgress(_ exerciseTimings: [WatchExerciseTiming], workout: WatchPlannedWorkout?) {
+    guard let workout else { return }
+    if let running = exerciseTimings.first(where: { $0.completedAt == nil }) {
+      if let index = workout.exercises.firstIndex(where: { $0.exerciseId == running.exerciseId }) {
+        exerciseIndex = index
+      }
+      activeExerciseStartedAt = parseDate(running.startedAt)
+      activeExercisePausedSeconds = running.pausedSeconds
+      isPaused = running.pausedAt != nil
+      pausedAt = parseDate(running.pausedAt)
+      return
+    }
+
+    activeExerciseStartedAt = nil
+    activeExercisePausedSeconds = 0
+    isPaused = false
+    pausedAt = nil
+    let stoppedIds = Set(exerciseTimings.compactMap { timing in
+      timing.completedAt == nil ? nil : timing.exerciseId
+    })
+    exerciseIndex = min(stoppedIds.count, workout.exercises.count)
   }
 
   private func applyCompletedLog(_ completedLog: WatchCompletedLog?, workout: WatchPlannedWorkout) -> Bool {
@@ -304,6 +351,46 @@ final class WatchWorkoutStore: ObservableObject {
       completedAt: completedAt
     )
     return true
+  }
+
+  private func sendProgress() {
+    guard let payload = progressPayload() else { return }
+    connectivity.sendProgress(payload)
+  }
+
+  private func progressPayload() -> WatchProgressPayload? {
+    guard let workout, let startedAt else { return nil }
+    progressRevision += 1
+    let now = Date()
+    var progressTimings = timings
+    if let exercise = currentExercise, let activeExerciseStartedAt {
+      progressTimings.append(
+        WatchExerciseTiming(
+          exerciseId: exercise.exerciseId,
+          exerciseName: exercise.name,
+          startedAt: iso(activeExerciseStartedAt),
+          completedAt: nil,
+          pausedAt: pausedAt.map { iso($0) },
+          pausedSeconds: activeExercisePausedSeconds
+        )
+      )
+    }
+    return WatchProgressPayload(
+      schemaVersion: 1,
+      revision: progressRevision,
+      sentAt: iso(now),
+      workoutId: workout.id,
+      title: workout.title,
+      startedAt: iso(startedAt),
+      pausedAt: pausedAt.map { iso($0) },
+      pausedSeconds: pausedSeconds,
+      activeExerciseId: currentExercise?.exerciseId,
+      exerciseIndex: exerciseIndex,
+      sets: sets,
+      exerciseTimings: progressTimings,
+      healthMetrics: workoutManager.metrics,
+      healthWriteStatus: workoutManager.healthStatus
+    )
   }
 
   private func iso(_ date: Date) -> String {

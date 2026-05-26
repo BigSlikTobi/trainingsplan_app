@@ -164,11 +164,11 @@ abstract class AppLocalizations {
   /// **'Starten'**
   String get btnStarten;
 
-  /// Import Codex plan button label
+  /// Import T4L Gym Bro plan button label
   ///
   /// In de, this message translates to:
-  /// **'Codex Plan importieren'**
-  String get btnCodexPlanImportieren;
+  /// **'T4L Gym Bro Plan importieren'**
+  String get btnCoachPlanImportieren;
 
   /// Empty state heading: no active block
   ///
@@ -179,7 +179,7 @@ abstract class AppLocalizations {
   /// Empty state subtitle: no active block
   ///
   /// In de, this message translates to:
-  /// **'Importiere deinen Codex Plan, um zu starten.'**
+  /// **'Importiere deinen T4L Gym Bro Plan, um zu starten.'**
   String get keinAktiverBlockSubtitle;
 
   /// Coach note eyebrow label
@@ -371,8 +371,8 @@ abstract class AppLocalizations {
   /// Meal analysis CTA: subtitle
   ///
   /// In de, this message translates to:
-  /// **'Codex bewertet Trainingsauswirkung'**
-  String get codexBewertetTrainingsauswirkung;
+  /// **'T4L Gym Bro bewertet Trainingsauswirkung'**
+  String get coachBewertetTrainingsauswirkung;
 
   /// Fallback meal description when empty
   ///
@@ -461,14 +461,14 @@ abstract class AppLocalizations {
   /// Pending meal request card title
   ///
   /// In de, this message translates to:
-  /// **'Codex Meal Analyse wartet'**
+  /// **'T4L Gym Bro Meal Analyse wartet'**
   String get pendingMealTitle;
 
-  /// Banner: new Codex training block available
+  /// Banner: new T4L Gym Bro training block available
   ///
   /// In de, this message translates to:
-  /// **'Neuer Codex Trainingsblock verfuegbar'**
-  String get neuerCodexBlock;
+  /// **'Neuer T4L Gym Bro Trainingsblock verfuegbar'**
+  String get neuerCoachBlock;
 
   /// Banner import button label
   ///
@@ -521,7 +521,7 @@ abstract class AppLocalizations {
   /// Complete dialog: notes field label
   ///
   /// In de, this message translates to:
-  /// **'Notizen fuer Codex'**
+  /// **'Notizen fuer T4L Gym Bro'**
   String get dialogCompleteNotes;
 
   /// Confirm / done button
@@ -560,16 +560,16 @@ abstract class AppLocalizations {
   /// **'Kamera'**
   String get btnKamera;
 
-  /// Send meal analysis to Codex button
+  /// Send meal analysis to T4L Gym Bro button
   ///
   /// In de, this message translates to:
-  /// **'An Codex senden'**
-  String get btnAnCodexSenden;
+  /// **'An T4L Gym Bro senden'**
+  String get btnAnCoachSenden;
 
   /// Meal result review dialog title
   ///
   /// In de, this message translates to:
-  /// **'Codex Analyse pruefen'**
+  /// **'T4L Gym Bro Analyse pruefen'**
   String get dialogMealResultTitle;
 
   /// Meal result: calories field label
@@ -659,7 +659,7 @@ abstract class AppLocalizations {
   /// Memory wiki subtitle
   ///
   /// In de, this message translates to:
-  /// **'Aktive Memories gehen in Codex Snapshots und Meal Analysen.'**
+  /// **'Aktive Memories gehen in T4L Gym Bro Kontext und Meal Analysen.'**
   String get memoryWikiSubtitle;
 
   /// Memory wiki empty state
@@ -725,8 +725,8 @@ abstract class AppLocalizations {
   /// Memory dialog: active toggle label
   ///
   /// In de, this message translates to:
-  /// **'Aktiv fuer Codex'**
-  String get dialogMemoryAktivFuerCodex;
+  /// **'Aktiv fuer T4L Gym Bro'**
+  String get dialogMemoryAktivFuerCoach;
 
   /// Blocks page hero panel title (brand voice: keep English)
   ///
@@ -737,13 +737,13 @@ abstract class AppLocalizations {
   /// Blocks page hero panel subtitle
   ///
   /// In de, this message translates to:
-  /// **'Codex plant, die App fuehrt aus'**
+  /// **'T4L Gym Bro plant, die App fuehrt aus'**
   String get blocksHeroSubtitle;
 
   /// Blocks page hero panel body
   ///
   /// In de, this message translates to:
-  /// **'Importiere den Block, den Codex in iCloud bereitstellt.'**
+  /// **'Importiere den Block, den T4L Gym Bro ueber deinen Server bereitstellt.'**
   String get blocksHeroBody;
 
   /// Blocks count trailing text
@@ -755,7 +755,7 @@ abstract class AppLocalizations {
   /// Import training block JSON button label
   ///
   /// In de, this message translates to:
-  /// **'training_block_plan.json importieren'**
+  /// **'Server-Trainingsblock importieren'**
   String get btnImportTrainingJson;
 
   /// Block card subtitle: weeks and creator
@@ -785,7 +785,7 @@ abstract class AppLocalizations {
   /// Progress page hero body
   ///
   /// In de, this message translates to:
-  /// **'Diese Kennzahlen gehen in den naechsten Codex Snapshot.'**
+  /// **'Diese Kennzahlen gehen in den naechsten T4L Gym Bro Kontext-Push.'**
   String get progressHeroBody;
 
   /// Progress done count
@@ -809,13 +809,13 @@ abstract class AppLocalizations {
   /// Settings page hero subtitle
   ///
   /// In de, this message translates to:
-  /// **'Codex, Claude oder anderer Coach'**
+  /// **'T4L Gym Bro Server'**
   String get settingsHeroSubtitle;
 
   /// Settings page hero body
   ///
   /// In de, this message translates to:
-  /// **'Alle Infos, die ein neuer Agent braucht: iCloud Ordner, Startprompt, Tagesablauf und Schreibbefehle.'**
+  /// **'Alles fuer T4L Gym Bro: Server URL, API Key, Context Push und Result Checks.'**
   String get settingsHeroBody;
 
   /// Settings hero trailing: ready state
@@ -830,10 +830,10 @@ abstract class AppLocalizations {
   /// **'Loading'**
   String get settingsHeroLoading;
 
-  /// Settings copy card: exchange folder title
+  /// Settings server card title
   ///
   /// In de, this message translates to:
-  /// **'iCloud Exchange Folder'**
+  /// **'T4L Server'**
   String get settingsExchangeFolder;
 
   /// Settings copy card: bootstrap URL title
@@ -872,10 +872,10 @@ abstract class AppLocalizations {
   /// **'Kopiert'**
   String get snackbarKopiert;
 
-  /// Settings: exchange folder loading placeholder
+  /// Settings: server setup loading placeholder
   ///
   /// In de, this message translates to:
-  /// **'Exchange folder wird geladen...'**
+  /// **'Server Setup wird geladen...'**
   String get exchangeFolderLoading;
 
   /// Nutrition page: title of placeholder when no fuel guidance is available

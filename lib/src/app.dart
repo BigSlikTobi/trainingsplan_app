@@ -8,17 +8,17 @@ import 'l10n/app_localizations.dart';
 import 'state/fitness_controller.dart';
 import 'ui/dashboard.dart';
 
-class CodexCoachApp extends StatefulWidget {
-  const CodexCoachApp({super.key});
+class T4LTrainerApp extends StatefulWidget {
+  const T4LTrainerApp({super.key});
 
   @override
-  State<CodexCoachApp> createState() => _CodexCoachAppState();
+  State<T4LTrainerApp> createState() => _T4LTrainerAppState();
 }
 
-class _CodexCoachAppState extends State<CodexCoachApp>
+class _T4LTrainerAppState extends State<T4LTrainerApp>
     with WidgetsBindingObserver {
   late final FitnessController controller;
-  Timer? _exchangePoller;
+  Timer? _serverPoller;
   bool _workoutWakelockEnabled = false;
 
   @override
@@ -28,15 +28,16 @@ class _CodexCoachAppState extends State<CodexCoachApp>
     controller = FitnessController();
     controller.addListener(_syncWorkoutWakelock);
     unawaited(controller.load().then((_) => controller.syncWorkoutToWatch()));
-    _exchangePoller = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => controller.checkForCodexUpdates(),
-    );
+    _serverPoller = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (controller.bridgeConfig.isConfigured) {
+        controller.checkForCoachUpdates();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _exchangePoller?.cancel();
+    _serverPoller?.cancel();
     controller.removeListener(_syncWorkoutWakelock);
     unawaited(WakelockPlus.disable());
     WidgetsBinding.instance.removeObserver(this);
@@ -47,7 +48,9 @@ class _CodexCoachAppState extends State<CodexCoachApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      controller.checkForCodexUpdates();
+      if (controller.bridgeConfig.isConfigured) {
+        controller.checkForCoachUpdates();
+      }
       controller.syncWorkoutToWatch();
       _syncWorkoutWakelock(force: true);
     }
@@ -76,67 +79,89 @@ class _CodexCoachAppState extends State<CodexCoachApp>
       },
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: const ColorScheme.light(
-          primary: AppColors.ink,
-          onPrimary: AppColors.paper,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.dark(
+          primary: AppColors.sage,
+          onPrimary: AppColors.white,
           secondary: AppColors.coral,
-          onSecondary: AppColors.ink,
-          tertiary: AppColors.sage,
-          surface: AppColors.paper,
-          onSurface: AppColors.ink,
+          tertiary: AppColors.gold,
+          surface: AppColors.surface,
+          onSurface: AppColors.paper,
           error: AppColors.error,
+          outline: AppColors.paper.withValues(alpha: 0.10),
         ),
         scaffoldBackgroundColor: AppColors.bg,
-        textTheme: Typography.blackCupertino.apply(
-          bodyColor: AppColors.ink,
-          displayColor: AppColors.ink,
+        textTheme: Typography.whiteCupertino.apply(
+          bodyColor: AppColors.paper,
+          displayColor: AppColors.paper,
         ),
-        appBarTheme: const AppBarTheme(
+        appBarTheme: AppBarTheme(
           backgroundColor: AppColors.bg,
-          foregroundColor: AppColors.ink,
+          foregroundColor: AppColors.paper,
           surfaceTintColor: AppColors.transparent,
           centerTitle: false,
         ),
         navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: AppColors.paper,
-          indicatorColor: AppColors.sage.withValues(
-            alpha: AppOpacity.selectedFill,
-          ),
+          backgroundColor: AppColors.bg.withValues(alpha: 0.96),
+          surfaceTintColor: AppColors.transparent,
+          indicatorColor: AppColors.sage.withValues(alpha: 0.18),
           labelTextStyle: WidgetStateProperty.resolveWith(
             (states) => TextStyle(
+              fontSize: 10,
               color: states.contains(WidgetState.selected)
-                  ? AppColors.ink
-                  : AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                  ? AppColors.sage
+                  : AppColors.paper.withValues(alpha: 0.28),
               fontWeight: states.contains(WidgetState.selected)
-                  ? FontWeight.w800
-                  : FontWeight.w600,
+                  ? FontWeight.w700
+                  : FontWeight.w500,
             ),
           ),
           iconTheme: WidgetStateProperty.resolveWith(
             (states) => IconThemeData(
               color: states.contains(WidgetState.selected)
-                  ? AppColors.ink
-                  : AppColors.ink.withValues(alpha: AppOpacity.mutedIcon),
+                  ? AppColors.sage
+                  : AppColors.paper.withValues(alpha: 0.28),
             ),
           ),
         ),
         cardTheme: CardThemeData(
           elevation: 0,
-          color: AppColors.white,
+          color: AppColors.surface,
           surfaceTintColor: AppColors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.small),
             side: BorderSide(
-              color: AppColors.ink.withValues(alpha: AppOpacity.subtle),
+              color: AppColors.paper.withValues(alpha: AppOpacity.hairline),
             ),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadii.small),
+            borderSide: BorderSide(
+              color: AppColors.paper.withValues(alpha: 0.10),
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadii.small),
+            borderSide: BorderSide(
+              color: AppColors.paper.withValues(alpha: 0.10),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadii.small),
+            borderSide: const BorderSide(color: AppColors.sage),
           ),
           filled: true,
-          fillColor: AppColors.white,
+          fillColor: AppColors.surface2,
+          hintStyle: TextStyle(color: AppColors.paper.withValues(alpha: 0.28)),
+        ),
+        dividerColor: AppColors.paper.withValues(alpha: 0.06),
+        chipTheme: ChipThemeData(
+          backgroundColor: AppColors.surface2,
+          selectedColor: AppColors.sage.withValues(alpha: 0.22),
+          side: BorderSide(color: AppColors.paper.withValues(alpha: 0.10)),
+          labelStyle: TextStyle(color: AppColors.paper),
         ),
       ),
       home: FitnessScope(controller: controller, child: const CoachDashboard()),

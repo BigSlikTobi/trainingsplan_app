@@ -15,29 +15,17 @@
 	<key>CFBundleName</key>
 	<string>T4L Trainer</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Meal photos can be captured privately and copied into the Codex iCloud exchange folder for nutrition analysis.</string>
+	<string>Meal photos can be captured privately and sent to your T4L Gym Bro server for nutrition analysis.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Meal photos can be selected privately and copied into the Codex iCloud exchange folder for nutrition analysis.</string>
+	<string>Meal photos can be selected privately and sent to your T4L Gym Bro server for nutrition analysis.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Health data helps Codex adapt training based on recovery, activity, body weight, and nutrition.</string>
+	<string>Health data helps T4L Gym Bro adapt training based on recovery, activity, body weight, and nutrition.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Completed workouts, nutrition summaries, and body metrics can be written to Apple Health.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>UISupportsDocumentBrowser</key>
 	<true/>
-	<key>NSUbiquitousContainers</key>
-	<dict>
-		<key>iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)</key>
-		<dict>
-			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
-			<true/>
-			<key>NSUbiquitousContainerName</key>
-			<string>T4L Trainer</string>
-			<key>NSUbiquitousContainerSupportedFolderLevels</key>
-			<string>Any</string>
-		</dict>
-	</dict>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
