@@ -49,19 +49,19 @@ void main() {
     expect(kinds, ['fuel_guidance', 'training_block_plan']);
   });
 
-  test('bridge client returns null for missing result files', () async {
+  test('bridge client returns null for missing results', () async {
     final service = LocalBridgeService(
       client: MockClient((request) async {
         return http.Response('{"error":"File not found."}', 404);
       }),
     );
 
-    final result = await service.downloadJson(
+    final result = await service.downloadResult(
       const LocalBridgeConfig(
         baseUrl: 'http://127.0.0.1:8787',
         token: '123-456',
       ),
-      'fuel_guidance.json',
+      'fuel_guidance',
     );
 
     expect(result, isNull);

@@ -14,7 +14,7 @@ FitnessData createEmptyFitnessData() {
         protein: 0,
         carbs: 0,
         fat: 0,
-        goalMode: 'Codex inferred',
+        goalMode: 'T4L Gym Bro inferred',
         rationale: '',
         updatedAt: DateTime.now(),
         source: 'empty',

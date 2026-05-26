@@ -3,9 +3,8 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private let exchangeChannelName = "codex_fitness/exchange"
-  private let watchChannelName = "codex_fitness/watch_sync"
-  private let watchEventsName = "codex_fitness/watch_events"
+  private let watchChannelName = "t4l_trainer/watch_sync"
+  private let watchEventsName = "t4l_trainer/watch_events"
   private let watchSync = WatchSyncCoordinator()
 
   override func application(
@@ -14,18 +13,6 @@ import UIKit
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
     if let controller = window?.rootViewController as? FlutterViewController {
-      let channel = FlutterMethodChannel(
-        name: exchangeChannelName,
-        binaryMessenger: controller.binaryMessenger
-      )
-      channel.setMethodCallHandler { [weak self] call, result in
-        switch call.method {
-        case "iCloudExchangeDirectory":
-          self?.resolveICloudExchangeDirectory(result: result)
-        default:
-          result(FlutterMethodNotImplemented)
-        }
-      }
       let watchChannel = FlutterMethodChannel(
         name: watchChannelName,
         binaryMessenger: controller.binaryMessenger
@@ -64,31 +51,5 @@ import UIKit
       ).setStreamHandler(watchSync)
     }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  private func resolveICloudExchangeDirectory(result: FlutterResult) {
-    guard let containerUrl = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {
-      result(nil)
-      return
-    }
-
-    let documentsUrl = containerUrl
-      .appendingPathComponent("Documents", isDirectory: true)
-      .appendingPathComponent("CodexFitnessExchange", isDirectory: true)
-
-    do {
-      try FileManager.default.createDirectory(
-        at: documentsUrl,
-        withIntermediateDirectories: true,
-        attributes: nil
-      )
-      result(documentsUrl.path)
-    } catch {
-      result(FlutterError(
-        code: "icloud_exchange_directory_failed",
-        message: "Could not create iCloud CodexFitnessExchange directory.",
-        details: error.localizedDescription
-      ))
-    }
   }
 }

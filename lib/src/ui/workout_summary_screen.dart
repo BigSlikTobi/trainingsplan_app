@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
 import '../app.dart';
 import '../design/design_tokens.dart';
 import '../models/fitness_models.dart';
 import '../state/fitness_controller.dart';
 import 'set_log_modal.dart';
 
-/// Full-screen route wrapper. Used when summary should appear as a
-/// dedicated route (e.g. tapping a historical workout). Embedded inline
-/// on the Today page, use [WorkoutSummaryView] directly.
 class WorkoutSummaryScreen extends StatelessWidget {
   const WorkoutSummaryScreen({super.key, required this.logId});
 
@@ -35,11 +30,6 @@ class WorkoutSummaryScreen extends StatelessWidget {
   }
 }
 
-/// Inline summary widget. Lists totals, per-exercise rows (with set
-/// editing + per-exercise notes), and a reflection block (readiness,
-/// soreness, notes). Tapping the done button persists everything via
-/// the controller; if [onDone] is provided it is invoked afterwards
-/// (e.g. to pop a route).
 class WorkoutSummaryView extends StatefulWidget {
   const WorkoutSummaryView({super.key, required this.logId, this.onDone});
 
@@ -55,6 +45,7 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
   int _readiness = 3;
   int _soreness = 2;
   bool _seeded = false;
+  bool _sent = false;
 
   @override
   void initState() {
@@ -64,8 +55,6 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
   }
 
   void _onNotesChanged() {
-    // Rebuild so the dirty check (and thus the Save button visibility)
-    // tracks live edits.
     if (mounted) setState(() {});
   }
 
@@ -98,165 +87,328 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
     }
 
     final totalSets = log.sets.length;
-    final volume = log.totalVolume.toStringAsFixed(0);
     final totalActive = log.totalDurationSeconds ?? 0;
-    final hr = log.healthMetrics?.heartRateBpm;
-    final kcal = log.healthMetrics?.activeEnergyKcal;
-    final dateText = DateFormat('EEE, d. MMM • HH:mm').format(log.startedAt);
+    final allRpe = log.sets.map((s) => s.rpe).toList();
+    final avgRpe = allRpe.isEmpty
+        ? null
+        : allRpe.reduce((a, b) => a + b) / allRpe.length;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
-      children: [
-        _CompletedBanner(),
-        const SizedBox(height: 14),
-            Text(
-              log.title,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: AppColors.ink,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              dateText,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _SummaryStatsCard(
-              activeSeconds: totalActive,
-              pausedSeconds: log.pausedSeconds,
-              exercisesDone: log.exerciseTimings
-                  .where((t) => t.isStopped)
-                  .length,
-              totalSets: totalSets,
-              volume: volume,
-              hrBpm: hr,
-              kcal: kcal,
-            ),
-            const SizedBox(height: 18),
-            const _Heading('Exercises'),
-            const SizedBox(height: 6),
-            ...log.exerciseTimings.map((t) {
-              // Build (set, indexInLog) pairs so edits can address the
-              // underlying log.sets list directly.
-              final pairs = <_IndexedSet>[];
-              for (var i = 0; i < log.sets.length; i++) {
-                final s = log.sets[i];
-                if (s.exerciseId == t.exerciseId) {
-                  pairs.add(_IndexedSet(s, i));
-                }
+    // Try to find the associated block for the banner
+    final block = controller.activeBlock;
+    final workout = block?.workouts.cast<PlannedWorkout?>().firstWhere(
+          (w) => w!.id == log.workoutId,
+          orElse: () => block.workouts.isNotEmpty ? block.workouts.first : null,
+        );
+    final completedInBlock = block == null
+        ? 0
+        : controller.data.logs
+              .where(
+                (l) =>
+                    l.completedAt != null &&
+                    block.workouts.any((w) => w.id == l.workoutId),
+              )
+              .length;
+    final blockProgress = block == null || block.workouts.isEmpty
+        ? 0
+        : ((completedInBlock / block.workouts.length) * 100).round();
+
+    return ColoredBox(
+      color: AppColors.bg,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+        children: [
+          _PostWorkoutBanner(
+            title: log.title,
+            block: block,
+            workout: workout,
+            blockProgress: blockProgress,
+            activeSeconds: totalActive,
+            totalSets: totalSets,
+            avgRpe: avgRpe,
+          ),
+          const SizedBox(height: 20),
+          _SectionLabel('Übungen überprüfen'),
+          const SizedBox(height: 10),
+          ...log.exerciseTimings.map((t) {
+            final pairs = <_IndexedSet>[];
+            for (var i = 0; i < log.sets.length; i++) {
+              final s = log.sets[i];
+              if (s.exerciseId == t.exerciseId) {
+                pairs.add(_IndexedSet(s, i));
               }
-              pairs.sort((a, b) => a.set.setNumber.compareTo(b.set.setNumber));
-              return _ExerciseSummaryRow(
+            }
+            pairs.sort((a, b) => a.set.setNumber.compareTo(b.set.setNumber));
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ExerciseReviewCard(
                 logId: log.id,
                 timing: t,
                 indexedSets: pairs,
-              );
-            }),
-            if (log.exerciseTimings.isEmpty)
-              Text(
-                'No exercise timings recorded.',
+              ),
+            );
+          }),
+          if (log.exerciseTimings.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Keine Übungen aufgezeichnet.',
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-                ),
-              ),
-            const SizedBox(height: 22),
-            const _Heading('Reflection'),
-            const SizedBox(height: 8),
-            _ScaleRow(
-              label: 'Readiness',
-              value: _readiness,
-              onChanged: (v) => setState(() => _readiness = v),
-            ),
-            const SizedBox(height: 8),
-            _ScaleRow(
-              label: 'Soreness',
-              value: _soreness,
-              onChanged: (v) => setState(() => _soreness = v),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notes,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                hintText: 'Cues, regressions, anything for the coach...',
-              ),
-            ),
-        const SizedBox(height: 20),
-        if (_isDirty(log) || widget.onDone != null)
-          SizedBox(
-            height: 48,
-            child: FilledButton(
-              onPressed: () async {
-                // Drop focus first so any per-exercise notes TextFields
-                // commit via their onFocusChange listener.
-                FocusManager.instance.primaryFocus?.unfocus();
-                await Future<void>.delayed(const Duration(milliseconds: 30));
-                await controller.updateCompletedLog(
-                  widget.logId,
-                  notes: _notes.text.trim(),
-                  readiness: _readiness,
-                  soreness: _soreness,
-                );
-                if (!context.mounted) return;
-                widget.onDone?.call();
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.ink,
-                foregroundColor: AppColors.paper,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: Text(
-                widget.onDone == null ? 'Speichern' : 'Fertig',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15,
+                  color: AppColors.paper.withValues(alpha: 0.28),
                 ),
               ),
             ),
+          _ReflectionCard(
+            readiness: _readiness,
+            soreness: _soreness,
+            notes: _notes,
+            onReadiness: (v) => setState(() => _readiness = v),
+            onSoreness: (v) => setState(() => _soreness = v),
           ),
-      ],
+          const SizedBox(height: 16),
+          _SendButton(
+            sent: _sent,
+            onSend: () async {
+              FocusManager.instance.primaryFocus?.unfocus();
+              await Future<void>.delayed(const Duration(milliseconds: 30));
+              await controller.updateCompletedLog(
+                widget.logId,
+                notes: _notes.text.trim(),
+                readiness: _readiness,
+                soreness: _soreness,
+              );
+              if (!context.mounted) return;
+              setState(() => _sent = true);
+              widget.onDone?.call();
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
-  }
-
-  bool _isDirty(WorkoutLog log) {
-    return _notes.text.trim() != log.notes.trim() ||
-        _readiness != log.readiness ||
-        _soreness != log.soreness;
   }
 }
 
-class _CompletedBanner extends StatelessWidget {
+// ── Post-workout banner (hero card style) ───────────────────────────
+
+class _PostWorkoutBanner extends StatelessWidget {
+  const _PostWorkoutBanner({
+    required this.title,
+    required this.block,
+    required this.workout,
+    required this.blockProgress,
+    required this.activeSeconds,
+    required this.totalSets,
+    required this.avgRpe,
+  });
+
+  final String title;
+  final TrainingBlock? block;
+  final PlannedWorkout? workout;
+  final int blockProgress;
+  final int activeSeconds;
+  final int totalSets;
+  final double? avgRpe;
+
+  @override
+  Widget build(BuildContext context) {
+    final paper = AppColors.paper;
+    final eyebrow = block != null && workout != null
+        ? '${block!.style.label} · Tag ${workout!.day} · Woche ${workout!.week}'
+              .toUpperCase()
+        : '';
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment(-0.55, -1),
+          end: Alignment(0.55, 1),
+          colors: [Color(0xFF1D2A1F), Color(0xFF18201B), Color(0xFF121B14)],
+          stops: [0.0, 0.52, 1.0],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: paper.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.50),
+            blurRadius: 60,
+            offset: const Offset(0, 22),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      paper.withValues(alpha: 0),
+                      paper.withValues(alpha: 0.20),
+                      paper.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const _StatusPill(
+                        label: '✓ FERTIG',
+                        color: AppColors.sage,
+                      ),
+                      const Spacer(),
+                      Text(
+                        '$blockProgress% Block',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: paper.withValues(alpha: 0.35),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (eyebrow.isNotEmpty)
+                    Text(
+                      eyebrow,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.0,
+                        color: paper.withValues(alpha: 0.30),
+                      ),
+                    ),
+                  if (eyebrow.isNotEmpty) const SizedBox(height: 7),
+                  Text(
+                    (workout?.title ?? title).toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 34,
+                      height: 0.93,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.4,
+                      color: paper,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      value: (blockProgress / 100).clamp(0.0, 1.0),
+                      minHeight: 2,
+                      backgroundColor: paper.withValues(alpha: 0.08),
+                      valueColor: const AlwaysStoppedAnimation(AppColors.sage),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _BannerStat(
+                          label: 'DAUER',
+                          value: _fmtDuration(activeSeconds),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _BannerStat(label: 'SÄTZE', value: '$totalSets'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _BannerStat(
+                          label: 'Ø RPE',
+                          value: avgRpe?.toStringAsFixed(1) ?? '—',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.sage.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.sage.withValues(alpha: 0.45)),
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: color.withValues(alpha: 0.30)),
       ),
-      child: Row(
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.0,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _BannerStat extends StatelessWidget {
+  const _BannerStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final paper = AppColors.paper;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: paper.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: paper.withValues(alpha: 0.09)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.check_circle, color: AppColors.sage, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Heutiges Training abgeschlossen',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: AppColors.sage,
-                letterSpacing: 0.2,
-              ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.4,
+              color: paper.withValues(alpha: 0.28),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              height: 1.0,
+              color: paper,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -265,8 +417,10 @@ class _CompletedBanner extends StatelessWidget {
   }
 }
 
-class _Heading extends StatelessWidget {
-  const _Heading(this.text);
+// ── Section label ───────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
 
   final String text;
 
@@ -276,117 +430,15 @@ class _Heading extends StatelessWidget {
       text.toUpperCase(),
       style: TextStyle(
         fontSize: 10,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 1.2,
-        color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.4,
+        color: AppColors.paper.withValues(alpha: 0.28),
       ),
     );
   }
 }
 
-class _SummaryStatsCard extends StatelessWidget {
-  const _SummaryStatsCard({
-    required this.activeSeconds,
-    required this.pausedSeconds,
-    required this.exercisesDone,
-    required this.totalSets,
-    required this.volume,
-    required this.hrBpm,
-    required this.kcal,
-  });
-
-  final int activeSeconds;
-  final int pausedSeconds;
-  final int exercisesDone;
-  final int totalSets;
-  final String volume;
-  final double? hrBpm;
-  final double? kcal;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeText = _fmtDuration(activeSeconds);
-    final pausedText = pausedSeconds > 0
-        ? ' (+${_fmtDuration(pausedSeconds)} paused)'
-        : '';
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _Stat(label: 'Active time', value: '$activeText$pausedText'),
-              const SizedBox(width: 16),
-              _Stat(label: 'Exercises', value: '$exercisesDone'),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _Stat(label: 'Sets', value: '$totalSets'),
-              const SizedBox(width: 16),
-              _Stat(label: 'Volume', value: '$volume kg'),
-            ],
-          ),
-          if (hrBpm != null || kcal != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                if (hrBpm != null)
-                  _Stat(label: 'Avg HR', value: '${hrBpm!.round()} bpm'),
-                if (hrBpm != null && kcal != null) const SizedBox(width: 16),
-                if (kcal != null)
-                  _Stat(label: 'Kcal', value: '${kcal!.round()}'),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.8,
-              color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: AppColors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ── Exercise review card ────────────────────────────────────────────
 
 class _IndexedSet {
   const _IndexedSet(this.set, this.index);
@@ -394,8 +446,8 @@ class _IndexedSet {
   final int index;
 }
 
-class _ExerciseSummaryRow extends StatefulWidget {
-  const _ExerciseSummaryRow({
+class _ExerciseReviewCard extends StatefulWidget {
+  const _ExerciseReviewCard({
     required this.logId,
     required this.timing,
     required this.indexedSets,
@@ -406,10 +458,10 @@ class _ExerciseSummaryRow extends StatefulWidget {
   final List<_IndexedSet> indexedSets;
 
   @override
-  State<_ExerciseSummaryRow> createState() => _ExerciseSummaryRowState();
+  State<_ExerciseReviewCard> createState() => _ExerciseReviewCardState();
 }
 
-class _ExerciseSummaryRowState extends State<_ExerciseSummaryRow> {
+class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
   late final TextEditingController _notes;
   String _committedNotes = '';
 
@@ -421,10 +473,8 @@ class _ExerciseSummaryRowState extends State<_ExerciseSummaryRow> {
   }
 
   @override
-  void didUpdateWidget(covariant _ExerciseSummaryRow old) {
+  void didUpdateWidget(covariant _ExerciseReviewCard old) {
     super.didUpdateWidget(old);
-    // If controller-side notes changed (e.g. after persist), keep the field
-    // in sync as long as the user hasn't typed something different.
     final remote = widget.timing.notes;
     if (remote != _committedNotes && _notes.text == _committedNotes) {
       _notes.text = remote;
@@ -442,11 +492,9 @@ class _ExerciseSummaryRowState extends State<_ExerciseSummaryRow> {
     final next = _notes.text.trim();
     if (next == _committedNotes) return;
     _committedNotes = next;
-    await FitnessScope.of(context).updateExerciseNotes(
-      widget.logId,
-      widget.timing.exerciseId,
-      next,
-    );
+    await FitnessScope.of(
+      context,
+    ).updateExerciseNotes(widget.logId, widget.timing.exerciseId, next);
   }
 
   @override
@@ -454,116 +502,130 @@ class _ExerciseSummaryRowState extends State<_ExerciseSummaryRow> {
     final controller = FitnessScope.of(context);
     final dur = widget.timing.durationSeconds;
     final durText = dur == null ? '--' : _fmtDuration(dur);
-    final hr = widget.timing.healthSnapshot?.heartRateBpm;
-    final muted = AppColors.ink.withValues(alpha: AppOpacity.mutedText);
-    final hasPause = widget.timing.pausedSeconds > 0;
+    final border = AppColors.paper.withValues(alpha: 0.06);
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.ink.withValues(alpha: AppOpacity.subtle),
-          ),
-        ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  widget.timing.exerciseName,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: border)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.timing.exerciseName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.paper,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              Text(
-                durText,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.ink,
+                Text(
+                  durText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.paper.withValues(alpha: 0.48),
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          if (hr != null || hasPause)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                [
-                  if (hr != null) 'HR ${hr.round()} bpm',
-                  if (hasPause)
-                    'paused ${_fmtDuration(widget.timing.pausedSeconds)}',
-                ].join(' • '),
-                style: TextStyle(fontSize: 11, color: muted),
-              ),
+              ],
             ),
-          const SizedBox(height: 6),
-          if (widget.indexedSets.isEmpty)
-            Text(
-              'No sets logged — tap "Add set" to record one.',
-              style: TextStyle(
-                fontSize: 11,
-                fontStyle: FontStyle.italic,
-                color: muted,
-              ),
-            )
-          else
+          ),
+
+          // Set rows
+          if (widget.indexedSets.isNotEmpty)
             Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final pair in widget.indexedSets)
-                  _SetLine(
+                  _SetRow(
                     set: pair.set,
-                    onEdit: () => _openEditSetDialog(
-                      context,
-                      controller,
-                      pair,
-                    ),
+                    border: border,
+                    onEdit: () => _openEditSetDialog(context, controller, pair),
                   ),
               ],
             ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => controller.addLoggedSet(
+
+          // Add set
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: border)),
+            ),
+            child: GestureDetector(
+              onTap: () => controller.addLoggedSet(
                 widget.logId,
                 exerciseId: widget.timing.exerciseId,
                 exerciseName: widget.timing.exerciseName,
               ),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add set'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.sage,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                visualDensity: VisualDensity.compact,
+              child: Row(
+                children: [
+                  Text(
+                    '+',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.sage,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Satz hinzufügen',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.sage,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          Focus(
-            onFocusChange: (has) {
-              if (!has) _commitNotesIfChanged();
-            },
-            child: TextField(
-              controller: _notes,
-              maxLines: 2,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _commitNotesIfChanged(),
-              style: const TextStyle(fontSize: 12),
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
+
+          // Notes
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 13),
+            child: Focus(
+              onFocusChange: (has) {
+                if (!has) _commitNotesIfChanged();
+              },
+              child: TextField(
+                controller: _notes,
+                maxLines: 2,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _commitNotesIfChanged(),
+                style: const TextStyle(fontSize: 13, color: AppColors.paper),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  hintText: 'Notiz für den Coach…',
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.paper.withValues(alpha: 0.28),
+                  ),
                 ),
-                hintText: 'Notes for this exercise…',
-                hintStyle: TextStyle(fontSize: 12, color: muted),
+                cursorColor: AppColors.sage,
               ),
             ),
           ),
@@ -582,11 +644,15 @@ class _ExerciseSummaryRowState extends State<_ExerciseSummaryRow> {
       context,
       exerciseName: pair.set.exerciseName,
       currentSetNumber: pair.set.setNumber,
-      totalSets: sameExercise.isEmpty ? pair.set.setNumber : sameExercise.length,
+      totalSets: sameExercise.isEmpty
+          ? pair.set.setNumber
+          : sameExercise.length,
       initialWeightKg: pair.set.weightKg,
       initialReps: pair.set.reps,
       initialRpe: pair.set.rpe,
-      history: sameExercise.where((s) => s.setNumber != pair.set.setNumber).toList(),
+      history: sameExercise
+          .where((s) => s.setNumber != pair.set.setNumber)
+          .toList(),
       allowDelete: true,
       saveLabel: 'Speichern',
     );
@@ -605,52 +671,93 @@ class _ExerciseSummaryRowState extends State<_ExerciseSummaryRow> {
   }
 }
 
-class _SetLine extends StatelessWidget {
-  const _SetLine({required this.set, required this.onEdit});
+class _SetRow extends StatelessWidget {
+  const _SetRow({
+    required this.set,
+    required this.border,
+    required this.onEdit,
+  });
 
   final LoggedSet set;
+  final Color border;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    final muted = AppColors.ink.withValues(alpha: AppOpacity.mutedText);
+    final rpeColor = _rpeColorForValue(set.rpe);
     final weightText = set.weightKg == 0
-        ? 'bodyweight'
-        : '${_fmtNum(set.weightKg)} kg';
-    return InkWell(
+        ? ''
+        : ' · ${_fmtNum(set.weightKg)} kg';
+    return GestureDetector(
       onTap: onEdit,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: border)),
+        ),
         child: Row(
           children: [
             SizedBox(
-              width: 22,
+              width: 20,
               child: Text(
                 'S${set.setNumber}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: muted,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                '${set.reps} × $weightText',
                 style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.sage,
                 ),
               ),
             ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${set.reps} Wdhl.',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.paper,
+                      ),
+                    ),
+                    if (weightText.isNotEmpty)
+                      TextSpan(
+                        text: weightText,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.paper.withValues(alpha: 0.48),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: rpeColor.withValues(alpha: 0.85),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
             Text(
               'RPE ${_fmtNum(set.rpe)}',
-              style: TextStyle(fontSize: 11, color: muted),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.paper.withValues(alpha: 0.48),
+              ),
             ),
-            const SizedBox(width: 6),
-            Icon(Icons.edit, size: 13, color: muted),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.edit_outlined,
+              size: 13,
+              color: AppColors.paper.withValues(alpha: 0.20),
+            ),
           ],
         ),
       ),
@@ -658,52 +765,307 @@ class _SetLine extends StatelessWidget {
   }
 }
 
-String _fmtNum(double v) {
-  if (v == v.roundToDouble()) return v.toStringAsFixed(0);
-  return v.toStringAsFixed(1);
+// ── Reflection card ─────────────────────────────────────────────────
+
+class _ReflectionCard extends StatelessWidget {
+  const _ReflectionCard({
+    required this.readiness,
+    required this.soreness,
+    required this.notes,
+    required this.onReadiness,
+    required this.onSoreness,
+  });
+
+  final int readiness;
+  final int soreness;
+  final TextEditingController notes;
+  final ValueChanged<int> onReadiness;
+  final ValueChanged<int> onSoreness;
+
+  static const _readinessLabels = [
+    '—',
+    'Sehr niedrig',
+    'Niedrig',
+    'OK',
+    'Gut',
+    'Top',
+  ];
+  static const _sorenessLabels = [
+    '—',
+    'Keine',
+    'Leicht',
+    'Moderat',
+    'Stark',
+    'Sehr stark',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final border = AppColors.paper.withValues(alpha: 0.06);
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header + scales
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: border)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'NACHBERICHT',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
+                    color: AppColors.paper.withValues(alpha: 0.28),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _DotScaleRow(
+                  label: 'Readiness',
+                  description: _readinessLabels[readiness.clamp(0, 5)],
+                  value: readiness,
+                  color: AppColors.sage,
+                  onChanged: onReadiness,
+                ),
+                const SizedBox(height: 16),
+                _DotScaleRow(
+                  label: 'Soreness',
+                  description: _sorenessLabels[soreness.clamp(0, 5)],
+                  value: soreness,
+                  color: AppColors.gold,
+                  onChanged: onSoreness,
+                ),
+              ],
+            ),
+          ),
+          // Notes field
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+            child: TextField(
+              controller: notes,
+              maxLines: 3,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.paper,
+                height: 1.6,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                hintText:
+                    'Allgemeine Notizen für den Coach — Technik, Energie, Anpassungen…',
+                hintStyle: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.paper.withValues(alpha: 0.28),
+                ),
+              ),
+              cursorColor: AppColors.sage,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _ScaleRow extends StatelessWidget {
-  const _ScaleRow({
+class _DotScaleRow extends StatelessWidget {
+  const _DotScaleRow({
     required this.label,
+    required this.description,
     required this.value,
+    required this.color,
     required this.onChanged,
   });
 
   final String label;
+  final String description;
   final int value;
+  final Color color;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 88,
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.paper,
+              ),
+            ),
+            Text(
+              description,
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.paper.withValues(alpha: 0.48),
+              ),
+            ),
+          ],
         ),
-        Expanded(
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (var i = 1; i <= 5; i++)
-                ChoiceChip(
-                  label: Text('$i'),
-                  selected: i == value,
-                  onSelected: (_) => onChanged(i),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (var i = 1; i <= 5; i++) ...[
+              _DotButton(
+                index: i,
+                selected: i <= value,
+                color: color,
+                onTap: () => onChanged(i),
+              ),
+              if (i < 5) const SizedBox(width: 8),
             ],
-          ),
+          ],
         ),
       ],
     );
   }
+}
+
+class _DotButton extends StatelessWidget {
+  const _DotButton({
+    required this.index,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final int index;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: selected ? color : AppColors.surface3,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected
+                    ? color
+                    : AppColors.paper.withValues(alpha: 0.06),
+                width: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '$index',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: index == (selected ? index : 0)
+                  ? AppColors.paper
+                  : AppColors.paper.withValues(alpha: 0.28),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Send button ─────────────────────────────────────────────────────
+
+class _SendButton extends StatelessWidget {
+  const _SendButton({required this.sent, required this.onSend});
+
+  final bool sent;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sent) {
+      return Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: AppColors.sage.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.sage.withValues(alpha: 0.30)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check, color: AppColors.sage, size: 18),
+            SizedBox(width: 10),
+            Text(
+              'GESENDET',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+                color: AppColors.sage,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: FilledButton(
+        onPressed: onSend,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.sage,
+          foregroundColor: AppColors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: EdgeInsets.zero,
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.send, size: 16),
+            SizedBox(width: 10),
+            Text(
+              'ZUM COACH SENDEN',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+String _fmtNum(double v) {
+  if (v == v.roundToDouble()) return v.toStringAsFixed(0);
+  return v.toStringAsFixed(1);
 }
 
 String _fmtDuration(int totalSeconds) {
@@ -714,4 +1076,10 @@ String _fmtDuration(int totalSeconds) {
   final mm = m.toString().padLeft(2, '0');
   final ss = sec.toString().padLeft(2, '0');
   return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
+}
+
+Color _rpeColorForValue(double rpe) {
+  if (rpe <= 4) return AppColors.sage;
+  if (rpe <= 6) return AppColors.gold;
+  return AppColors.coral;
 }

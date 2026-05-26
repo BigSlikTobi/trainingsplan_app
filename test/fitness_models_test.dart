@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trainingsplan_app/src/models/fitness_models.dart';
+import 'package:trainingsplan_app/src/services/coach_payload_service.dart';
 
 import 'helpers/sample_fitness_data.dart';
 
@@ -48,6 +49,88 @@ void main() {
     expect(updated.nextWorkout?.id, isNot(workout.id));
   });
 
+  test('completed active block has no next workout', () {
+    final data = sampleFitnessData();
+    final block = data.activeBlock!;
+    final logs = [
+      for (final workout in block.workouts)
+        WorkoutLog(
+          id: 'log-${workout.id}',
+          workoutId: workout.id,
+          title: workout.title,
+          startedAt: DateTime(2026),
+          completedAt: DateTime(2026, 1, workout.day, 1),
+          readiness: 3,
+          soreness: 2,
+          notes: '',
+          sets: const [],
+          healthWriteStatus: 'not_synced',
+        ),
+    ];
+
+    final updated = data.copyWith(logs: logs);
+
+    expect(updated.hasActiveWorkout, isFalse);
+    expect(updated.nextWorkout, isNull);
+  });
+
+  test('duplicate workout ids only consume one completed occurrence', () {
+    final data = sampleFitnessData();
+    final baseWorkout = data.activeBlock!.workouts.first;
+    final firstDuplicate = PlannedWorkout(
+      id: 'duplicate_workout',
+      week: 1,
+      day: 1,
+      title: 'Duplicate A',
+      focus: 'First duplicate',
+      rationale: '',
+      exercises: baseWorkout.exercises,
+      conditioning: '',
+    );
+    final secondDuplicate = PlannedWorkout(
+      id: 'duplicate_workout',
+      week: 1,
+      day: 2,
+      title: 'Duplicate B',
+      focus: 'Second duplicate',
+      rationale: '',
+      exercises: baseWorkout.exercises,
+      conditioning: '',
+    );
+    final block = TrainingBlock(
+      id: 'duplicate_block',
+      style: TrainingStyle.strengthHypertrophy,
+      title: 'Duplicate Block',
+      durationWeeks: 1,
+      currentWeek: 1,
+      weeklyFocus: const [],
+      measurableTargets: const [],
+      workouts: [firstDuplicate, secondDuplicate],
+      createdBy: 'test',
+      createdAt: DateTime(2026),
+    );
+    final completedLog = WorkoutLog(
+      id: 'log-duplicate-a',
+      workoutId: firstDuplicate.id,
+      title: firstDuplicate.title,
+      startedAt: DateTime(2026),
+      completedAt: DateTime(2026, 1, 1, 1),
+      readiness: 3,
+      soreness: 2,
+      notes: '',
+      sets: const [],
+      healthWriteStatus: 'not_synced',
+    );
+
+    final updated = data.copyWith(
+      blocks: [block],
+      activeBlockId: block.id,
+      logs: [completedLog],
+    );
+
+    expect(updated.nextWorkout?.title, 'Duplicate B');
+  });
+
   test('live health metrics reports when any realtime value exists', () {
     final empty = LiveHealthMetrics(updatedAt: DateTime(2026), sampleCount: 0);
     final withHeartRate = LiveHealthMetrics(
@@ -60,7 +143,7 @@ void main() {
     expect(withHeartRate.hasAnyValue, isTrue);
   });
 
-  test('workout log serializes health metrics for Codex snapshots', () {
+  test('workout log serializes health metrics for T4L Gym Bro context', () {
     final log = WorkoutLog(
       id: 'log-health',
       workoutId: 'workout-health',
@@ -111,10 +194,10 @@ void main() {
         protein: 175,
         carbs: 320,
         fat: 80,
-        goalMode: 'Codex inferred recomposition',
+        goalMode: 'T4L Gym Bro inferred recomposition',
         rationale: 'Recent training volume is high.',
         updatedAt: DateTime(2026, 5, 19, 13),
-        source: 'Codex',
+        source: 'T4L Gym Bro',
       ),
     );
 
@@ -191,6 +274,7 @@ void main() {
               'restSeconds': '90',
               'coachCue': 'Brace before each rep.',
               'media': {
+                'youtubeUrl': 'https://www.youtube.com/watch?v=goblet',
                 'setup': 'Kettlebell tight to sternum.',
                 'cues': ['Tripod foot', 'Brace hard'],
                 'commonMistakes': ['Losing heel pressure'],
@@ -199,7 +283,7 @@ void main() {
           ],
         },
       ],
-      'createdBy': 'Codex',
+      'createdBy': 'T4L Gym Bro',
       'createdAt': '2026-05-19T12:00:00.000',
     });
 
@@ -214,6 +298,10 @@ void main() {
       block.workouts.single.exercises.single.media?.setup,
       'Kettlebell tight to sternum.',
     );
+    expect(
+      block.workouts.single.exercises.single.media?.explainerUrl,
+      'https://www.youtube.com/watch?v=goblet',
+    );
     expect(block.workouts.single.exercises.single.media?.cues, [
       'Tripod foot',
       'Brace hard',
@@ -223,7 +311,7 @@ void main() {
     ]);
   });
 
-  test('exercise prescription accepts flat Codex cue fields', () {
+  test('exercise prescription accepts flat coach cue fields', () {
     final exercise = ExercisePrescription.fromJson({
       'exerciseId': 'push_up',
       'name': 'Push-up',
@@ -380,5 +468,67 @@ void main() {
     expect(decoded.fuelGuidance?.validFor, '2026-05-20');
     expect(decoded.fuelGuidance?.mealSuggestion.name, 'Haferflocken + Banane');
     expect(decoded.fuelGuidance?.mealIdeas, isEmpty);
+  });
+
+  test('FuelCheckIn round-trips through FitnessData toJson / fromJson', () {
+    final data = sampleFitnessData().copyWith(
+      latestFuelCheckIn: FuelCheckIn(
+        guidanceValidFor: '2026-05-25',
+        score: 3,
+        context: 'Restaurant meal before training.',
+        createdAt: DateTime(2026, 5, 25, 20, 30),
+      ),
+    );
+
+    final decoded = FitnessData.fromJson(data.toJson());
+
+    expect(decoded.latestFuelCheckIn?.guidanceValidFor, '2026-05-25');
+    expect(decoded.latestFuelCheckIn?.score, 3);
+    expect(
+      decoded.latestFuelCheckIn?.context,
+      'Restaurant meal before training.',
+    );
+    expect(decoded.toJson()['latestFuelCheckIn'], containsPair('score', 3));
+  });
+
+  test('FuelCheckIn migrates temporary rating values to score', () {
+    final decoded = FuelCheckIn.fromJson({
+      'guidanceValidFor': '2026-05-25',
+      'rating': 'mostly',
+      'context': 'Temporary older payload.',
+      'createdAt': '2026-05-25T20:30:00',
+    });
+
+    expect(decoded.score, 8);
+    expect(decoded.toJson(), isNot(contains('rating')));
+  });
+
+  test('coach context payloads include latest fuel check-in', () {
+    final service = CoachPayloadService();
+    final checkIn = FuelCheckIn(
+      guidanceValidFor: '2026-05-25',
+      score: 8,
+      context: 'Had pasta but trained earlier than planned.',
+      createdAt: DateTime(2026, 5, 25, 20, 30),
+    );
+    final data = sampleFitnessData().copyWith(latestFuelCheckIn: checkIn);
+    final activity = DayActivityReport(
+      summary: const DayActivitySummary(
+        readStatus: 'ok',
+        missingPermissions: [],
+        sampleCount: 0,
+      ),
+      sessions: const [],
+    );
+
+    final snapshot = service.buildDailySnapshot(data);
+    final dayContext = service.buildDayContext(
+      data: data,
+      activityReport: activity,
+      day: DateTime(2026, 5, 25),
+    );
+
+    expect(snapshot['latestFuelCheckIn'], checkIn.toJson());
+    expect(dayContext['latestFuelCheckIn'], checkIn.toJson());
   });
 }

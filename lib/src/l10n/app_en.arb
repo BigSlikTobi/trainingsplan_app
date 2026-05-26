@@ -15,10 +15,10 @@
   "sectionUebungen": "Exercises",
 
   "btnStarten": "Start",
-  "btnCodexPlanImportieren": "Import Codex Plan",
+  "btnCoachPlanImportieren": "Import T4L Gym Bro Plan",
 
   "keinAktiverBlock": "No active block",
-  "keinAktiverBlockSubtitle": "Import your Codex Plan to get started.",
+  "keinAktiverBlockSubtitle": "Import your T4L Gym Bro plan to get started.",
 
   "labelCoach": "COACH",
   "labelProfil": "Profile",
@@ -63,7 +63,7 @@
   "btnDetails": "Details",
 
   "mahlzeitAnalysieren": "Analyse meal",
-  "codexBewertetTrainingsauswirkung": "Codex evaluates training impact",
+  "coachBewertetTrainingsauswirkung": "T4L Gym Bro evaluates training impact",
 
   "mahlzeit": "Meal",
 
@@ -85,9 +85,9 @@
 
   "coachEmptyState": "No active workout. Select a block to start the Coach.",
 
-  "pendingMealTitle": "Codex Meal Analysis pending",
+  "pendingMealTitle": "T4L Gym Bro Meal Analysis pending",
 
-  "neuerCodexBlock": "New Codex training block available",
+  "neuerCoachBlock": "New T4L Gym Bro training block available",
   "btnImport": "Import",
 
   "dialogSetTitle": "Log {exerciseName}",
@@ -98,7 +98,7 @@
   "dialogCompleteTitle": "Complete workout",
   "dialogCompleteReadiness": "Readiness {value}",
   "dialogCompleteSoreness": "Soreness {value}",
-  "dialogCompleteNotes": "Notes for Codex",
+  "dialogCompleteNotes": "Notes for T4L Gym Bro",
 
   "btnFertig": "Done",
 
@@ -108,9 +108,9 @@
 
   "btnFoto": "Photo",
   "btnKamera": "Camera",
-  "btnAnCodexSenden": "Send to Codex",
+  "btnAnCoachSenden": "Send to T4L Gym Bro",
 
-  "dialogMealResultTitle": "Review Codex analysis",
+  "dialogMealResultTitle": "Review T4L Gym Bro analysis",
   "dialogMealResultKalorien": "Calories",
   "dialogMealResultProtein": "Protein g",
   "dialogMealResultCarbs": "Carbs g",
@@ -127,7 +127,7 @@
 
   "memoryWikiTitle": "Memory Wiki",
   "memoryWikiAktiv": "{count} active",
-  "memoryWikiSubtitle": "Active memories are included in Codex snapshots and meal analyses.",
+  "memoryWikiSubtitle": "Active memories are included in T4L Gym Bro context and meal analyses.",
   "memoryWikiEmpty": "No memories saved yet.",
 
   "tooltipMemoryHinzufuegen": "Add memory",
@@ -140,32 +140,32 @@
   "dialogMemoryTitel": "Title",
   "dialogMemoryKurzMemory": "Short memory",
   "dialogMemoryMarkdown": "Markdown details",
-  "dialogMemoryAktivFuerCodex": "Active for Codex",
+  "dialogMemoryAktivFuerCoach": "Active for T4L Gym Bro",
 
   "blocksHeroTitle": "8-Week Training Blocks",
-  "blocksHeroSubtitle": "Codex plans, the app executes",
-  "blocksHeroBody": "Import the block Codex provides in iCloud.",
+  "blocksHeroSubtitle": "T4L Gym Bro plans, the app executes",
+  "blocksHeroBody": "Import the block T4L Gym Bro provides through your server.",
 
   "blocksCount": "{count} Blocks",
 
-  "btnImportTrainingJson": "Import training_block_plan.json",
+  "btnImportTrainingJson": "Import server training block",
 
   "blockCardWeeks": "{weeks} weeks · {createdBy}",
   "blockCardTargets": "Targets: {targets}",
   "blockCardWorkouts": "{count} planned workouts",
 
   "progressHeroTitle": "Progress",
-  "progressHeroBody": "These metrics go into the next Codex snapshot.",
+  "progressHeroBody": "These metrics go into the next T4L Gym Bro context push.",
   "progressDone": "{count} done",
   "progressLogSets": "{sets} Sets · {volume} kg · {status}",
 
   "settingsHeroTitle": "Agent Setup",
-  "settingsHeroSubtitle": "Codex, Claude or other coach",
-  "settingsHeroBody": "Everything a new agent needs: iCloud folder, start prompt, daily routine and write commands.",
+  "settingsHeroSubtitle": "T4L Gym Bro server",
+  "settingsHeroBody": "Everything T4L Gym Bro needs: server URL, API key, context push, and result checks.",
   "settingsHeroReady": "Ready",
   "settingsHeroLoading": "Loading",
 
-  "settingsExchangeFolder": "iCloud Exchange Folder",
+  "settingsExchangeFolder": "T4L Server",
   "settingsBootstrapUrl": "Agent Bootstrap URL",
   "settingsStartprompt": "Agent Start Prompt",
   "settingsWriteCommands": "Validated Write Commands",
@@ -174,7 +174,7 @@
   "tooltipKopieren": "Copy",
   "snackbarKopiert": "Copied",
 
-  "exchangeFolderLoading": "Loading exchange folder...",
+  "exchangeFolderLoading": "Loading server setup...",
 
   "noGuidanceTitle": "Waiting for fuel guidance from the coach",
   "noGuidanceHintStale": "Guidance is from a previous day — waiting for a fresh read from the coach.",

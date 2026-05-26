@@ -6,6 +6,7 @@ final class WatchSyncCoordinator: NSObject {
   private let session: WCSession?
   private var eventSink: FlutterEventSink?
   private var pendingCompletions: [[String: Any]] = []
+  private var latestProgress: [String: Any]?
   private var activeWatchWorkoutId: String?
 
   override init() {
@@ -93,6 +94,14 @@ final class WatchSyncCoordinator: NSObject {
     }
   }
 
+  private func receiveProgress(_ payload: [String: Any]) {
+    latestProgress = payload
+    eventSink?([
+      "type": "watchWorkoutProgress",
+      "payload": payload,
+    ])
+  }
+
   private func emitCompletion(_ payload: [String: Any]) {
     eventSink?([
       "type": "watchWorkoutCompleted",
@@ -134,6 +143,12 @@ extension WatchSyncCoordinator: FlutterStreamHandler {
     for completion in pendingCompletions {
       emitCompletion(completion)
     }
+    if let latestProgress {
+      events([
+        "type": "watchWorkoutProgress",
+        "payload": latestProgress,
+      ])
+    }
     return nil
   }
 
@@ -159,6 +174,8 @@ extension WatchSyncCoordinator: WCSessionDelegate {
   func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
     if let payload = message["watchWorkoutCompleted"] as? [String: Any] {
       DispatchQueue.main.async { self.receiveCompletion(payload) }
+    } else if let payload = message["watchWorkoutProgress"] as? [String: Any] {
+      DispatchQueue.main.async { self.receiveProgress(payload) }
     } else if let workoutId = message["watchSessionActive"] as? String {
       DispatchQueue.main.async { self.handleSessionActive(workoutId) }
     } else if message["watchSessionEnded"] != nil {
@@ -170,11 +187,19 @@ extension WatchSyncCoordinator: WCSessionDelegate {
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     if let payload = userInfo["watchWorkoutCompleted"] as? [String: Any] {
       DispatchQueue.main.async { self.receiveCompletion(payload) }
+    } else if let payload = userInfo["watchWorkoutProgress"] as? [String: Any] {
+      DispatchQueue.main.async { self.receiveProgress(payload) }
     } else if let workoutId = userInfo["watchSessionActive"] as? String {
       DispatchQueue.main.async { self.handleSessionActive(workoutId) }
     } else if userInfo["watchSessionEnded"] != nil {
       let workoutId = userInfo["watchSessionEnded"] as? String
       DispatchQueue.main.async { self.handleSessionEnded(workoutId) }
+    }
+  }
+
+  func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+    if let payload = applicationContext["watchWorkoutProgress"] as? [String: Any] {
+      DispatchQueue.main.async { self.receiveProgress(payload) }
     }
   }
 }

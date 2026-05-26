@@ -34,13 +34,13 @@
   "btnStarten": "Starten",
   "@btnStarten": { "description": "Start workout button label" },
 
-  "btnCodexPlanImportieren": "Codex Plan importieren",
-  "@btnCodexPlanImportieren": { "description": "Import Codex plan button label" },
+  "btnCoachPlanImportieren": "T4L Gym Bro Plan importieren",
+  "@btnCoachPlanImportieren": { "description": "Import T4L Gym Bro plan button label" },
 
   "keinAktiverBlock": "Kein aktiver Block",
   "@keinAktiverBlock": { "description": "Empty state heading: no active block" },
 
-  "keinAktiverBlockSubtitle": "Importiere deinen Codex Plan, um zu starten.",
+  "keinAktiverBlockSubtitle": "Importiere deinen T4L Gym Bro Plan, um zu starten.",
   "@keinAktiverBlockSubtitle": { "description": "Empty state subtitle: no active block" },
 
   "labelCoach": "COACH",
@@ -147,8 +147,8 @@
   "mahlzeitAnalysieren": "Mahlzeit analysieren",
   "@mahlzeitAnalysieren": { "description": "Meal analysis CTA: primary label" },
 
-  "codexBewertetTrainingsauswirkung": "Codex bewertet Trainingsauswirkung",
-  "@codexBewertetTrainingsauswirkung": { "description": "Meal analysis CTA: subtitle" },
+  "coachBewertetTrainingsauswirkung": "T4L Gym Bro bewertet Trainingsauswirkung",
+  "@coachBewertetTrainingsauswirkung": { "description": "Meal analysis CTA: subtitle" },
 
   "mahlzeit": "Mahlzeit",
   "@mahlzeit": { "description": "Fallback meal description when empty" },
@@ -198,11 +198,11 @@
   "coachEmptyState": "Kein aktives Workout. Wähle einen Block, um den Coach zu starten.",
   "@coachEmptyState": { "description": "Coach empty state message" },
 
-  "pendingMealTitle": "Codex Meal Analyse wartet",
+  "pendingMealTitle": "T4L Gym Bro Meal Analyse wartet",
   "@pendingMealTitle": { "description": "Pending meal request card title" },
 
-  "neuerCodexBlock": "Neuer Codex Trainingsblock verfuegbar",
-  "@neuerCodexBlock": { "description": "Banner: new Codex training block available" },
+  "neuerCoachBlock": "Neuer T4L Gym Bro Trainingsblock verfuegbar",
+  "@neuerCoachBlock": { "description": "Banner: new T4L Gym Bro training block available" },
 
   "btnImport": "Import",
   "@btnImport": { "description": "Banner import button label" },
@@ -243,7 +243,7 @@
     }
   },
 
-  "dialogCompleteNotes": "Notizen fuer Codex",
+  "dialogCompleteNotes": "Notizen fuer T4L Gym Bro",
   "@dialogCompleteNotes": { "description": "Complete dialog: notes field label" },
 
   "btnFertig": "Fertig",
@@ -264,10 +264,10 @@
   "btnKamera": "Kamera",
   "@btnKamera": { "description": "Camera button label" },
 
-  "btnAnCodexSenden": "An Codex senden",
-  "@btnAnCodexSenden": { "description": "Send meal analysis to Codex button" },
+  "btnAnCoachSenden": "An T4L Gym Bro senden",
+  "@btnAnCoachSenden": { "description": "Send meal analysis to T4L Gym Bro button" },
 
-  "dialogMealResultTitle": "Codex Analyse pruefen",
+  "dialogMealResultTitle": "T4L Gym Bro Analyse pruefen",
   "@dialogMealResultTitle": { "description": "Meal result review dialog title" },
 
   "dialogMealResultKalorien": "Kalorien",
@@ -317,7 +317,7 @@
     }
   },
 
-  "memoryWikiSubtitle": "Aktive Memories gehen in Codex Snapshots und Meal Analysen.",
+  "memoryWikiSubtitle": "Aktive Memories gehen in T4L Gym Bro Kontext und Meal Analysen.",
   "@memoryWikiSubtitle": { "description": "Memory wiki subtitle" },
 
   "memoryWikiEmpty": "Noch keine Memories gespeichert.",
@@ -350,16 +350,16 @@
   "dialogMemoryMarkdown": "Markdown Details",
   "@dialogMemoryMarkdown": { "description": "Memory dialog: markdown field label" },
 
-  "dialogMemoryAktivFuerCodex": "Aktiv fuer Codex",
-  "@dialogMemoryAktivFuerCodex": { "description": "Memory dialog: active toggle label" },
+  "dialogMemoryAktivFuerCoach": "Aktiv fuer T4L Gym Bro",
+  "@dialogMemoryAktivFuerCoach": { "description": "Memory dialog: active toggle label" },
 
   "blocksHeroTitle": "8-Week Training Blocks",
   "@blocksHeroTitle": { "description": "Blocks page hero panel title (brand voice: keep English)" },
 
-  "blocksHeroSubtitle": "Codex plant, die App fuehrt aus",
+  "blocksHeroSubtitle": "T4L Gym Bro plant, die App fuehrt aus",
   "@blocksHeroSubtitle": { "description": "Blocks page hero panel subtitle" },
 
-  "blocksHeroBody": "Importiere den Block, den Codex in iCloud bereitstellt.",
+  "blocksHeroBody": "Importiere den Block, den T4L Gym Bro ueber deinen Server bereitstellt.",
   "@blocksHeroBody": { "description": "Blocks page hero panel body" },
 
   "blocksCount": "{count} Blocks",
@@ -370,7 +370,7 @@
     }
   },
 
-  "btnImportTrainingJson": "training_block_plan.json importieren",
+  "btnImportTrainingJson": "Server-Trainingsblock importieren",
   "@btnImportTrainingJson": { "description": "Import training block JSON button label" },
 
   "blockCardWeeks": "{weeks} Wochen · {createdBy}",
@@ -401,7 +401,7 @@
   "progressHeroTitle": "Progress",
   "@progressHeroTitle": { "description": "Progress page hero title" },
 
-  "progressHeroBody": "Diese Kennzahlen gehen in den naechsten Codex Snapshot.",
+  "progressHeroBody": "Diese Kennzahlen gehen in den naechsten T4L Gym Bro Kontext-Push.",
   "@progressHeroBody": { "description": "Progress page hero body" },
 
   "progressDone": "{count} done",
@@ -425,10 +425,10 @@
   "settingsHeroTitle": "Agent Setup",
   "@settingsHeroTitle": { "description": "Settings page hero title" },
 
-  "settingsHeroSubtitle": "Codex, Claude oder anderer Coach",
+  "settingsHeroSubtitle": "T4L Gym Bro Server",
   "@settingsHeroSubtitle": { "description": "Settings page hero subtitle" },
 
-  "settingsHeroBody": "Alle Infos, die ein neuer Agent braucht: iCloud Ordner, Startprompt, Tagesablauf und Schreibbefehle.",
+  "settingsHeroBody": "Alles fuer T4L Gym Bro: Server URL, API Key, Context Push und Result Checks.",
   "@settingsHeroBody": { "description": "Settings page hero body" },
 
   "settingsHeroReady": "Ready",
@@ -437,8 +437,8 @@
   "settingsHeroLoading": "Loading",
   "@settingsHeroLoading": { "description": "Settings hero trailing: loading state" },
 
-  "settingsExchangeFolder": "iCloud Exchange Folder",
-  "@settingsExchangeFolder": { "description": "Settings copy card: exchange folder title" },
+  "settingsExchangeFolder": "T4L Server",
+  "@settingsExchangeFolder": { "description": "Settings server card title" },
 
   "settingsBootstrapUrl": "Agent Bootstrap URL",
   "@settingsBootstrapUrl": { "description": "Settings copy card: bootstrap URL title" },
@@ -458,8 +458,8 @@
   "snackbarKopiert": "Kopiert",
   "@snackbarKopiert": { "description": "Snackbar: copied to clipboard" },
 
-  "exchangeFolderLoading": "Exchange folder wird geladen...",
-  "@exchangeFolderLoading": { "description": "Settings: exchange folder loading placeholder" },
+  "exchangeFolderLoading": "Server Setup wird geladen...",
+  "@exchangeFolderLoading": { "description": "Settings: server setup loading placeholder" },
 
   "noGuidanceTitle": "Warte auf Fuel Guidance vom Coach",
   "@noGuidanceTitle": { "description": "Nutrition page: title of placeholder when no fuel guidance is available" },

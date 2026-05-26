@@ -63,6 +63,23 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
     }
   }
 
+  func sendProgress(_ payload: WatchProgressPayload) {
+    guard let message = try? DictionaryCoding.encode(payload) else { return }
+    let envelope = ["watchWorkoutProgress": message]
+
+    guard let session else { return }
+    try? session.updateApplicationContext(envelope)
+    if session.isReachable {
+      session.sendMessage(
+        envelope,
+        replyHandler: nil,
+        errorHandler: { [weak self] _ in self?.transferProgress(message) }
+      )
+    } else {
+      transferProgress(message)
+    }
+  }
+
   func retryPendingCompletions() {
     guard let session else { return }
     for payload in pendingCompletions() {
@@ -89,6 +106,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
 
   private func transfer(_ message: [String: Any]) {
     session?.transferUserInfo(["watchWorkoutCompleted": message])
+  }
+
+  private func transferProgress(_ message: [String: Any]) {
+    session?.transferUserInfo(["watchWorkoutProgress": message])
   }
 
   private func receiveWorkout(_ value: Any) {

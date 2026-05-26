@@ -11,14 +11,22 @@ abstract final class AppAssets {
 
 abstract final class AppColors {
   static const ink = Color(0xFF18201B);
-  static const paper = Color(0xFFF2EFE6);
-  static const bg = Color(0xFFF5F4F0);
+  static const paper = Color(0xFFEEECEA);
+  static const bg = Color(0xFF0F1210);
+  static const surface = Color(0xFF181C1A);
+  static const surface2 = Color(0xFF1F2421);
+  static const surface3 = Color(0xFF252A27);
   static const sage = Color(0xFF6E8A73);
   static const coral = Color(0xFFCB6B52);
-  static const gold = Color(0xFFE8B35E);
+  static const gold = Color(0xFFC9A256);
   static const error = Color(0xFFBA1A1A);
   static const white = Colors.white;
   static const transparent = Colors.transparent;
+}
+
+abstract final class AppBorder {
+  static final thin = AppColors.paper.withValues(alpha: 0.06);
+  static final medium = AppColors.paper.withValues(alpha: 0.10);
 }
 
 abstract final class AppRadii {

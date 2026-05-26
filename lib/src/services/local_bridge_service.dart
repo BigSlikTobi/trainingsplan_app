@@ -90,6 +90,20 @@ class LocalBridgeService {
     await _putJson(config, '/v1/profile', payload);
   }
 
+  Future<void> uploadTrainingBlockRequest(
+    LocalBridgeConfig config,
+    Map<String, dynamic> payload,
+  ) async {
+    await _putJson(config, '/v1/requests/training-block', payload);
+  }
+
+  Future<void> uploadNutritionAnalysisRequest(
+    LocalBridgeConfig config,
+    Map<String, dynamic> payload,
+  ) async {
+    await _putJson(config, '/v1/requests/nutrition-analysis', payload);
+  }
+
   Future<List<String>> pendingResultKinds(LocalBridgeConfig config) async {
     final response = await _client
         .get(_uri(config, '/v1/results/pending'), headers: _headers(config))
@@ -122,24 +136,6 @@ class LocalBridgeService {
     _ensureOk(response);
   }
 
-  Future<void> uploadJson(
-    LocalBridgeConfig config,
-    String fileName,
-    Map<String, dynamic> payload,
-  ) async {
-    final response = await _client
-        .post(
-          _uri(config, '/files/${Uri.encodeComponent(fileName)}'),
-          headers: {
-            ..._headers(config),
-            'content-type': 'application/json; charset=utf-8',
-          },
-          body: const JsonEncoder.withIndent('  ').convert(payload),
-        )
-        .timeout(const Duration(seconds: 8));
-    _ensureOk(response);
-  }
-
   Future<void> _putJson(
     LocalBridgeConfig config,
     String path,
@@ -158,36 +154,21 @@ class LocalBridgeService {
     _ensureOk(response);
   }
 
-  Future<void> uploadBytes(
+  Future<void> uploadMealImage(
     LocalBridgeConfig config,
     String fileName,
     List<int> bytes,
   ) async {
     final response = await _client
         .post(
-          _fileUri(config, fileName),
+          _uri(
+            config,
+            '/v1/blobs/meal-images/${Uri.encodeComponent(fileName)}',
+          ),
           headers: _headers(config),
           body: bytes,
         )
         .timeout(const Duration(seconds: 12));
-    _ensureOk(response);
-  }
-
-  Future<Map<String, dynamic>?> downloadJson(
-    LocalBridgeConfig config,
-    String fileName,
-  ) async {
-    final response = await _client
-        .get(_fileUri(config, fileName), headers: _headers(config))
-        .timeout(const Duration(seconds: 8));
-    if (response.statusCode == 404) return null;
-    return _decodeJsonResponse(response);
-  }
-
-  Future<void> deleteResult(LocalBridgeConfig config, String fileName) async {
-    final response = await _client
-        .delete(_fileUri(config, fileName), headers: _headers(config))
-        .timeout(const Duration(seconds: 5));
     _ensureOk(response);
   }
 
@@ -197,11 +178,6 @@ class LocalBridgeService {
       throw const FormatException('Local bridge URL is empty.');
     }
     return Uri.parse('$normalized$path');
-  }
-
-  Uri _fileUri(LocalBridgeConfig config, String fileName) {
-    final encoded = fileName.split('/').map(Uri.encodeComponent).join('/');
-    return _uri(config, '/files/$encoded');
   }
 
   Map<String, String> _headers(LocalBridgeConfig config) => {

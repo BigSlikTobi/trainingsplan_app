@@ -91,8 +91,8 @@ class _CoachDashboardState extends State<CoachDashboard> {
               child: Column(
                 children: [
                   _StatusBar(text: controller.status),
-                  if (controller.hasPendingCodexBlock)
-                    _CodexBlockAvailableBanner(controller: controller),
+                  if (controller.hasPendingCoachBlock)
+                    _CoachBlockAvailableBanner(controller: controller),
                   Expanded(
                     child: IndexedStack(index: index, children: pages),
                   ),
@@ -176,27 +176,14 @@ class _TodayPage extends StatelessWidget {
     final block = controller.activeBlock as TrainingBlock?;
     final data = controller.data as FitnessData;
     if (workout == null || block == null) {
+      final completedLog = _latestCompletedWorkoutLog(data);
+      if (completedLog != null) {
+        return ColoredBox(
+          color: AppColors.bg,
+          child: WorkoutSummaryView(logId: completedLog.id),
+        );
+      }
       return _TodayEmptyState(controller: controller);
-    }
-
-    // If a workout has already been completed today, the Today tab
-    // shows its inline summary instead of any training UI for the
-    // remaining/next planned workout.
-    final todayKey = dateKey(DateTime.now());
-    final logsCompletedToday =
-        data.logs
-            .where(
-              (log) =>
-                  log.completedAt != null &&
-                  dateKey(log.completedAt!) == todayKey,
-            )
-            .toList()
-          ..sort((a, b) => b.completedAt!.compareTo(a.completedAt!));
-    if (logsCompletedToday.isNotEmpty) {
-      return ColoredBox(
-        color: AppColors.bg,
-        child: WorkoutSummaryView(logId: logsCompletedToday.first.id),
-      );
     }
 
     final completedInBlock = data.logs
@@ -287,6 +274,7 @@ class _TodayPage extends StatelessWidget {
             canDismissFocus: focusedIsPaused,
             totalExercises: workout.exercises.length,
             onStart: controller.startCurrentWorkout,
+            onComplete: () => controller.completeCurrentWorkout(),
             onPause: controller.pauseCurrentWorkout,
             onResume: controller.resumeCurrentWorkout,
             onStop: () => controller.stopCurrentWorkout(),
@@ -342,6 +330,17 @@ class _TodayPage extends StatelessWidget {
     );
   }
 
+  static WorkoutLog? _latestCompletedWorkoutLog(FitnessData data) {
+    WorkoutLog? latest;
+    for (final log in data.logs) {
+      if (log.completedAt == null) continue;
+      if (latest == null || log.completedAt!.isAfter(latest.completedAt!)) {
+        latest = log;
+      }
+    }
+    return latest;
+  }
+
   static String _formatToday(BuildContext context) {
     final locale = Localizations.localeOf(context).toLanguageTag();
     final now = DateTime.now();
@@ -362,7 +361,7 @@ class _TodayDateLine extends StatelessWidget {
         text,
         style: TextStyle(
           fontSize: 12,
-          color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+          color: AppColors.paper.withValues(alpha: 0.28),
         ),
       ),
     );
@@ -416,7 +415,7 @@ class _RpeLegendDot extends StatelessWidget {
             fontSize: 9,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.4,
-            color: AppColors.ink.withValues(alpha: 0.35),
+            color: AppColors.paper.withValues(alpha: 0.28),
           ),
         ),
       ],
@@ -443,19 +442,14 @@ class _ExerciseListCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.paper.withValues(alpha: AppOpacity.hairline),
+        ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: Column(
           children: [
             for (var i = 0; i < exercises.length; i++)
@@ -547,7 +541,7 @@ class _ConditioningNote extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.55,
-                    color: AppColors.ink.withValues(alpha: 0.52),
+                    color: AppColors.paper.withValues(alpha: 0.48),
                   ),
                 ),
               ],
@@ -576,10 +570,7 @@ Future<void> _showExerciseDetailSheet(
       const <String>[];
   final warning = exercise.displayWarningCue;
   final detailNote = exercise.displayDetailNote;
-  final explainerUri = Uri.tryParse(media?.explainerUrl ?? '');
-  final hasVideo =
-      explainerUri != null &&
-      (explainerUri.scheme == 'http' || explainerUri.scheme == 'https');
+  final videoUri = _exerciseVideoUri(exercise);
   final restLabel = _restLabel(exercise.restSeconds);
 
   await showModalBottomSheet<void>(
@@ -599,14 +590,25 @@ Future<void> _showExerciseDetailSheet(
               controller: scrollController,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
               children: [
-                Text(
-                  exercise.name,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    height: 1.1,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.ink,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        exercise.name,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          height: 1.1,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.paper,
+                        ),
+                      ),
+                    ),
+                    if (videoUri != null) ...[
+                      const SizedBox(width: 10),
+                      _ExerciseVideoButton(uri: videoUri, prominent: true),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -722,14 +724,9 @@ Future<void> _showExerciseDetailSheet(
                         label: const Text('Satz loggen'),
                       ),
                     ),
-                    if (hasVideo) ...[
+                    if (videoUri != null) ...[
                       const SizedBox(width: 10),
-                      _VideoPill(
-                        onTap: () => launchUrl(
-                          _preferYoutubeShorts(explainerUri),
-                          mode: LaunchMode.externalApplication,
-                        ),
-                      ),
+                      _VideoPill(onTap: () => _openExerciseVideo(videoUri)),
                     ],
                   ],
                 ),
@@ -753,15 +750,17 @@ class _DetailSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
+        border: Border.all(
+          color: AppColors.paper.withValues(alpha: AppOpacity.hairline),
+        ),
       ),
       child: DefaultTextStyle(
         style: TextStyle(
           fontSize: 13,
           height: 1.45,
-          color: AppColors.ink.withValues(alpha: 0.72),
+          color: AppColors.paper.withValues(alpha: 0.70),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -772,7 +771,7 @@ class _DetailSection extends StatelessWidget {
                 fontSize: 10,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.0,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                color: AppColors.paper.withValues(alpha: 0.28),
               ),
             ),
             const SizedBox(height: 7),
@@ -864,16 +863,9 @@ class _SectionLabel extends StatelessWidget {
           label.toUpperCase(),
           style: TextStyle(
             fontSize: 10,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.2,
-            color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            height: 1,
-            color: AppColors.ink.withValues(alpha: AppOpacity.subtle),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.4,
+            color: AppColors.paper.withValues(alpha: 0.28),
           ),
         ),
       ],
@@ -920,6 +912,7 @@ class _ExerciseRow extends StatelessWidget {
     final cue = exercise.displayPrimaryCue;
     final restLabel = _restLabel(exercise.restSeconds);
     final rpeText = _rpeText(exercise.targetRpe);
+    final videoUri = _exerciseVideoUri(exercise);
     final showRpeDot =
         !hasActiveWorkout || (!isRunning && !isPaused && !isStopped);
     return InkWell(
@@ -939,7 +932,7 @@ class _ExerciseRow extends StatelessWidget {
             bottom: BorderSide(
               color: isLast
                   ? AppColors.transparent
-                  : AppColors.ink.withValues(alpha: 0.07),
+                  : AppColors.paper.withValues(alpha: AppOpacity.hairline),
             ),
           ),
         ),
@@ -972,7 +965,7 @@ class _ExerciseRow extends StatelessWidget {
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       height: 1.2,
-                      color: isFocused ? AppColors.sage : AppColors.ink,
+                      color: isFocused ? AppColors.sage : AppColors.paper,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -1019,6 +1012,10 @@ class _ExerciseRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
             ],
+            if (videoUri != null) ...[
+              _ExerciseVideoButton(uri: videoUri),
+              const SizedBox(width: 6),
+            ],
             _ExerciseTimerControls(
               hasActiveWorkout: hasActiveWorkout,
               isRunning: isRunning,
@@ -1056,12 +1053,12 @@ class _ExerciseMetaChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         decoration: BoxDecoration(
           color: muted
-              ? AppColors.ink.withValues(alpha: 0.04)
+              ? AppColors.paper.withValues(alpha: 0.04)
               : AppColors.sage.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: muted
-                ? AppColors.ink.withValues(alpha: 0.08)
+                ? AppColors.paper.withValues(alpha: 0.08)
                 : AppColors.sage.withValues(alpha: 0.17),
           ),
         ),
@@ -1075,8 +1072,46 @@ class _ExerciseMetaChip extends StatelessWidget {
             height: 1,
             fontWeight: FontWeight.w800,
             color: muted
-                ? AppColors.ink.withValues(alpha: 0.50)
-                : AppColors.ink.withValues(alpha: 0.72),
+                ? AppColors.paper.withValues(alpha: 0.42)
+                : AppColors.paper.withValues(alpha: 0.70),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExerciseVideoButton extends StatelessWidget {
+  const _ExerciseVideoButton({required this.uri, this.prominent = false});
+
+  final Uri uri;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = AppLocalizations.of(context)!.erklaervideo;
+    final size = prominent ? 38.0 : 32.0;
+    return Tooltip(
+      message: label,
+      child: Material(
+        color: AppColors.transparent,
+        child: InkWell(
+          onTap: () => _openExerciseVideo(uri),
+          borderRadius: BorderRadius.circular(99),
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: AppColors.sage.withValues(alpha: prominent ? 0.13 : 0.08),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.sage.withValues(alpha: 0.28)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              CupertinoIcons.play_fill,
+              size: prominent ? 15 : 12,
+              color: AppColors.sage,
+            ),
           ),
         ),
       ),
@@ -1130,7 +1165,7 @@ class _ExerciseTimerControls extends StatelessWidget {
       return Icon(
         Icons.chevron_right,
         size: 22,
-        color: AppColors.ink.withValues(alpha: 0.17),
+        color: AppColors.paper.withValues(alpha: 0.17),
       );
     }
     if (isStopped) {
@@ -1192,8 +1227,8 @@ class _ExerciseTimerControls extends StatelessWidget {
           ),
         _SquareTimerButton(
           icon: isPaused ? Icons.play_arrow : Icons.pause,
-          iconColor: isPaused ? AppColors.sage : AppColors.ink,
-          background: AppColors.ink.withValues(alpha: 0.07),
+          iconColor: isPaused ? AppColors.sage : AppColors.paper,
+          background: AppColors.surface3,
           onTap: isPaused ? onResume : onPause,
         ),
         const SizedBox(width: 6),
@@ -1317,7 +1352,7 @@ class _CoachNote extends StatelessWidget {
               fontSize: 13,
               fontStyle: FontStyle.italic,
               height: 1.4,
-              color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+              color: AppColors.paper.withValues(alpha: 0.48),
             ),
           ),
         ],
@@ -1335,6 +1370,8 @@ class _TodayEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final isConnected =
         (controller.bridgeConfig as LocalBridgeConfig).isConfigured;
+    final block = controller.activeBlock as TrainingBlock?;
+    final hasBlockPlans = block != null && block.workouts.isNotEmpty;
     return ColoredBox(
       color: AppColors.bg,
       child: ListView(
@@ -1342,18 +1379,21 @@ class _TodayEmptyState extends StatelessWidget {
         children: [
           _TodayDateLine(text: _TodayPage._formatToday(context)),
           const SizedBox(height: AppSpacing.medium),
-          EmptyHeroCard(
-            isConnected: isConnected,
-            onLoadPlan: controller.importCodexBlockPlan,
-            onConnect: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => FitnessScope(
-                  controller: controller,
-                  child: const _SettingsScreen(),
+          if (hasBlockPlans)
+            _CompletedBlockHeroCard(block: block)
+          else
+            EmptyHeroCard(
+              isConnected: isConnected,
+              onLoadPlan: controller.importCoachBlockPlan,
+              onConnect: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => FitnessScope(
+                    controller: controller,
+                    child: const _SettingsScreen(),
+                  ),
                 ),
               ),
             ),
-          ),
           const SizedBox(height: AppSpacing.page),
           _SectionLabel(label: AppLocalizations.of(context)!.sectionUebungen),
           const SizedBox(height: AppSpacing.small),
@@ -1361,15 +1401,61 @@ class _TodayEmptyState extends StatelessWidget {
           const SizedBox(height: 14),
           Center(
             child: Text(
-              'Dein Plan erscheint hier',
+              hasBlockPlans
+                  ? 'Alle Workouts in diesem Block sind erledigt'
+                  : 'Dein Plan erscheint hier',
               style: TextStyle(
                 fontSize: 11,
                 letterSpacing: 0.4,
-                color: AppColors.ink.withValues(alpha: 0.28),
+                color: AppColors.paper.withValues(alpha: 0.28),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CompletedBlockHeroCard extends StatelessWidget {
+  const _CompletedBlockHeroCard({required this.block});
+
+  final TrainingBlock block;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: AppColors.sage),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Block abgeschlossen',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              block.title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${block.workouts.length} Workouts im Block. Details bleiben in Blocks verfügbar.',
+              style: TextStyle(color: AppColors.paper.withValues(alpha: 0.52)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1442,12 +1528,13 @@ class _BlocksPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: controller.importCodexBlockPlan,
+          onPressed: controller.importCoachBlockPlan,
           icon: const Icon(CupertinoIcons.arrow_down_doc),
           label: Text(l.btnImportTrainingJson),
         ),
         const SizedBox(height: 16),
-        for (final block in data.blocks) _BlockCard(block: block),
+        for (final block in data.blocks)
+          _BlockCard(block: block, isActive: block.id == data.activeBlockId),
       ],
     );
   }
@@ -1492,6 +1579,21 @@ class _NutritionPage extends StatelessWidget {
               mealName: guidance.mealSuggestion.name,
               mealRationale: guidance.mealSuggestion.rationale,
             ),
+          ],
+          const SizedBox(height: 10),
+          _FuelCheckInCard(
+            guidanceValidFor: today,
+            checkIn: data.latestFuelCheckIn?.guidanceValidFor == today
+                ? data.latestFuelCheckIn
+                : null,
+            onSubmit: ({required int score, required String context}) =>
+                controller.submitFuelCheckIn(
+                  guidanceValidFor: today,
+                  score: score,
+                  context: context,
+                ),
+          ),
+          if (isGuidanceFresh) ...[
             const SizedBox(height: 10),
             _YesterdayCard(
               log: latest,
@@ -1499,46 +1601,7 @@ class _NutritionPage extends StatelessWidget {
               yesterdayRead: guidance.yesterdayRead,
               target: target,
             ),
-            if (guidance.mealIdeas.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              _SectionLabel(
-                label: AppLocalizations.of(context)!.sectionMealIdeas,
-              ),
-              const SizedBox(height: 8),
-              _MealIdeasRow(ideas: guidance.mealIdeas),
-            ],
           ],
-          const SizedBox(height: 14),
-          _SectionLabel(
-            label: AppLocalizations.of(context)!.sectionMealAnalysis,
-          ),
-          const SizedBox(height: 8),
-          if (data.pendingMealResult != null)
-            _MealResultCardV2(
-              result: data.pendingMealResult!,
-              onAccept: () => controller.acceptMealAnalysis(
-                calories: data.pendingMealResult!.calories,
-                protein: data.pendingMealResult!.protein,
-                carbs: data.pendingMealResult!.carbs,
-                fat: data.pendingMealResult!.fat,
-                bodyWeightKg: data.pendingMealResult!.bodyWeightKg > 0
-                    ? data.pendingMealResult!.bodyWeightKg
-                    : profile.weightKg,
-                notes: '',
-              ),
-              onDiscard: () => controller.discardMealAnalysis(),
-              onReview: () => _showMealResultDialog(
-                context,
-                controller,
-                data.pendingMealResult!,
-              ),
-            )
-          else if (data.pendingMealRequest != null)
-            _PendingMealRequestCard(request: data.pendingMealRequest!)
-          else
-            _MealAnalysisCta(
-              onTap: () => _showMealAnalysisDialog(context, controller),
-            ),
         ],
       ),
     );
@@ -1564,8 +1627,8 @@ class _NoGuidancePlaceholder extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
       decoration: BoxDecoration(
-        color: AppColors.ink.withValues(alpha: 0.04),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.10)),
+        color: AppColors.paper.withValues(alpha: 0.04),
+        border: Border.all(color: AppColors.paper.withValues(alpha: 0.08)),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -1576,7 +1639,7 @@ class _NoGuidancePlaceholder extends StatelessWidget {
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: AppColors.ink.withValues(alpha: 0.55),
+              color: AppColors.paper.withValues(alpha: 0.48),
             ),
           ),
           const SizedBox(height: 6),
@@ -1585,7 +1648,7 @@ class _NoGuidancePlaceholder extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               height: 1.45,
-              color: AppColors.ink.withValues(alpha: 0.40),
+              color: AppColors.paper.withValues(alpha: 0.35),
             ),
           ),
         ],
@@ -1642,7 +1705,7 @@ class _NutritionHeader extends StatelessWidget {
           style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w900,
-            color: AppColors.ink,
+            color: AppColors.paper,
           ),
         ),
         Expanded(
@@ -1652,7 +1715,7 @@ class _NutritionHeader extends StatelessWidget {
               right,
               style: TextStyle(
                 fontSize: 12,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                color: AppColors.paper.withValues(alpha: 0.48),
               ),
             ),
           ),
@@ -1703,7 +1766,7 @@ _SignalConfig _signalConfig(FuelSignal s, AppLocalizations l) {
       return _SignalConfig(
         label: l.signalDeloadBias,
         sub: l.signalDeloadBiasSub,
-        color: AppColors.ink,
+        color: AppColors.paper,
         pulse: false,
       );
   }
@@ -1805,7 +1868,7 @@ class _SignalBadgeState extends State<_SignalBadge>
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.35,
-                    color: AppColors.ink.withValues(alpha: 0.62),
+                    color: AppColors.paper.withValues(alpha: 0.55),
                   ),
                 ),
               ],
@@ -1826,12 +1889,12 @@ class _WhiteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
+        border: Border.all(color: AppColors.paper.withValues(alpha: 0.06)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.06),
+            color: AppColors.paper.withValues(alpha: 0.06),
             blurRadius: 20,
             offset: const Offset(0, 3),
           ),
@@ -1859,7 +1922,7 @@ class _CardHeaderRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: AppColors.ink.withValues(alpha: 0.07)),
+          bottom: BorderSide(color: AppColors.paper.withValues(alpha: 0.06)),
         ),
       ),
       child: Row(
@@ -1870,7 +1933,7 @@ class _CardHeaderRow extends StatelessWidget {
               fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.2,
-              color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+              color: AppColors.paper.withValues(alpha: 0.48),
             ),
           ),
           const Spacer(),
@@ -1883,9 +1946,7 @@ class _CardHeaderRow extends StatelessWidget {
                 fontSize: 10,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.7,
-                color:
-                    trailingColor ??
-                    AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                color: trailingColor ?? AppColors.paper.withValues(alpha: 0.48),
               ),
             ),
           ),
@@ -1930,7 +1991,7 @@ class _FuelAdviceCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.55,
-                    color: AppColors.ink,
+                    color: AppColors.paper,
                   ),
                 ),
                 const SizedBox(height: 11),
@@ -1979,7 +2040,7 @@ class _FuelAdviceCard extends StatelessWidget {
                                   fontSize: 13,
                                   fontWeight: FontWeight.w900,
                                   height: 1.1,
-                                  color: AppColors.ink,
+                                  color: AppColors.paper,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -1988,7 +2049,9 @@ class _FuelAdviceCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 12,
                                   height: 1.4,
-                                  color: AppColors.ink.withValues(alpha: 0.62),
+                                  color: AppColors.paper.withValues(
+                                    alpha: 0.55,
+                                  ),
                                 ),
                               ),
                             ],
@@ -2002,6 +2065,226 @@ class _FuelAdviceCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FuelCheckInCard extends StatefulWidget {
+  const _FuelCheckInCard({
+    required this.guidanceValidFor,
+    required this.checkIn,
+    required this.onSubmit,
+  });
+
+  final String guidanceValidFor;
+  final FuelCheckIn? checkIn;
+  final Future<void> Function({required int score, required String context})
+  onSubmit;
+
+  @override
+  State<_FuelCheckInCard> createState() => _FuelCheckInCardState();
+}
+
+class _FuelCheckInCardState extends State<_FuelCheckInCard> {
+  late double _score;
+  late final TextEditingController _context;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _score = (widget.checkIn?.score ?? 8).toDouble();
+    _context = TextEditingController(text: widget.checkIn?.context ?? '');
+  }
+
+  @override
+  void didUpdateWidget(covariant _FuelCheckInCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.guidanceValidFor == widget.guidanceValidFor &&
+        oldWidget.checkIn?.createdAt == widget.checkIn?.createdAt) {
+      return;
+    }
+    _score = (widget.checkIn?.score ?? 8).toDouble();
+    _context.text = widget.checkIn?.context ?? '';
+  }
+
+  @override
+  void dispose() {
+    _context.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sent = widget.checkIn != null;
+    return _WhiteCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'FUEL CHECK-IN',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    color: AppColors.paper.withValues(alpha: 0.48),
+                  ),
+                ),
+                const Spacer(),
+                if (sent)
+                  const Text(
+                    'SENT',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.7,
+                      color: AppColors.sage,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'How well did you stick to the plan today?',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.paper,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _score.round().toString(),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.sage,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: AppColors.sage,
+                inactiveTrackColor: AppColors.paper.withValues(alpha: 0.12),
+                thumbColor: AppColors.sage,
+                overlayColor: AppColors.sage.withValues(alpha: 0.14),
+                tickMarkShape: SliderTickMarkShape.noTickMark,
+                trackHeight: 4,
+              ),
+              child: Slider(
+                value: _score,
+                min: 1,
+                max: 10,
+                divisions: 9,
+                label: '${_score.round()} / 10',
+                onChanged: (value) => setState(() => _score = value),
+              ),
+            ),
+            Row(
+              children: [
+                Text(
+                  '1 Poor',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.paper.withValues(alpha: 0.42),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '10 Perfect',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.paper.withValues(alpha: 0.42),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _context,
+              minLines: 1,
+              maxLines: 3,
+              textInputAction: TextInputAction.done,
+              style: const TextStyle(fontSize: 13, color: AppColors.paper),
+              decoration: InputDecoration(
+                hintText: 'Add context for your coach...',
+                hintStyle: TextStyle(
+                  color: AppColors.paper.withValues(alpha: 0.28),
+                ),
+                filled: true,
+                fillColor: AppColors.paper.withValues(alpha: 0.04),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 10,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: AppColors.paper.withValues(alpha: 0.08),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: AppColors.sage.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 38,
+              child: ElevatedButton(
+                onPressed: _sending
+                    ? null
+                    : () async {
+                        setState(() => _sending = true);
+                        await widget.onSubmit(
+                          score: _score.round(),
+                          context: _context.text,
+                        );
+                        if (mounted) setState(() => _sending = false);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.sage,
+                  disabledBackgroundColor: AppColors.sage.withValues(
+                    alpha: 0.35,
+                  ),
+                  foregroundColor: AppColors.paper,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  _sending
+                      ? 'Sending...'
+                      : sent
+                      ? 'Update Coach'
+                      : 'Send to Coach',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2055,7 +2338,7 @@ class _YesterdayCard extends StatelessWidget {
                 fontSize: 10,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.2,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                color: AppColors.paper.withValues(alpha: 0.48),
               ),
             ),
             const SizedBox(height: 9),
@@ -2093,7 +2376,7 @@ class _YesterdayCard extends StatelessWidget {
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
                 height: 1.4,
-                color: AppColors.ink.withValues(alpha: 0.58),
+                color: AppColors.paper.withValues(alpha: 0.50),
               ),
             ),
           ],
@@ -2139,7 +2422,7 @@ class _SignalChip extends StatelessWidget {
               fontSize: 9,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.0,
-              color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+              color: AppColors.paper.withValues(alpha: 0.48),
             ),
           ),
           const SizedBox(height: 3),
@@ -2159,7 +2442,7 @@ class _SignalChip extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
-              color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+              color: AppColors.paper.withValues(alpha: 0.48),
             ),
           ),
         ],
@@ -2179,6 +2462,7 @@ Color _mealIdeaTagColor(String tag) {
   }
 }
 
+// ignore: unused_element
 class _MealIdeasRow extends StatelessWidget {
   const _MealIdeasRow({required this.ideas});
 
@@ -2210,12 +2494,12 @@ class _MealIdeaCard extends StatelessWidget {
       width: 150,
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.07)),
+        border: Border.all(color: AppColors.paper.withValues(alpha: 0.06)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.05),
+            color: AppColors.paper.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 3),
           ),
@@ -2240,7 +2524,7 @@ class _MealIdeaCard extends StatelessWidget {
               fontSize: 14,
               fontWeight: FontWeight.w900,
               height: 1.15,
-              color: AppColors.ink,
+              color: AppColors.paper,
             ),
           ),
           const SizedBox(height: 7),
@@ -2250,7 +2534,7 @@ class _MealIdeaCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 height: 1.4,
-                color: AppColors.ink.withValues(alpha: 0.55),
+                color: AppColors.paper.withValues(alpha: 0.48),
               ),
             ),
           ),
@@ -2305,7 +2589,7 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
                       height: 1.1,
-                      color: AppColors.ink,
+                      color: AppColors.paper,
                     ),
                   ),
                 ),
@@ -2336,7 +2620,7 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                           style: TextStyle(
                             fontSize: 12,
                             height: 1.45,
-                            color: AppColors.ink.withValues(alpha: 0.72),
+                            color: AppColors.paper.withValues(alpha: 0.65),
                           ),
                         ),
                       ],
@@ -2355,9 +2639,7 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                           child: Icon(
                             CupertinoIcons.right_chevron,
                             size: 11,
-                            color: AppColors.ink.withValues(
-                              alpha: AppOpacity.mutedText,
-                            ),
+                            color: AppColors.paper.withValues(alpha: 0.48),
                           ),
                         ),
                         const SizedBox(width: 5),
@@ -2368,9 +2650,7 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.ink.withValues(
-                              alpha: AppOpacity.mutedText,
-                            ),
+                            color: AppColors.paper.withValues(alpha: 0.48),
                           ),
                         ),
                       ],
@@ -2424,7 +2704,7 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                         child: FilledButton(
                           onPressed: widget.onAccept,
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.ink,
+                            backgroundColor: AppColors.sage,
                             foregroundColor: AppColors.paper,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(9),
@@ -2447,14 +2727,14 @@ class _MealResultCardV2State extends State<_MealResultCardV2> {
                         child: OutlinedButton(
                           onPressed: widget.onDiscard,
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: AppColors.ink.withValues(
+                            backgroundColor: AppColors.paper.withValues(
                               alpha: 0.07,
                             ),
-                            foregroundColor: AppColors.ink.withValues(
+                            foregroundColor: AppColors.paper.withValues(
                               alpha: AppOpacity.mutedText,
                             ),
                             side: BorderSide(
-                              color: AppColors.ink.withValues(alpha: 0.13),
+                              color: AppColors.paper.withValues(alpha: 0.10),
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(9),
@@ -2505,7 +2785,7 @@ class _MacroChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: accent
             ? AppColors.sage.withValues(alpha: 0.10)
-            : AppColors.ink.withValues(alpha: 0.07),
+            : AppColors.paper.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(8),
         border: accent
             ? Border.all(color: AppColors.sage.withValues(alpha: 0.22))
@@ -2520,7 +2800,7 @@ class _MacroChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w900,
-              color: accent ? AppColors.sage : AppColors.ink,
+              color: accent ? AppColors.sage : AppColors.paper,
             ),
           ),
           const SizedBox(height: 2),
@@ -2530,7 +2810,7 @@ class _MacroChip extends StatelessWidget {
               fontSize: 9,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.0,
-              color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+              color: AppColors.paper.withValues(alpha: 0.48),
             ),
           ),
         ],
@@ -2539,6 +2819,7 @@ class _MacroChip extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _MealAnalysisCta extends StatelessWidget {
   const _MealAnalysisCta({required this.onTap});
 
@@ -2552,14 +2833,14 @@ class _MealAnalysisCta extends StatelessWidget {
       child: CustomPaint(
         painter: _DashedRRectPainter(
           radius: 14,
-          color: AppColors.ink.withValues(alpha: 0.20),
+          color: AppColors.paper.withValues(alpha: 0.15),
           strokeWidth: 1.5,
           dashLength: 4,
           gapLength: 3,
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.ink.withValues(alpha: 0.05),
+            color: AppColors.paper.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(14),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -2570,16 +2851,16 @@ class _MealAnalysisCta extends StatelessWidget {
                 height: 34,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  color: AppColors.surface,
                   border: Border.all(
-                    color: AppColors.ink.withValues(alpha: 0.13),
+                    color: AppColors.paper.withValues(alpha: 0.10),
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   CupertinoIcons.plus,
                   size: 18,
-                  color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                  color: AppColors.paper.withValues(alpha: 0.48),
                 ),
               ),
               const SizedBox(width: 11),
@@ -2595,17 +2876,15 @@ class _MealAnalysisCta extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w900,
-                            color: AppColors.ink,
+                            color: AppColors.paper,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          l.codexBewertetTrainingsauswirkung,
+                          l.coachBewertetTrainingsauswirkung,
                           style: TextStyle(
                             fontSize: 11,
-                            color: AppColors.ink.withValues(
-                              alpha: AppOpacity.mutedText,
-                            ),
+                            color: AppColors.paper.withValues(alpha: 0.48),
                           ),
                         ),
                       ],
@@ -2675,7 +2954,7 @@ class _CoachOpsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPending = controller.hasPendingCodexBlock as bool;
+    final hasPending = controller.hasPendingCoachBlock as bool;
     final bridge = controller.bridgeConfig as LocalBridgeConfig;
     final workoutLabel = workout == null
         ? 'Kein Workout geplant'
@@ -2729,7 +3008,7 @@ class _CoachOpsCard extends StatelessWidget {
               children: [
                 FilledButton.icon(
                   onPressed: hasPending
-                      ? controller.importCodexBlockPlan
+                      ? controller.importCoachBlockPlan
                       : null,
                   icon: const Icon(CupertinoIcons.arrow_down_doc),
                   label: const Text('Import'),
@@ -2740,7 +3019,7 @@ class _CoachOpsCard extends StatelessWidget {
                   label: const Text('Context'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: controller.checkForCodexUpdates,
+                  onPressed: controller.checkForCoachUpdates,
                   icon: const Icon(CupertinoIcons.refresh),
                   label: const Text('Check'),
                 ),
@@ -2769,7 +3048,7 @@ class _CoachSignalRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: AppColors.ink.withValues(alpha: 0.48)),
+        Icon(icon, size: 16, color: AppColors.paper.withValues(alpha: 0.42)),
         const SizedBox(width: 9),
         Expanded(
           child: Column(
@@ -2782,7 +3061,7 @@ class _CoachSignalRow extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.ink,
+                  color: AppColors.paper,
                 ),
               ),
               const SizedBox(height: 2),
@@ -2792,7 +3071,7 @@ class _CoachSignalRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                  color: AppColors.paper.withValues(alpha: 0.48),
                 ),
               ),
             ],
@@ -2873,7 +3152,7 @@ class _PlanReviewCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                color: AppColors.paper.withValues(alpha: 0.48),
               ),
             ),
           ],
@@ -2928,7 +3207,7 @@ class _PlanReviewExerciseRow extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
+                    color: AppColors.paper,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -2943,7 +3222,7 @@ class _PlanReviewExerciseRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.ink.withValues(alpha: 0.52),
+                    color: AppColors.paper.withValues(alpha: 0.48),
                   ),
                 ),
                 if (cue.isNotEmpty) ...[
@@ -3002,6 +3281,20 @@ class _VideoPill extends StatelessWidget {
       ),
     );
   }
+}
+
+Uri? _exerciseVideoUri(ExercisePrescription exercise) {
+  final raw = exercise.media?.explainerUrl.trim() ?? '';
+  if (raw.isEmpty) return null;
+  final uri = Uri.tryParse(raw);
+  if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+    return null;
+  }
+  return _preferYoutubeShorts(uri);
+}
+
+Future<void> _openExerciseVideo(Uri uri) {
+  return launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 Uri _preferYoutubeShorts(Uri uri) {
@@ -3070,16 +3363,14 @@ class _MemoryWikiSection extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               l.memoryWikiSubtitle,
-              style: TextStyle(
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-              ),
+              style: TextStyle(color: AppColors.paper.withValues(alpha: 0.48)),
             ),
             const SizedBox(height: 12),
             if (memories.isEmpty)
               Text(
                 l.memoryWikiEmpty,
                 style: TextStyle(
-                  color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
+                  color: AppColors.paper.withValues(alpha: 0.48),
                 ),
               )
             else
@@ -3152,9 +3443,7 @@ class _MemoryCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadii.small),
-        border: Border.all(
-          color: AppColors.ink.withValues(alpha: AppOpacity.subtle),
-        ),
+        border: Border.all(color: AppColors.paper.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3177,9 +3466,7 @@ class _MemoryCard extends StatelessWidget {
               memory.markdown,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-              ),
+              style: TextStyle(color: AppColors.paper.withValues(alpha: 0.48)),
             ),
           ],
           const SizedBox(height: 8),
@@ -3190,9 +3477,7 @@ class _MemoryCard extends StatelessWidget {
                   '${memory.source} · ${(memory.confidence * 100).round()}%',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.ink.withValues(
-                      alpha: AppOpacity.mutedText,
-                    ),
+                    color: AppColors.paper.withValues(alpha: 0.48),
                   ),
                 ),
               ),
@@ -3224,6 +3509,7 @@ class _MemoryCard extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _PendingMealRequestCard extends StatelessWidget {
   const _PendingMealRequestCard({required this.request});
 
@@ -3295,7 +3581,7 @@ class _ProgressPage extends StatelessWidget {
               tooltip: 'Delete log',
               icon: Icon(
                 Icons.delete_outline,
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedIcon),
+                color: AppColors.paper.withValues(alpha: 0.48),
               ),
               onPressed: () => _confirmDeleteLog(context, controller, log),
             ),
@@ -3316,7 +3602,6 @@ class _SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<_SettingsPage> {
-  late Future<String> _exchangePath;
   late final TextEditingController _bridgeUrlController;
   late final TextEditingController _bridgeTokenController;
   bool _bridgeBusy = false;
@@ -3324,7 +3609,6 @@ class _SettingsPageState extends State<_SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _exchangePath = widget.controller.exchangeDirectoryPath();
     _bridgeUrlController = TextEditingController(
       text: widget.controller.bridgeConfig.baseUrl,
     );
@@ -3342,38 +3626,30 @@ class _SettingsPageState extends State<_SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String>(
-      future: _exchangePath,
-      builder: (context, snapshot) {
-        final l = AppLocalizations.of(context)!;
-        final exchangePath = snapshot.data ?? l.exchangeFolderLoading;
-        final handoff = _agentHandoffPayload(exchangePath);
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _HeroPanel(
-              title: l.settingsHeroTitle,
-              subtitle: l.settingsHeroSubtitle,
-              body: l.settingsHeroBody,
-              trailing: snapshot.hasData
-                  ? l.settingsHeroReady
-                  : l.settingsHeroLoading,
-            ),
-            const SizedBox(height: 12),
-            _LocalBridgeCard(
-              controller: widget.controller,
-              urlController: _bridgeUrlController,
-              tokenController: _bridgeTokenController,
-              busy: _bridgeBusy,
-              onAction: _runBridgeAction,
-            ),
-            const SizedBox(height: 12),
-            _AgentHandoffCard(handoff: handoff, enabled: snapshot.hasData),
-            const SizedBox(height: 12),
-            _SetupChecklistCard(exchangePath: exchangePath),
-          ],
-        );
-      },
+    final l = AppLocalizations.of(context)!;
+    final handoff = _agentHandoffPayload();
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _HeroPanel(
+          title: l.settingsHeroTitle,
+          subtitle: l.settingsHeroSubtitle,
+          body: l.settingsHeroBody,
+          trailing: l.settingsHeroReady,
+        ),
+        const SizedBox(height: 12),
+        _LocalBridgeCard(
+          controller: widget.controller,
+          urlController: _bridgeUrlController,
+          tokenController: _bridgeTokenController,
+          busy: _bridgeBusy,
+          onAction: _runBridgeAction,
+        ),
+        const SizedBox(height: 12),
+        _AgentHandoffCard(handoff: handoff, enabled: true),
+        const SizedBox(height: 12),
+        const _SetupChecklistCard(),
+      ],
     );
   }
 
@@ -3440,9 +3716,7 @@ class _LocalBridgeCard extends StatelessWidget {
             Text(
               'Connect to your own T4L server. The phone stays the source of '
               'truth, and new plans still need your import confirmation.',
-              style: TextStyle(
-                color: AppColors.ink.withValues(alpha: AppOpacity.mutedText),
-              ),
+              style: TextStyle(color: AppColors.paper.withValues(alpha: 0.48)),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -3534,7 +3808,7 @@ class _AgentHandoffCard extends StatelessWidget {
           'Complete Agent Handoff',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
-        subtitle: const Text('Copy this once and send it to Codex or Claude.'),
+        subtitle: const Text('Copy this once and send it to T4L Gym Bro.'),
         trailing: Wrap(
           spacing: 2,
           children: [
@@ -3557,7 +3831,7 @@ class _AgentHandoffCard extends StatelessWidget {
           SelectableText(
             handoff,
             style: TextStyle(
-              color: AppColors.ink.withValues(alpha: AppOpacity.inverseBody),
+              color: AppColors.paper.withValues(alpha: 0.65),
               height: 1.35,
             ),
           ),
@@ -3568,9 +3842,7 @@ class _AgentHandoffCard extends StatelessWidget {
 }
 
 class _SetupChecklistCard extends StatelessWidget {
-  const _SetupChecklistCard({required this.exchangePath});
-
-  final String exchangePath;
+  const _SetupChecklistCard();
 
   @override
   Widget build(BuildContext context) {
@@ -3632,46 +3904,129 @@ class _SetupChecklistCard extends StatelessWidget {
 }
 
 class _BlockCard extends StatelessWidget {
-  const _BlockCard({required this.block});
+  const _BlockCard({required this.block, required this.isActive});
 
   final TrainingBlock block;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Card(
       child: ExpansionTile(
-        initiallyExpanded: false,
+        initiallyExpanded: isActive,
         title: Text(
           block.title,
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
-        subtitle: Text(
-          AppLocalizations.of(
-            context,
-          )!.blockCardWeeks(block.durationWeeks, block.createdBy),
-        ),
+        subtitle: Text(l.blockCardWeeks(block.durationWeeks, block.createdBy)),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
+          if (block.weeklyFocus.isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(block.weeklyFocus.join('\n')),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (block.measurableTargets.isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                l.blockCardTargets(block.measurableTargets.join(', ')),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Align(
             alignment: Alignment.centerLeft,
-            child: Text(block.weeklyFocus.join('\n')),
+            child: Text(l.blockCardWorkouts(block.workouts.length)),
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              AppLocalizations.of(
-                context,
-              )!.blockCardTargets(block.measurableTargets.join(', ')),
+          for (final workout in block.workouts.take(8))
+            _WorkoutPreviewRow(workout: workout),
+          if (block.workouts.length > 8)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '+${block.workouts.length - 8} weitere Workouts',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.paper.withValues(alpha: 0.48),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutPreviewRow extends StatelessWidget {
+  const _WorkoutPreviewRow({required this.workout});
+
+  final PlannedWorkout workout;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.small),
+        border: Border.all(color: AppColors.paper.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  workout.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                l.weekDay(workout.week, workout.day),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            workout.focus,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.paper.withValues(alpha: 0.48),
             ),
           ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              AppLocalizations.of(
-                context,
-              )!.blockCardWorkouts(block.workouts.length),
+          const SizedBox(height: 6),
+          Text(
+            '${workout.exercises.length} Übungen',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppColors.paper.withValues(alpha: 0.42),
             ),
           ),
         ],
@@ -3711,9 +4066,7 @@ class _HeroPanel extends StatelessWidget {
                 child: Text(
                   subtitle,
                   style: TextStyle(
-                    color: AppColors.white.withValues(
-                      alpha: AppOpacity.inverseMuted,
-                    ),
+                    color: AppColors.paper.withValues(alpha: 0.65),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -3731,7 +4084,7 @@ class _HeroPanel extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: AppColors.white,
+              color: AppColors.paper,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -3739,7 +4092,7 @@ class _HeroPanel extends StatelessWidget {
           Text(
             body,
             style: TextStyle(
-              color: AppColors.white.withValues(alpha: AppOpacity.inverseBody),
+              color: AppColors.paper.withValues(alpha: 0.65),
               height: 1.35,
             ),
           ),
@@ -3863,9 +4216,6 @@ class _StatusBar extends StatelessWidget {
       AppColors.coral,
     );
   }
-  if (lower.contains('exchange folder')) {
-    return ('Exchange-Ordner bereit', CupertinoIcons.folder, AppColors.sage);
-  }
   if (lower.contains('exported')) {
     return (
       'Context exportiert',
@@ -3880,10 +4230,10 @@ class _StatusBar extends StatelessWidget {
       AppColors.sage,
     );
   }
-  if (lower.contains('new codex training block')) {
+  if (lower.contains('new t4l gym bro training block')) {
     return ('Neuer Block bereit', CupertinoIcons.bell_fill, AppColors.coral);
   }
-  if (lower.contains('no training_block_plan')) {
+  if (lower.contains('no t4l gym bro training block')) {
     return ('Kein neuer Block', CupertinoIcons.doc_text_search, AppColors.gold);
   }
   if (lower.contains('workout started')) {
@@ -3898,9 +4248,9 @@ class _StatusBar extends StatelessWidget {
   return (text, CupertinoIcons.info_circle, AppColors.sage);
 }
 
-String _agentHandoffPayload(String exchangePath) {
+String _agentHandoffPayload() {
   return '''
-You are my T4L Trainer coaching agent.
+You are my T4L Gym Bro coaching agent.
 
 Agent instructions repo:
 $_agentInstructionsRepo
@@ -3910,9 +4260,6 @@ $_bridgeInstallCommand
 
 Server start command:
 $_bridgeServeCommand
-
-Informational iPhone exchange path:
-$exchangePath
 
 Please read the agent instructions repo and follow the adapter for your runtime.
 '''
@@ -3946,8 +4293,8 @@ Future<void> _shareHandoff(BuildContext context, String value) async {
   }
 }
 
-class _CodexBlockAvailableBanner extends StatelessWidget {
-  const _CodexBlockAvailableBanner({required this.controller});
+class _CoachBlockAvailableBanner extends StatelessWidget {
+  const _CoachBlockAvailableBanner({required this.controller});
 
   final dynamic controller;
 
@@ -3976,12 +4323,12 @@ class _CodexBlockAvailableBanner extends StatelessWidget {
           const SizedBox(width: AppSpacing.medium),
           Expanded(
             child: Text(
-              AppLocalizations.of(context)!.neuerCodexBlock,
+              AppLocalizations.of(context)!.neuerCoachBlock,
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
           FilledButton.icon(
-            onPressed: controller.importCodexBlockPlan,
+            onPressed: controller.importCoachBlockPlan,
             icon: const Icon(CupertinoIcons.arrow_down_doc),
             label: Text(AppLocalizations.of(context)!.btnImport),
           ),
@@ -4212,7 +4559,7 @@ Future<void> _showMemoryDialog(
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(l.dialogMemoryAktivFuerCodex),
+                  title: Text(l.dialogMemoryAktivFuerCoach),
                   value: active,
                   onChanged: (value) => setState(() => active = value),
                 ),
@@ -4256,6 +4603,7 @@ Future<void> _showMemoryDialog(
   );
 }
 
+// ignore: unused_element
 Future<void> _showMealAnalysisDialog(
   BuildContext context,
   dynamic controller,
@@ -4338,7 +4686,7 @@ Future<void> _showMealAnalysisDialog(
                 );
                 Navigator.pop(context);
               },
-              child: Text(l.btnAnCodexSenden),
+              child: Text(l.btnAnCoachSenden),
             ),
           ],
         );
@@ -4347,6 +4695,7 @@ Future<void> _showMealAnalysisDialog(
   );
 }
 
+// ignore: unused_element
 Future<void> _showMealResultDialog(
   BuildContext context,
   dynamic controller,

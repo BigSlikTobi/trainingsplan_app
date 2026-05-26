@@ -1,26 +1,7 @@
-import 'dart:io';
-
-import 'package:path/path.dart' as p;
-
-import '../data/local_store.dart';
 import '../models/fitness_models.dart';
 
-class CoachExchangeService {
-  CoachExchangeService(this._store);
-
-  final LocalFitnessStore _store;
-  static const _trainingBlockPlanFile = 'training_block_plan.json';
-  static const _nutritionRequestFile = 'nutrition_analysis_request.json';
-  static const _nutritionResultFile = 'nutrition_analysis_result.json';
-  static const _dayContextFile = 'day_context.json';
-  static const _fuelGuidanceFile = 'fuel_guidance.json';
-  static const _memoryWikiFiles = [
-    _dayContextFile,
-    'daily_snapshot.json',
-    _nutritionRequestFile,
-  ];
-
-  Future<String> exportDailySnapshot(FitnessData data) async {
+class CoachPayloadService {
+  Map<String, dynamic> buildDailySnapshot(FitnessData data) {
     final recentLogs = [...data.logs]..sort(_compareWorkoutLogsNewestFirst);
     final recentNutrition = [...data.nutrition]
       ..sort((a, b) => b.date.compareTo(a.date));
@@ -28,7 +9,7 @@ class CoachExchangeService {
     final latestNutrition = recentNutrition.isEmpty
         ? null
         : recentNutrition.first;
-    final payload = {
+    return {
       'schema': 'daily_snapshot.v1',
       'createdAt': DateTime.now().toIso8601String(),
       'profile': data.profile.toJson(),
@@ -38,21 +19,21 @@ class CoachExchangeService {
       'latestNutrition': latestNutrition?.toJson(),
       'recentLogs': recentLogs.take(10).map((item) => item.toJson()).toList(),
       'memoryWiki': _memoryWiki(data.memories),
+      if (data.latestFuelCheckIn != null)
+        'latestFuelCheckIn': data.latestFuelCheckIn!.toJson(),
       'coachQuestions': [
         'Should tomorrow be progressed, held, deloaded, or substituted?',
         'Which exercise cues matter most from recent performance?',
         'Do nutrition or readiness signals require training changes?',
       ],
     };
-    final file = await _store.writeExchangeJson('daily_snapshot.json', payload);
-    return file.path;
   }
 
-  Future<String> exportDayContext({
+  Map<String, dynamic> buildDayContext({
     required FitnessData data,
     required DayActivityReport activityReport,
     DateTime? day,
-  }) async {
+  }) {
     final targetDay = day ?? DateTime.now();
     final windowStart = DateTime(
       targetDay.year,
@@ -67,7 +48,7 @@ class CoachExchangeService {
     final latestWorkout = trainingLogs.isEmpty ? null : trainingLogs.first;
     final latestNutrition = nutritionLogs.isEmpty ? null : nutritionLogs.first;
     final offset = windowStart.timeZoneOffset;
-    final payload = {
+    return {
       'schema': 'day_context.v1',
       'dayKey': dateKey(windowStart),
       'timezoneOffset': _formatOffset(offset),
@@ -86,26 +67,26 @@ class CoachExchangeService {
       'activeBlock': data.activeBlock?.toJson(),
       'nextWorkout': data.nextWorkout?.toJson(),
       'memoryWiki': _memoryWiki(data.memories),
+      if (data.latestFuelCheckIn != null)
+        'latestFuelCheckIn': data.latestFuelCheckIn!.toJson(),
       'instructions': [
-        'This is the primary Codex coaching context for the local calendar day.',
+        'This is the primary T4L Gym Bro coaching context for the local calendar day.',
         'Keep training logs, nutrition logs, and Apple Fitness activity separate, but consider them together when adapting coaching.',
         'Post-training walks, runs, rides, and other Apple Health workouts can affect recovery, next-workout intensity, and nutrition needs.',
       ],
     };
-    final file = await _store.writeExchangeJson(_dayContextFile, payload);
-    return file.path;
   }
 
-  Future<(MealAnalysisRequest, String)> exportNutritionAnalysisRequest({
+  (MealAnalysisRequest, Map<String, dynamic>) buildNutritionAnalysisRequest({
     required FitnessData data,
     required String description,
     String? imagePath,
-  }) async {
+  }) {
     final request = MealAnalysisRequest(
       id: newId('meal_request'),
       createdAt: DateTime.now(),
       description: description.trim(),
-      imagePath: await _copyMealImage(imagePath),
+      imagePath: imagePath,
       status: 'pending',
     );
     final recentLogs = [...data.logs]..sort(_compareWorkoutLogsNewestFirst);
@@ -119,7 +100,7 @@ class CoachExchangeService {
       'schema': 'nutrition_analysis_request.v1',
       'createdAt': request.createdAt.toIso8601String(),
       'request': request.toJson(),
-      'dayContextFile': _dayContextFile,
+      'dayContextKind': 'day_context',
       'profile': data.profile.toJson(),
       'currentBodyMetrics': {
         'heightCm': data.profile.heightCm,
@@ -143,7 +124,7 @@ class CoachExchangeService {
         'Analyze the meal from description and optional imagePath.',
         'Estimate calories, protein, carbs, and fat as integers.',
         'Infer the daily calorie target from user goal, training status, recent calorie intake, bodyweight trend, height, weight, age, sex, training days, and session minutes.',
-        'Return nutrition_analysis_result.json with schema nutrition_analysis_result.v1.',
+        'Return a nutrition_analysis_result.v1 payload.',
         'Include assumptions and confidence because image and text meal estimates are approximate.',
       ],
       'expectedResultShape': {
@@ -162,90 +143,53 @@ class CoachExchangeService {
         'target': data.profile.nutritionTarget.toJson(),
       },
     };
-    final file = await _store.writeExchangeJson(_nutritionRequestFile, payload);
-    return (request, file.path);
+    return (request, payload);
   }
 
-  Future<TrainingBlock?> readTrainingBlockPlan() async {
-    final json = await _store.readExchangeJson(_trainingBlockPlanFile);
-    if (json == null) return null;
+  TrainingBlock parseTrainingBlockPlan(Map<String, dynamic> json) {
     final blockJson = (json['block'] as Map?)?.cast<String, dynamic>() ?? json;
     final block = TrainingBlock.fromJson(blockJson);
     if (block.workouts.isEmpty || block.durationWeeks < 1) {
-      throw const FormatException('training_block_plan.json has no workouts.');
+      throw const FormatException('Training block plan has no workouts.');
     }
-    return block.copyWith(createdBy: 'Codex import');
+    return block.copyWith(createdBy: 'T4L Gym Bro import');
   }
 
-  Future<bool> hasTrainingBlockPlan() {
-    return _store.exchangeJsonExists(_trainingBlockPlanFile);
-  }
-
-  Future<void> clearTrainingBlockPlan() {
-    return _store.deleteExchangeJson(_trainingBlockPlanFile);
-  }
-
-  Future<PlannedWorkout?> readNextDayPlan() async {
-    final json = await _store.readExchangeJson('next_day_plan.json');
-    if (json == null) return null;
-    final workoutJson =
-        (json['workout'] as Map?)?.cast<String, dynamic>() ?? json;
+  PlannedWorkout parseNextDayPlan(Map<String, dynamic> json) {
+    final workoutJson = _workoutPayloadObject(json);
     final workout = PlannedWorkout.fromJson(workoutJson);
     if (workout.exercises.isEmpty) {
-      throw const FormatException('next_day_plan.json has no exercises.');
+      throw const FormatException('Next-day plan has no exercises.');
     }
     return workout;
   }
 
-  Future<bool> hasNutritionAnalysisResult() {
-    return _store.exchangeJsonExists(_nutritionResultFile);
-  }
-
-  Future<MealAnalysisResult?> readNutritionAnalysisResult() async {
-    final json = await _store.readExchangeJson(_nutritionResultFile);
-    if (json == null) return null;
+  MealAnalysisResult parseNutritionAnalysisResult(Map<String, dynamic> json) {
     final resultJson =
         (json['result'] as Map?)?.cast<String, dynamic>() ?? json;
     final result = MealAnalysisResult.fromJson(resultJson);
     if (result.calories <= 0) {
       throw const FormatException(
-        'nutrition_analysis_result.json must include positive calories.',
+        'Nutrition analysis result must include positive calories.',
       );
     }
     if (result.protein < 0 || result.carbs < 0 || result.fat < 0) {
       throw const FormatException(
-        'nutrition_analysis_result.json macros cannot be negative.',
+        'Nutrition analysis result macros cannot be negative.',
       );
     }
     return result;
   }
 
-  Future<void> clearNutritionAnalysisResult() {
-    return _store.deleteExchangeJson(_nutritionResultFile);
-  }
-
-  Future<void> clearNutritionAnalysisRequest() {
-    return _store.deleteExchangeJson(_nutritionRequestFile);
-  }
-
-  Future<FuelGuidance?> readFuelGuidance() async {
-    final json = await _store.readExchangeJson(_fuelGuidanceFile);
-    if (json == null) return null;
+  FuelGuidance parseFuelGuidance(Map<String, dynamic> json) {
     return FuelGuidance.fromJson(json);
   }
 
-  Future<bool> hasFuelGuidance() {
-    return _store.exchangeJsonExists(_fuelGuidanceFile);
-  }
-
-  Future<void> clearFuelGuidance() {
-    return _store.deleteExchangeJson(_fuelGuidanceFile);
-  }
-
-  Future<List<MemoryEntry>> readExchangeMemoryWikiEntries() async {
+  List<MemoryEntry> extractMemoryWikiEntries(
+    Iterable<Map<String, dynamic>?> payloads,
+  ) {
     final entries = <MemoryEntry>[];
-    for (final fileName in _memoryWikiFiles) {
-      final json = await _store.readExchangeJson(fileName);
+    for (final json in payloads) {
       final wiki = (json?['memoryWiki'] as Map?)?.cast<String, dynamic>();
       final rawEntries = wiki?['entries'];
       if (rawEntries is! List) continue;
@@ -259,24 +203,6 @@ class CoachExchangeService {
       }
     }
     return entries;
-  }
-
-  Future<String?> _copyMealImage(String? imagePath) async {
-    if (imagePath == null || imagePath.trim().isEmpty) return null;
-    final source = File(imagePath.trim());
-    if (!source.existsSync()) return imagePath.trim();
-
-    final dir = await _store.getExchangeDirectory();
-    final imagesDir = Directory(p.join(dir.path, 'meal_images'));
-    if (!imagesDir.existsSync()) await imagesDir.create(recursive: true);
-    final extension = p.extension(source.path).isEmpty
-        ? '.jpg'
-        : p.extension(source.path);
-    final target = File(
-      p.join(imagesDir.path, '${newId('meal_image')}$extension'),
-    );
-    await source.copy(target.path);
-    return target.path;
   }
 }
 
@@ -339,4 +265,25 @@ bool _isNutritionRelevantMemory(MemoryEntry memory) {
     MemoryCategory.goal => true,
     MemoryCategory.training || MemoryCategory.form => false,
   };
+}
+
+Map<String, dynamic> _workoutPayloadObject(Map<String, dynamic> payload) {
+  final workout = (payload['workout'] as Map?)?.cast<String, dynamic>();
+  if (workout != null) return workout;
+
+  final plan = (payload['plan'] as Map?)?.cast<String, dynamic>();
+  if (plan != null) {
+    final planWorkout = (plan['workout'] as Map?)?.cast<String, dynamic>();
+    if (planWorkout != null) return planWorkout;
+    if (plan['exercises'] is List) return plan;
+  }
+
+  final result = (payload['result'] as Map?)?.cast<String, dynamic>();
+  if (result != null) {
+    final resultWorkout = (result['workout'] as Map?)?.cast<String, dynamic>();
+    if (resultWorkout != null) return resultWorkout;
+    if (result['exercises'] is List) return result;
+  }
+
+  return payload;
 }

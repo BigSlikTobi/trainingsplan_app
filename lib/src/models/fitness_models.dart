@@ -20,7 +20,7 @@ enum TrainingStyle {
     'Muskelaufbau mit messbarer Kraft',
   ),
   conditioning('Conditioning', 'Work capacity, Intervalle, Regeneration'),
-  custom('Custom', 'Codex definiert den Schwerpunkt');
+  custom('Custom', 'T4L Gym Bro definiert den Schwerpunkt');
 
   const TrainingStyle(this.label, this.description);
 
@@ -181,7 +181,7 @@ class NutritionTarget {
       protein: _intValue(json['protein'], 170),
       carbs: _intValue(json['carbs'], 280),
       fat: _intValue(json['fat'], 80),
-      goalMode: json['goalMode'] as String? ?? 'Codex inferred',
+      goalMode: json['goalMode'] as String? ?? 'T4L Gym Bro inferred',
       rationale: json['rationale'] as String? ?? '',
       updatedAt:
           DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
@@ -464,7 +464,7 @@ class TrainingBlock {
       weeklyFocus: _stringList(json['weeklyFocus']),
       measurableTargets: _stringList(json['measurableTargets']),
       workouts: _objectList(json['workouts'], PlannedWorkout.fromJson),
-      createdBy: json['createdBy'] as String? ?? 'Codex',
+      createdBy: json['createdBy'] as String? ?? 'T4L Gym Bro',
       createdAt:
           DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
@@ -1012,7 +1012,7 @@ class MealAnalysisResult {
     final noteParts = [
       if (notes != null && notes.trim().isNotEmpty) notes.trim(),
       if (mealDescription.trim().isNotEmpty) mealDescription.trim(),
-      if (rationale.trim().isNotEmpty) 'Codex: ${rationale.trim()}',
+      if (rationale.trim().isNotEmpty) 'T4L Gym Bro: ${rationale.trim()}',
       if (assumptions.isNotEmpty) 'Assumptions: ${assumptions.join('; ')}',
       'Confidence ${(confidence * 100).round()}%',
     ];
@@ -1074,6 +1074,38 @@ class MealAnalysisResult {
 }
 
 enum FuelSignal { green, hold, fuel, deload }
+
+class FuelCheckIn {
+  const FuelCheckIn({
+    required this.guidanceValidFor,
+    required this.score,
+    required this.context,
+    required this.createdAt,
+  }) : assert(score >= 1 && score <= 10);
+
+  final String guidanceValidFor;
+  final int score;
+  final String context;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    'guidanceValidFor': guidanceValidFor,
+    'score': score.clamp(1, 10),
+    'context': context,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory FuelCheckIn.fromJson(Map<String, dynamic> json) {
+    return FuelCheckIn(
+      guidanceValidFor: json['guidanceValidFor'] as String? ?? '',
+      score: _fuelCheckInScoreValue(json['score'] ?? json['rating']),
+      context: json['context'] as String? ?? '',
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
+}
 
 class MealSuggestion {
   const MealSuggestion({
@@ -1320,6 +1352,7 @@ class FitnessData {
     required this.coachDecisions,
     required this.memories,
     this.fuelGuidance,
+    this.latestFuelCheckIn,
   });
 
   final AthleteProfile profile;
@@ -1332,6 +1365,7 @@ class FitnessData {
   final List<CoachDecision> coachDecisions;
   final List<MemoryEntry> memories;
   final FuelGuidance? fuelGuidance;
+  final FuelCheckIn? latestFuelCheckIn;
 
   TrainingBlock? get activeBlock {
     for (final block in blocks) {
@@ -1345,14 +1379,20 @@ class FitnessData {
   PlannedWorkout? get nextWorkout {
     final block = activeBlock;
     if (block == null || block.workouts.isEmpty) return null;
-    final completedIds = logs
-        .where((log) => log.completedAt != null)
-        .map((log) => log.workoutId)
-        .toSet();
-    for (final workout in block.workouts) {
-      if (!completedIds.contains(workout.id)) return workout;
+    final completedByWorkoutId = <String, int>{};
+    for (final log in logs.where((log) => log.completedAt != null)) {
+      completedByWorkoutId.update(
+        log.workoutId,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
     }
-    return block.workouts.last;
+    for (final workout in block.workouts) {
+      final completedCount = completedByWorkoutId[workout.id] ?? 0;
+      if (completedCount == 0) return workout;
+      completedByWorkoutId[workout.id] = completedCount - 1;
+    }
+    return null;
   }
 
   FitnessData copyWith({
@@ -1366,6 +1406,7 @@ class FitnessData {
     List<CoachDecision>? coachDecisions,
     List<MemoryEntry>? memories,
     Object? fuelGuidance = _sentinel,
+    Object? latestFuelCheckIn = _sentinel,
   }) {
     return FitnessData(
       profile: profile ?? this.profile,
@@ -1384,6 +1425,9 @@ class FitnessData {
       fuelGuidance: fuelGuidance == _sentinel
           ? this.fuelGuidance
           : fuelGuidance as FuelGuidance?,
+      latestFuelCheckIn: latestFuelCheckIn == _sentinel
+          ? this.latestFuelCheckIn
+          : latestFuelCheckIn as FuelCheckIn?,
     );
   }
 
@@ -1399,6 +1443,8 @@ class FitnessData {
     'coachDecisions': coachDecisions.map((item) => item.toJson()).toList(),
     'memories': memories.map((item) => item.toJson()).toList(),
     if (fuelGuidance != null) 'fuelGuidance': fuelGuidance!.toJson(),
+    if (latestFuelCheckIn != null)
+      'latestFuelCheckIn': latestFuelCheckIn!.toJson(),
   };
 
   factory FitnessData.fromJson(Map<String, dynamic> json) {
@@ -1418,6 +1464,7 @@ class FitnessData {
       ),
       memories: _objectList(json['memories'], MemoryEntry.fromJson),
       fuelGuidance: _fuelGuidanceValue(json['fuelGuidance']),
+      latestFuelCheckIn: _fuelCheckInValue(json['latestFuelCheckIn']),
     );
   }
 }
@@ -1443,6 +1490,21 @@ T _enumValue<T extends Enum>(Object? value, List<T> values, T fallback) {
     if (item.name == text) return item;
   }
   return fallback;
+}
+
+int _fuelCheckInScoreValue(Object? value) {
+  if (value == null) return 5;
+  if (value is num) return value.round().clamp(1, 10);
+  final text = value.toString().trim();
+  final parsed = int.tryParse(text);
+  if (parsed != null) return parsed.clamp(1, 10);
+  return switch (text) {
+    'done' => 10,
+    'mostly' => 8,
+    'partly' => 5,
+    'not_today' || 'notToday' => 2,
+    _ => 5,
+  };
 }
 
 List<T> _enumList<T extends Enum>(Object? value, List<T> values, T fallback) {
@@ -1540,4 +1602,9 @@ MealAnalysisResult? _mealAnalysisResultValue(Object? value) {
 FuelGuidance? _fuelGuidanceValue(Object? value) {
   if (value is! Map) return null;
   return FuelGuidance.fromJson(value.cast<String, dynamic>());
+}
+
+FuelCheckIn? _fuelCheckInValue(Object? value) {
+  if (value is! Map) return null;
+  return FuelCheckIn.fromJson(value.cast<String, dynamic>());
 }

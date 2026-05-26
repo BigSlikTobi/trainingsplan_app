@@ -6,29 +6,42 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import '../models/fitness_models.dart';
-import '../services/exchange_directory_service.dart';
 import '../services/local_bridge_service.dart';
 import 'seed_data.dart';
 
 class LocalFitnessStore {
-  LocalFitnessStore({ExchangeDirectoryService? exchangeDirectoryService})
-    : _exchangeDirectoryService =
-          exchangeDirectoryService ?? ExchangeDirectoryService();
-
-  final ExchangeDirectoryService _exchangeDirectoryService;
+  LocalFitnessStore();
 
   Future<File> get _dataFile async {
     final dir = await getApplicationDocumentsDirectory();
-    return File(p.join(dir.path, 'codex_fitness_data.json'));
+    return _migratedFile(
+      dir: dir,
+      currentName: 't4l_trainer_data.json',
+      legacyName: 'codex_fitness_data.json',
+    );
   }
 
   Future<File> get _sqliteFile async {
     final dir = await getApplicationDocumentsDirectory();
-    return File(p.join(dir.path, 'codex_fitness.sqlite'));
+    return _migratedFile(
+      dir: dir,
+      currentName: 't4l_trainer.sqlite',
+      legacyName: 'codex_fitness.sqlite',
+    );
   }
 
-  Future<Directory> getExchangeDirectory() async {
-    return _exchangeDirectoryService.resolveExchangeDirectory();
+  Future<File> _migratedFile({
+    required Directory dir,
+    required String currentName,
+    required String legacyName,
+  }) async {
+    final current = File(p.join(dir.path, currentName));
+    if (current.existsSync()) return current;
+    final legacy = File(p.join(dir.path, legacyName));
+    if (legacy.existsSync()) {
+      await legacy.copy(current.path);
+    }
+    return current;
   }
 
   Future<FitnessData> load() async {
@@ -107,9 +120,7 @@ class LocalFitnessStore {
   }
 
   Future<void> saveBridgeConfig(LocalBridgeConfig config) async {
-    final encoded = const JsonEncoder.withIndent('  ').convert(
-      config.toJson(),
-    );
+    final encoded = const JsonEncoder.withIndent('  ').convert(config.toJson());
     final db = await _openDatabase();
     try {
       db.execute(
@@ -125,39 +136,6 @@ class LocalFitnessStore {
     } finally {
       db.close();
     }
-  }
-
-  Future<File> writeExchangeJson(
-    String fileName,
-    Map<String, dynamic> payload,
-  ) async {
-    final dir = await getExchangeDirectory();
-    final file = File(p.join(dir.path, fileName));
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(payload),
-    );
-    return file;
-  }
-
-  Future<Map<String, dynamic>?> readExchangeJson(String fileName) async {
-    final dir = await getExchangeDirectory();
-    final file = File(p.join(dir.path, fileName));
-    if (!file.existsSync()) return null;
-    final decoded = jsonDecode(await file.readAsString());
-    if (decoded is Map<String, dynamic>) return decoded;
-    if (decoded is Map) return decoded.cast<String, dynamic>();
-    return null;
-  }
-
-  Future<bool> exchangeJsonExists(String fileName) async {
-    final dir = await getExchangeDirectory();
-    return File(p.join(dir.path, fileName)).exists();
-  }
-
-  Future<void> deleteExchangeJson(String fileName) async {
-    final dir = await getExchangeDirectory();
-    final file = File(p.join(dir.path, fileName));
-    if (file.existsSync()) await file.delete();
   }
 
   Future<Database> _openDatabase() async {

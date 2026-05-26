@@ -72,7 +72,7 @@ FitnessData sampleFitnessData() {
         protein: 170,
         carbs: 280,
         fat: 80,
-        goalMode: 'Codex inferred recomposition',
+        goalMode: 'T4L Gym Bro inferred recomposition',
         rationale: 'Test fixture target.',
         updatedAt: DateTime(2026, 5, 18),
         source: 'test',
