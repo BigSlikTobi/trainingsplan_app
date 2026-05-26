@@ -21,6 +21,8 @@ class CoachPayloadService {
       'memoryWiki': _memoryWiki(data.memories),
       if (data.latestFuelCheckIn != null)
         'latestFuelCheckIn': data.latestFuelCheckIn!.toJson(),
+      if (data.fuelDiary.isNotEmpty)
+        'fuelDiary': data.fuelDiary.map((e) => e.toJson()).toList(),
       'coachQuestions': [
         'Should tomorrow be progressed, held, deloaded, or substituted?',
         'Which exercise cues matter most from recent performance?',
@@ -69,6 +71,8 @@ class CoachPayloadService {
       'memoryWiki': _memoryWiki(data.memories),
       if (data.latestFuelCheckIn != null)
         'latestFuelCheckIn': data.latestFuelCheckIn!.toJson(),
+      if (data.fuelDiary.isNotEmpty)
+        'fuelDiary': data.fuelDiary.map((e) => e.toJson()).toList(),
       'instructions': [
         'This is the primary T4L Gym Bro coaching context for the local calendar day.',
         'Keep training logs, nutrition logs, and Apple Fitness activity separate, but consider them together when adapting coaching.',

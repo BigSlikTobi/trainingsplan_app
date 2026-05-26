@@ -1107,6 +1107,38 @@ class FuelCheckIn {
   }
 }
 
+class FuelDiaryEntry {
+  const FuelDiaryEntry({
+    required this.id,
+    required this.date,
+    required this.text,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String date;
+  final String text;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'date': date,
+    'text': text,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory FuelDiaryEntry.fromJson(Map<String, dynamic> json) {
+    return FuelDiaryEntry(
+      id: json['id'] as String? ?? '',
+      date: json['date'] as String? ?? '',
+      text: json['text'] as String? ?? '',
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
+}
+
 class MealSuggestion {
   const MealSuggestion({
     required this.name,
@@ -1353,6 +1385,8 @@ class FitnessData {
     required this.memories,
     this.fuelGuidance,
     this.latestFuelCheckIn,
+    this.fuelDiary = const [],
+    this.fuelDiarySentAt,
   });
 
   final AthleteProfile profile;
@@ -1366,6 +1400,8 @@ class FitnessData {
   final List<MemoryEntry> memories;
   final FuelGuidance? fuelGuidance;
   final FuelCheckIn? latestFuelCheckIn;
+  final List<FuelDiaryEntry> fuelDiary;
+  final DateTime? fuelDiarySentAt;
 
   TrainingBlock? get activeBlock {
     for (final block in blocks) {
@@ -1407,6 +1443,8 @@ class FitnessData {
     List<MemoryEntry>? memories,
     Object? fuelGuidance = _sentinel,
     Object? latestFuelCheckIn = _sentinel,
+    List<FuelDiaryEntry>? fuelDiary,
+    Object? fuelDiarySentAt = _sentinel,
   }) {
     return FitnessData(
       profile: profile ?? this.profile,
@@ -1428,6 +1466,10 @@ class FitnessData {
       latestFuelCheckIn: latestFuelCheckIn == _sentinel
           ? this.latestFuelCheckIn
           : latestFuelCheckIn as FuelCheckIn?,
+      fuelDiary: fuelDiary ?? this.fuelDiary,
+      fuelDiarySentAt: fuelDiarySentAt == _sentinel
+          ? this.fuelDiarySentAt
+          : fuelDiarySentAt as DateTime?,
     );
   }
 
@@ -1445,6 +1487,9 @@ class FitnessData {
     if (fuelGuidance != null) 'fuelGuidance': fuelGuidance!.toJson(),
     if (latestFuelCheckIn != null)
       'latestFuelCheckIn': latestFuelCheckIn!.toJson(),
+    'fuelDiary': fuelDiary.map((e) => e.toJson()).toList(),
+    if (fuelDiarySentAt != null)
+      'fuelDiarySentAt': fuelDiarySentAt!.toIso8601String(),
   };
 
   factory FitnessData.fromJson(Map<String, dynamic> json) {
@@ -1465,6 +1510,10 @@ class FitnessData {
       memories: _objectList(json['memories'], MemoryEntry.fromJson),
       fuelGuidance: _fuelGuidanceValue(json['fuelGuidance']),
       latestFuelCheckIn: _fuelCheckInValue(json['latestFuelCheckIn']),
+      fuelDiary: _objectList(json['fuelDiary'], FuelDiaryEntry.fromJson),
+      fuelDiarySentAt: DateTime.tryParse(
+        json['fuelDiarySentAt'] as String? ?? '',
+      ),
     );
   }
 }

@@ -1581,17 +1581,12 @@ class _NutritionPage extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 10),
-          _FuelCheckInCard(
-            guidanceValidFor: today,
-            checkIn: data.latestFuelCheckIn?.guidanceValidFor == today
-                ? data.latestFuelCheckIn
-                : null,
-            onSubmit: ({required int score, required String context}) =>
-                controller.submitFuelCheckIn(
-                  guidanceValidFor: today,
-                  score: score,
-                  context: context,
-                ),
+          _FuelDiaryCard(
+            entries: controller.todayFuelDiary,
+            sentToday: controller.fuelDiarySentToday,
+            onAdd: (text) => controller.addFuelDiaryEntry(text),
+            onRemove: (id) => controller.removeFuelDiaryEntry(id),
+            onSend: (score) => controller.submitFuelDiary(score: score),
           ),
           if (isGuidanceFresh) ...[
             const SizedBox(height: 10),
@@ -2070,54 +2065,45 @@ class _FuelAdviceCard extends StatelessWidget {
   }
 }
 
-class _FuelCheckInCard extends StatefulWidget {
-  const _FuelCheckInCard({
-    required this.guidanceValidFor,
-    required this.checkIn,
-    required this.onSubmit,
+class _FuelDiaryCard extends StatefulWidget {
+  const _FuelDiaryCard({
+    required this.entries,
+    required this.sentToday,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onSend,
   });
 
-  final String guidanceValidFor;
-  final FuelCheckIn? checkIn;
-  final Future<void> Function({required int score, required String context})
-  onSubmit;
+  final List<FuelDiaryEntry> entries;
+  final bool sentToday;
+  final Future<void> Function(String text) onAdd;
+  final Future<void> Function(String id) onRemove;
+  final Future<void> Function(int score) onSend;
 
   @override
-  State<_FuelCheckInCard> createState() => _FuelCheckInCardState();
+  State<_FuelDiaryCard> createState() => _FuelDiaryCardState();
 }
 
-class _FuelCheckInCardState extends State<_FuelCheckInCard> {
-  late double _score;
-  late final TextEditingController _context;
+class _FuelDiaryCardState extends State<_FuelDiaryCard> {
+  final _input = TextEditingController();
+  double _score = 8;
   bool _sending = false;
 
   @override
-  void initState() {
-    super.initState();
-    _score = (widget.checkIn?.score ?? 8).toDouble();
-    _context = TextEditingController(text: widget.checkIn?.context ?? '');
-  }
-
-  @override
-  void didUpdateWidget(covariant _FuelCheckInCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.guidanceValidFor == widget.guidanceValidFor &&
-        oldWidget.checkIn?.createdAt == widget.checkIn?.createdAt) {
-      return;
-    }
-    _score = (widget.checkIn?.score ?? 8).toDouble();
-    _context.text = widget.checkIn?.context ?? '';
-  }
-
-  @override
   void dispose() {
-    _context.dispose();
+    _input.dispose();
     super.dispose();
+  }
+
+  String _timeLabel(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   @override
   Widget build(BuildContext context) {
-    final sent = widget.checkIn != null;
+    final entries = widget.entries;
     return _WhiteCard(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
@@ -2127,7 +2113,7 @@ class _FuelCheckInCardState extends State<_FuelCheckInCard> {
             Row(
               children: [
                 Text(
-                  'FUEL CHECK-IN',
+                  'FUEL DIARY',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
@@ -2136,7 +2122,7 @@ class _FuelCheckInCardState extends State<_FuelCheckInCard> {
                   ),
                 ),
                 const Spacer(),
-                if (sent)
+                if (widget.sentToday)
                   const Text(
                     'SENT',
                     style: TextStyle(
@@ -2153,7 +2139,7 @@ class _FuelCheckInCardState extends State<_FuelCheckInCard> {
               children: [
                 const Expanded(
                   child: Text(
-                    'How well did you stick to the plan today?',
+                    'Fuel Quality Level',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
@@ -2212,81 +2198,169 @@ class _FuelCheckInCardState extends State<_FuelCheckInCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _context,
-              minLines: 1,
-              maxLines: 3,
-              textInputAction: TextInputAction.done,
-              style: const TextStyle(fontSize: 13, color: AppColors.paper),
-              decoration: InputDecoration(
-                hintText: 'Add context for your coach...',
-                hintStyle: TextStyle(
-                  color: AppColors.paper.withValues(alpha: 0.28),
-                ),
-                filled: true,
-                fillColor: AppColors.paper.withValues(alpha: 0.04),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 10,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color: AppColors.paper.withValues(alpha: 0.08),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color: AppColors.sage.withValues(alpha: 0.55),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 38,
-              child: ElevatedButton(
-                onPressed: _sending
-                    ? null
-                    : () async {
-                        setState(() => _sending = true);
-                        await widget.onSubmit(
-                          score: _score.round(),
-                          context: _context.text,
-                        );
-                        if (mounted) setState(() => _sending = false);
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.sage,
-                  disabledBackgroundColor: AppColors.sage.withValues(
-                    alpha: 0.35,
-                  ),
-                  foregroundColor: AppColors.paper,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  elevation: 0,
-                ),
+            const SizedBox(height: 12),
+            if (entries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  _sending
-                      ? 'Sending...'
-                      : sent
-                      ? 'Update Coach'
-                      : 'Send to Coach',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                  'Log what you ate, how you feel, supplements, water — anything fuel-related. Send it all to your coach when ready.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.paper.withValues(alpha: 0.36),
+                  ),
+                ),
+              )
+            else
+              ...entries.map((entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _timeLabel(entry.createdAt),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: AppColors.sage.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        entry.text,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.paper,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => widget.onRemove(entry.id),
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: AppColors.paper.withValues(alpha: 0.28),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    minLines: 1,
+                    maxLines: 3,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _addEntry(),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.paper,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'What did you eat or drink?',
+                      hintStyle: TextStyle(
+                        color: AppColors.paper.withValues(alpha: 0.28),
+                      ),
+                      filled: true,
+                      fillColor: AppColors.paper.withValues(alpha: 0.04),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 10,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: AppColors.paper.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: AppColors.sage.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 38,
+                  width: 38,
+                  child: IconButton(
+                    onPressed: _addEntry,
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.sage.withValues(alpha: 0.15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                    ),
+                    icon: const Icon(
+                      Icons.add_rounded,
+                      size: 20,
+                      color: AppColors.sage,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (entries.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 38,
+                child: ElevatedButton(
+                  onPressed: _sending
+                      ? null
+                      : () async {
+                          setState(() => _sending = true);
+                          await widget.onSend(_score.round());
+                          if (mounted) setState(() => _sending = false);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.sage,
+                    disabledBackgroundColor: AppColors.sage.withValues(
+                      alpha: 0.35,
+                    ),
+                    foregroundColor: AppColors.paper,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    _sending
+                        ? 'Sending...'
+                        : widget.sentToday
+                        ? 'Update Coach'
+                        : 'Send to Coach',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _addEntry() async {
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
+    _input.clear();
+    await widget.onAdd(text);
   }
 }
 

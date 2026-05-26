@@ -70,6 +70,8 @@ class FitnessController extends ChangeNotifier {
   MealAnalysisResult? get pendingMealResult => _data.pendingMealResult;
   FuelGuidance? get fuelGuidance => _data.fuelGuidance;
   FuelCheckIn? get latestFuelCheckIn => _data.latestFuelCheckIn;
+  List<FuelDiaryEntry> get fuelDiary => _data.fuelDiary;
+  DateTime? get fuelDiarySentAt => _data.fuelDiarySentAt;
   LocalBridgeConfig get bridgeConfig => _bridgeConfig;
 
   Future<void> syncWorkoutToWatch() async {
@@ -1270,6 +1272,77 @@ class FitnessController extends ChangeNotifier {
       _status = 'Fuel check-in saved locally, server push failed: $error';
     }
     notifyListeners();
+  }
+
+  Future<void> addFuelDiaryEntry(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final today = _todayKey();
+    final entry = FuelDiaryEntry(
+      id: newId('fuel_diary'),
+      date: today,
+      text: trimmed,
+      createdAt: DateTime.now(),
+    );
+    _data = _data.copyWith(
+      fuelDiary: [..._data.fuelDiary, entry],
+    );
+    await _store.save(_data);
+    notifyListeners();
+  }
+
+  Future<void> removeFuelDiaryEntry(String id) async {
+    _data = _data.copyWith(
+      fuelDiary: _data.fuelDiary.where((e) => e.id != id).toList(),
+    );
+    await _store.save(_data);
+    notifyListeners();
+  }
+
+  List<FuelDiaryEntry> get todayFuelDiary {
+    final today = _todayKey();
+    return _data.fuelDiary.where((e) => e.date == today).toList();
+  }
+
+  bool get fuelDiarySentToday {
+    final sent = _data.fuelDiarySentAt;
+    if (sent == null) return false;
+    final today = _todayKey();
+    final sentKey =
+        '${sent.year}-${sent.month.toString().padLeft(2, '0')}-${sent.day.toString().padLeft(2, '0')}';
+    return sentKey == today;
+  }
+
+  Future<void> submitFuelDiary({required int score}) async {
+    final entries = todayFuelDiary;
+    if (entries.isEmpty) return;
+    final combined = entries.map((e) => e.text).join('\n');
+    _data = _data.copyWith(
+      latestFuelCheckIn: FuelCheckIn(
+        guidanceValidFor: _todayKey(),
+        score: score.clamp(1, 10),
+        context: combined,
+        createdAt: DateTime.now(),
+      ),
+      fuelDiarySentAt: DateTime.now(),
+    );
+    await _store.save(_data);
+    try {
+      if (_bridgeConfig.isConfigured) {
+        await _exportDayContext(notify: false);
+        _status = 'Sent Fuel diary to T4L Gym Bro';
+      } else {
+        _status = 'Saved Fuel diary locally';
+      }
+    } on Object catch (error) {
+      _status = 'Fuel diary saved locally, server push failed: $error';
+    }
+    notifyListeners();
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> updateProfile(AthleteProfile profile) async {
