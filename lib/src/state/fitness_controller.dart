@@ -404,8 +404,11 @@ class FitnessController extends ChangeNotifier {
     await _persist('Imported T4L Gym Bro block plan');
   }
 
+  Future<void> _pullLock = Future.value();
+
   Future<void> checkForCoachUpdates() {
-    return pullBridgeResults();
+    _pullLock = _pullLock.then((_) => pullBridgeResults());
+    return _pullLock;
   }
 
   Future<void> saveBridgeConfig({
@@ -529,28 +532,34 @@ class FitnessController extends ChangeNotifier {
     String kind,
     Map<String, dynamic> payload,
   ) async {
-    switch (kind) {
-      case 'next_day_plan':
-        final workout = _coach.parseNextDayPlan(payload);
-        await importNextDayWorkout(workout, source: 'T4L server');
-        return (label: 'next_day_plan', consume: true);
-      case 'training_block_plan':
-        _coach.parseTrainingBlockPlan(payload);
-        _pendingTrainingBlockPlanPayload = payload;
-        _hasPendingCoachBlock = true;
-        _status = 'New T4L Gym Bro training block available';
-        return (label: 'training_block_plan', consume: false);
-      case 'nutrition_analysis_result':
-        final result = _coach.parseNutritionAnalysisResult(payload);
-        _data = _data.copyWith(pendingMealResult: result);
-        _hasPendingNutritionAnalysis = true;
-        await _store.save(_data);
-        return (label: 'nutrition_analysis_result', consume: true);
-      case 'fuel_guidance':
-        final guidance = _coach.parseFuelGuidance(payload);
-        _data = _data.copyWith(fuelGuidance: guidance);
-        await _store.save(_data);
-        return (label: 'fuel_guidance', consume: true);
+    try {
+      switch (kind) {
+        case 'next_day_plan':
+          final workout = _coach.parseNextDayPlan(payload);
+          await importNextDayWorkout(workout, source: 'T4L server');
+          return (label: 'next_day_plan', consume: true);
+        case 'training_block_plan':
+          _coach.parseTrainingBlockPlan(payload);
+          _pendingTrainingBlockPlanPayload = payload;
+          _hasPendingCoachBlock = true;
+          _status = 'New T4L Gym Bro training block available';
+          return (label: 'training_block_plan', consume: false);
+        case 'nutrition_analysis_result':
+          final result = _coach.parseNutritionAnalysisResult(payload);
+          _data = _data.copyWith(pendingMealResult: result);
+          _hasPendingNutritionAnalysis = true;
+          await _store.save(_data);
+          return (label: 'nutrition_analysis_result', consume: true);
+        case 'fuel_guidance':
+          final guidance = _coach.parseFuelGuidance(payload);
+          _data = _data.copyWith(fuelGuidance: guidance);
+          await _store.save(_data);
+          return (label: 'fuel_guidance', consume: true);
+      }
+    } on FormatException catch (e) {
+      _status = 'Invalid $kind payload from server: $e';
+      notifyListeners();
+      return null;
     }
     return null;
   }

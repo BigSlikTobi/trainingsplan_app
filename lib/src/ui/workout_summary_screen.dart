@@ -95,10 +95,10 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
 
     // Try to find the associated block for the banner
     final block = controller.activeBlock;
-    final workout = block?.workouts.firstWhere(
-      (w) => w.id == log.workoutId,
-      orElse: () => block.workouts.first,
-    );
+    final workout = block?.workouts.cast<PlannedWorkout?>().firstWhere(
+          (w) => w!.id == log.workoutId,
+          orElse: () => block.workouts.isNotEmpty ? block.workouts.first : null,
+        );
     final completedInBlock = block == null
         ? 0
         : controller.data.logs

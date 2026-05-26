@@ -1493,9 +1493,10 @@ T _enumValue<T extends Enum>(Object? value, List<T> values, T fallback) {
 }
 
 int _fuelCheckInScoreValue(Object? value) {
+  if (value == null) return 5;
   if (value is num) return value.round().clamp(1, 10);
-  final text = value?.toString().trim();
-  final parsed = int.tryParse(text ?? '');
+  final text = value.toString().trim();
+  final parsed = int.tryParse(text);
   if (parsed != null) return parsed.clamp(1, 10);
   return switch (text) {
     'done' => 10,
