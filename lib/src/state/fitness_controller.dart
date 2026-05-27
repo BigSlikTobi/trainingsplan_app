@@ -47,6 +47,7 @@ class FitnessController extends ChangeNotifier {
   WorkoutLog? _justCompletedLog;
   LocalBridgeConfig _bridgeConfig = const LocalBridgeConfig();
   Map<String, dynamic>? _pendingTrainingBlockPlanPayload;
+  CoachingGoals? _pendingTrainingBlockGoals;
   StreamSubscription<Map<String, dynamic>>? _watchEvents;
   String? _activeWatchSessionWorkoutId;
   final Map<String, int> _watchProgressRevisions = {};
@@ -324,6 +325,57 @@ class FitnessController extends ChangeNotifier {
     await _persist(active ? 'Memory activated' : 'Memory paused');
   }
 
+  Future<void> addPersonalRecord({
+    required String exerciseName,
+    required double weightKg,
+    double? previousKg,
+    bool includeInContext = true,
+  }) async {
+    if (exerciseName.trim().isEmpty || weightKg <= 0) return;
+    final pr = PersonalRecord(
+      id: newId('pr'),
+      exerciseName: exerciseName.trim(),
+      weightKg: weightKg,
+      previousKg: previousKg,
+      updatedAt: DateTime.now(),
+      includeInContext: includeInContext,
+    );
+    _data = _data.copyWith(personalRecords: [pr, ..._data.personalRecords]);
+    await _persist('PR added');
+  }
+
+  Future<void> updatePersonalRecord(PersonalRecord pr) async {
+    if (pr.exerciseName.trim().isEmpty || pr.weightKg <= 0) return;
+    final updated = pr.copyWith(updatedAt: DateTime.now());
+    _data = _data.copyWith(
+      personalRecords: _data.personalRecords
+          .map((item) => item.id == updated.id ? updated : item)
+          .toList(),
+    );
+    await _persist('PR updated');
+  }
+
+  Future<void> deletePersonalRecord(String id) async {
+    _data = _data.copyWith(
+      personalRecords: _data.personalRecords
+          .where((item) => item.id != id)
+          .toList(),
+    );
+    await _persist('PR deleted');
+  }
+
+  Future<void> togglePersonalRecordContext(String id, bool include) async {
+    _data = _data.copyWith(
+      personalRecords: _data.personalRecords
+          .map(
+            (item) =>
+                item.id == id ? item.copyWith(includeInContext: include) : item,
+          )
+          .toList(),
+    );
+    await _persist(include ? 'PR added to context' : 'PR removed from context');
+  }
+
   Future<void> load() async {
     _isLoading = true;
     notifyListeners();
@@ -400,7 +452,11 @@ class FitnessController extends ChangeNotifier {
         ..._data.coachDecisions,
       ],
     );
+    if (_pendingTrainingBlockGoals != null) {
+      _data = _data.copyWith(coachingGoals: _pendingTrainingBlockGoals);
+    }
     _pendingTrainingBlockPlanPayload = null;
+    _pendingTrainingBlockGoals = null;
     _hasPendingCoachBlock = false;
     await _bridge.markResultConsumed(_bridgeConfig, 'training_block_plan');
     await _persist('Imported T4L Gym Bro block plan');
@@ -522,7 +578,7 @@ class FitnessController extends ChangeNotifier {
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
       _status = downloaded.isEmpty
-          ? 'No self-hosted server results found'
+          ? ''
           : 'Pulled ${downloaded.join(', ')} from self-hosted server';
     } on Object catch (error) {
       _status = 'Server result check failed: $error';
@@ -537,12 +593,19 @@ class FitnessController extends ChangeNotifier {
     try {
       switch (kind) {
         case 'next_day_plan':
-          final workout = _coach.parseNextDayPlan(payload);
-          await importNextDayWorkout(workout, source: 'T4L server');
+          final parsed = _coach.parseNextDayPlanWithContext(payload);
+          await importNextDayWorkout(parsed.workout, source: 'T4L server');
+          _data = _data.copyWith(
+            dailyMotto: parsed.dailyMotto ?? _data.dailyMotto,
+            yesterdaySummary: parsed.yesterdaySummary ?? _data.yesterdaySummary,
+            coachingGoals: parsed.goals ?? _data.coachingGoals,
+          );
+          await _store.save(_data);
           return (label: 'next_day_plan', consume: true);
         case 'training_block_plan':
-          _coach.parseTrainingBlockPlan(payload);
+          final parsed = _coach.parseTrainingBlockPlanWithContext(payload);
           _pendingTrainingBlockPlanPayload = payload;
+          _pendingTrainingBlockGoals = parsed.goals;
           _hasPendingCoachBlock = true;
           _status = 'New T4L Gym Bro training block available';
           return (label: 'training_block_plan', consume: false);
@@ -635,8 +698,9 @@ class FitnessController extends ChangeNotifier {
     ExercisePrescription exercise,
     double weight,
     int reps,
-    double rpe,
-  ) async {
+    double rpe, {
+    int? durationSeconds,
+  }) async {
     final workout = nextWorkout;
     if (workout == null) return;
     final existingIndex = _data.logs.indexWhere(
@@ -667,6 +731,7 @@ class FitnessController extends ChangeNotifier {
       weightKg: weight,
       reps: reps,
       rpe: rpe.clamp(1, 10).toDouble(),
+      durationSeconds: durationSeconds,
     );
     final updated = log.copyWith(sets: [...log.sets, set]);
     final logs = [..._data.logs];
@@ -899,17 +964,17 @@ class FitnessController extends ChangeNotifier {
     return Duration(seconds: active < 0 ? 0 : active);
   }
 
-  ExerciseTiming? _timingFor(String exerciseId) {
-    final log = _activeWorkoutLog();
+  ExerciseTiming? timingForExercise(String exerciseId) {
+    final log = _activeWorkoutLog() ?? _justCompletedLog;
     if (log == null) return null;
     final i = log.exerciseTimings.indexWhere((t) => t.exerciseId == exerciseId);
     return i < 0 ? null : log.exerciseTimings[i];
   }
 
   bool isExerciseRunning(String exerciseId) =>
-      _timingFor(exerciseId)?.isRunning ?? false;
+      timingForExercise(exerciseId)?.isRunning ?? false;
   bool isExercisePaused(String exerciseId) =>
-      _timingFor(exerciseId)?.isPaused ?? false;
+      timingForExercise(exerciseId)?.isPaused ?? false;
   bool isExerciseStopped(String exerciseId) {
     final log = _activeWorkoutLog() ?? _justCompletedLog;
     if (log == null) return false;
@@ -1284,9 +1349,7 @@ class FitnessController extends ChangeNotifier {
       text: trimmed,
       createdAt: DateTime.now(),
     );
-    _data = _data.copyWith(
-      fuelDiary: [..._data.fuelDiary, entry],
-    );
+    _data = _data.copyWith(fuelDiary: [..._data.fuelDiary, entry]);
     await _store.save(_data);
     notifyListeners();
   }
@@ -1331,6 +1394,9 @@ class FitnessController extends ChangeNotifier {
       if (_bridgeConfig.isConfigured) {
         await _exportDayContext(notify: false);
         _status = 'Sent Fuel diary to T4L Gym Bro';
+        Future.delayed(const Duration(seconds: 5), () {
+          if (_bridgeConfig.isConfigured) checkForCoachUpdates();
+        });
       } else {
         _status = 'Saved Fuel diary locally';
       }

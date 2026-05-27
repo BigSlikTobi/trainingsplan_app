@@ -19,6 +19,7 @@ class CoachPayloadService {
       'latestNutrition': latestNutrition?.toJson(),
       'recentLogs': recentLogs.take(10).map((item) => item.toJson()).toList(),
       'memoryWiki': _memoryWiki(data.memories),
+      'personalRecords': _activeRecords(data.personalRecords),
       if (data.latestFuelCheckIn != null)
         'latestFuelCheckIn': data.latestFuelCheckIn!.toJson(),
       if (data.fuelDiary.isNotEmpty)
@@ -69,6 +70,7 @@ class CoachPayloadService {
       'activeBlock': data.activeBlock?.toJson(),
       'nextWorkout': data.nextWorkout?.toJson(),
       'memoryWiki': _memoryWiki(data.memories),
+      'personalRecords': _activeRecords(data.personalRecords),
       if (data.latestFuelCheckIn != null)
         'latestFuelCheckIn': data.latestFuelCheckIn!.toJson(),
       if (data.fuelDiary.isNotEmpty)
@@ -168,6 +170,38 @@ class CoachPayloadService {
     return workout;
   }
 
+  ({
+    PlannedWorkout workout,
+    String? dailyMotto,
+    YesterdaySummary? yesterdaySummary,
+    CoachingGoals? goals,
+  }) parseNextDayPlanWithContext(Map<String, dynamic> json) {
+    final workout = parseNextDayPlan(json);
+    return (
+      workout: workout,
+      dailyMotto: json['dailyMotto'] as String?,
+      yesterdaySummary: _parseYesterdaySummary(json['yesterdaySummary']),
+      goals: _parseGoals(json['goals']),
+    );
+  }
+
+  ({TrainingBlock block, CoachingGoals? goals}) parseTrainingBlockPlanWithContext(
+    Map<String, dynamic> json,
+  ) {
+    final block = parseTrainingBlockPlan(json);
+    return (block: block, goals: _parseGoals(json['goals']));
+  }
+
+  static YesterdaySummary? _parseYesterdaySummary(Object? value) {
+    if (value is! Map) return null;
+    return YesterdaySummary.fromJson(value.cast<String, dynamic>());
+  }
+
+  static CoachingGoals? _parseGoals(Object? value) {
+    if (value is! Map) return null;
+    return CoachingGoals.fromJson(value.cast<String, dynamic>());
+  }
+
   MealAnalysisResult parseNutritionAnalysisResult(Map<String, dynamic> json) {
     final resultJson =
         (json['result'] as Map?)?.cast<String, dynamic>() ?? json;
@@ -258,6 +292,13 @@ Map<String, dynamic> _memoryWiki(Iterable<MemoryEntry> memories) {
     'instructions':
         'Use these active memories as durable coaching context. Prefer recent, high-confidence entries, and do not treat inactive or missing memories as facts.',
   };
+}
+
+List<Map<String, dynamic>> _activeRecords(List<PersonalRecord> records) {
+  return records
+      .where((pr) => pr.includeInContext)
+      .map((pr) => pr.toJson())
+      .toList();
 }
 
 bool _isNutritionRelevantMemory(MemoryEntry memory) {

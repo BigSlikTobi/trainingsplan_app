@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/design_tokens.dart';
+import '../l10n/app_localizations.dart';
 import '../models/fitness_models.dart';
 
 enum HeroWorkoutStatus { bereit, aktiv, pause, fertig }
@@ -34,6 +35,7 @@ class TodayHeroCard extends StatelessWidget {
     required this.onExerciseResume,
     required this.onExerciseStop,
     required this.onDismissExerciseFocus,
+    this.dailyMotto,
   });
 
   final HeroWorkoutStatus status;
@@ -64,6 +66,7 @@ class TodayHeroCard extends StatelessWidget {
   final VoidCallback onExerciseResume;
   final VoidCallback onExerciseStop;
   final VoidCallback onDismissExerciseFocus;
+  final String? dailyMotto;
 
   static const _gradientTop = Color(0xFF1D2A1F);
   static const _gradientMid = Color(0xFF18201B);
@@ -150,6 +153,7 @@ class TodayHeroCard extends StatelessWidget {
                         blockProgressPercent: blockProgressPercent,
                         sessionElapsed: sessionElapsed,
                         avgRpe: avgRpe,
+                        dailyMotto: dailyMotto,
                         onStart: onStart,
                         onComplete: onComplete,
                         onPause: onPause,
@@ -174,23 +178,18 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, color, bgAlpha, borderAlpha, live) = switch (status) {
-      HeroWorkoutStatus.bereit => (
-        '● BEREIT',
-        AppColors.gold,
-        0.12,
-        0.30,
-        false,
-      ),
-      HeroWorkoutStatus.aktiv => ('● AKTIV', AppColors.coral, 0.12, 0.30, true),
-      HeroWorkoutStatus.pause => ('⏸ PAUSE', AppColors.gold, 0.12, 0.30, false),
-      HeroWorkoutStatus.fertig => (
-        '✓ FERTIG',
-        AppColors.sage,
-        0.14,
-        0.30,
-        false,
-      ),
+    final l = AppLocalizations.of(context)!;
+    final (color, bgAlpha, borderAlpha, live) = switch (status) {
+      HeroWorkoutStatus.bereit => (AppColors.gold, 0.12, 0.30, false),
+      HeroWorkoutStatus.aktiv => (AppColors.coral, 0.12, 0.30, true),
+      HeroWorkoutStatus.pause => (AppColors.gold, 0.12, 0.30, false),
+      HeroWorkoutStatus.fertig => (AppColors.sage, 0.14, 0.30, false),
+    };
+    final label = switch (status) {
+      HeroWorkoutStatus.bereit => l.statusBereit,
+      HeroWorkoutStatus.aktiv => l.statusAktiv,
+      HeroWorkoutStatus.pause => l.statusPause,
+      HeroWorkoutStatus.fertig => l.statusFertig,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
@@ -284,6 +283,7 @@ class _HeroOverview extends StatelessWidget {
     required this.blockProgressPercent,
     required this.sessionElapsed,
     required this.avgRpe,
+    this.dailyMotto,
     required this.onStart,
     required this.onComplete,
     required this.onPause,
@@ -302,6 +302,7 @@ class _HeroOverview extends StatelessWidget {
   final int blockProgressPercent;
   final Duration? sessionElapsed;
   final double? avgRpe;
+  final String? dailyMotto;
   final VoidCallback onStart;
   final VoidCallback onComplete;
   final VoidCallback onPause;
@@ -310,31 +311,32 @@ class _HeroOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final running =
         status == HeroWorkoutStatus.aktiv || status == HeroWorkoutStatus.pause;
     final done = status == HeroWorkoutStatus.fertig;
     final paper = AppColors.paper;
     final stats = running
         ? [
-            ('AKTIV', _fmtElapsed(sessionElapsed ?? Duration.zero)),
-            ('SÄTZE', '$completedSets / $totalSets'),
+            (l.statAktivLabel, _fmtElapsed(sessionElapsed ?? Duration.zero)),
+            (l.heroSaetze, '$completedSets / $totalSets'),
             (
-              'RPE ⌀',
+              l.statRpeAvg,
               avgRpe == null
                   ? '—'
                   : '~${avgRpe!.toStringAsFixed(avgRpe! >= 10 ? 0 : 1)}',
             ),
           ]
         : [
-            ('PLANZEIT', '$sessionMinutes min'),
-            ('SÄTZE', '$totalSets'),
-            ('TAG', '$dayIndex / $totalDays'),
+            (l.statPlanzeit, '$sessionMinutes min'),
+            (l.heroSaetze, '$totalSets'),
+            (l.statTagLabel, '$dayIndex / $totalDays'),
           ];
 
     final eyebrowText = [
       block.style.label,
-      'Tag $dayIndex',
-      'Woche ${workout.week}',
+      l.heroTag(dayIndex),
+      l.woche(workout.week),
     ].join(' · ').toUpperCase();
 
     return Column(
@@ -395,6 +397,29 @@ class _HeroOverview extends StatelessWidget {
             ),
           ),
         ],
+        if (dailyMotto != null && dailyMotto!.trim().isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: AppColors.sage.withValues(alpha: 0.45),
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Text(
+              '"${dailyMotto!.trim()}"',
+              style: TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: AppColors.sage.withValues(alpha: 0.72),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         ClipRRect(
           borderRadius: BorderRadius.circular(99),
@@ -426,9 +451,9 @@ class _HeroOverview extends StatelessWidget {
               borderRadius: BorderRadius.circular(13),
               border: Border.all(color: AppColors.sage.withValues(alpha: 0.22)),
             ),
-            child: const Text(
-              '✓ ABGESCHLOSSEN',
-              style: TextStyle(
+            child: Text(
+              l.statusAbgeschlossen,
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.4,
@@ -519,14 +544,14 @@ class _OverviewStartButton extends StatelessWidget {
           ),
           padding: EdgeInsets.zero,
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.play_arrow, size: 18),
-            SizedBox(width: 8),
+            const Icon(Icons.play_arrow, size: 18),
+            const SizedBox(width: 8),
             Text(
-              'TRAINING STARTEN',
-              style: TextStyle(
+              AppLocalizations.of(context)!.btnTrainingStarten,
+              style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.2,
@@ -568,9 +593,9 @@ class _OverviewReadyControls extends StatelessWidget {
               ),
             ),
             icon: const Icon(Icons.check_circle_outline, size: 18),
-            label: const Text(
-              'WORKOUT ABSCHLIESSEN',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+            label: Text(
+              AppLocalizations.of(context)!.btnWorkoutAbschliessen,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
             ),
           ),
         ),
@@ -594,6 +619,7 @@ class _OverviewActiveControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final paper = AppColors.paper;
     return Row(
       children: [
@@ -618,7 +644,7 @@ class _OverviewActiveControls extends StatelessWidget {
                 padding: EdgeInsets.zero,
               ),
               child: Text(
-                isPaused ? '▶ WEITER' : '⏸ PAUSE',
+                isPaused ? l.btnWeiter : l.btnPauseLabel,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
@@ -646,9 +672,9 @@ class _OverviewActiveControls extends StatelessWidget {
                 padding: EdgeInsets.zero,
               ),
               icon: const Icon(Icons.check_circle_outline, size: 18),
-              label: const Text(
-                'FERTIG',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+              label: Text(
+                l.btnFertig,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
               ),
             ),
           ),
@@ -688,6 +714,7 @@ class _HeroExercise extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final paper = AppColors.paper;
     final pre =
         '${exercise.sets} × ${exercise.reps}'
@@ -724,7 +751,7 @@ class _HeroExercise extends StatelessWidget {
         Row(
           children: [
             Text(
-              'ÜBUNG $exerciseIndex / $totalExercises',
+              l.uebungProgress(exerciseIndex, totalExercises),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
@@ -738,7 +765,7 @@ class _HeroExercise extends StatelessWidget {
                 onTap: onDismiss,
                 behavior: HitTestBehavior.opaque,
                 child: Text(
-                  '← Übersicht',
+                  l.heroUebersicht,
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -762,44 +789,48 @@ class _HeroExercise extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 14),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Flexible(
-              child: Text(
-                pre,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: paper.withValues(alpha: 0.70),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 8),
             Text(
-              '·',
+              pre,
               style: TextStyle(
                 fontSize: 14,
-                color: paper.withValues(alpha: 0.20),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: rpeColor.withValues(alpha: 0.9),
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              'RPE ${exercise.targetRpe.toStringAsFixed(exercise.targetRpe % 1 == 0 ? 0 : 1)}',
-              style: TextStyle(
-                fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: paper.withValues(alpha: 0.42),
+                color: paper.withValues(alpha: 0.70),
               ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '·',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: paper.withValues(alpha: 0.20),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: rpeColor.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'RPE ${exercise.targetRpe.toStringAsFixed(exercise.targetRpe % 1 == 0 ? 0 : 1)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: paper.withValues(alpha: 0.42),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -873,6 +904,7 @@ class EmptyHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final paper = AppColors.paper;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -940,8 +972,8 @@ class EmptyHeroCard extends StatelessWidget {
                         ),
                         child: Text(
                           isConnected
-                              ? '○ KEIN AKTIVER BLOCK'
-                              : '○ NICHT VERBUNDEN',
+                              ? l.emptyKeinBlock
+                              : l.emptyNichtVerbunden,
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -964,7 +996,7 @@ class EmptyHeroCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    'DEIN',
+                    l.emptyDein,
                     style: TextStyle(
                       fontSize: 40,
                       height: 0.9,
@@ -974,7 +1006,7 @@ class EmptyHeroCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'ERSTER',
+                    l.emptyErster,
                     style: TextStyle(
                       fontSize: 40,
                       height: 0.9,
@@ -983,9 +1015,9 @@ class EmptyHeroCard extends StatelessWidget {
                       color: paper,
                     ),
                   ),
-                  const Text(
-                    'TAG.',
-                    style: TextStyle(
+                  Text(
+                    l.emptyTag,
+                    style: const TextStyle(
                       fontSize: 40,
                       height: 0.9,
                       fontWeight: FontWeight.w900,
@@ -1004,11 +1036,11 @@ class EmptyHeroCard extends StatelessWidget {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      Expanded(child: _GhostStatTile(label: 'PLANZEIT')),
+                      Expanded(child: _GhostStatTile(label: l.statPlanzeit)),
                       const SizedBox(width: 8),
-                      Expanded(child: _GhostStatTile(label: 'SÄTZE')),
+                      Expanded(child: _GhostStatTile(label: l.heroSaetze)),
                       const SizedBox(width: 8),
-                      Expanded(child: _GhostStatTile(label: 'TAG')),
+                      Expanded(child: _GhostStatTile(label: l.statTagLabel)),
                     ],
                   ),
                   const SizedBox(height: 22),
@@ -1026,14 +1058,14 @@ class EmptyHeroCard extends StatelessWidget {
                           ),
                           padding: EdgeInsets.zero,
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.file_download_outlined, size: 16),
-                            SizedBox(width: 11),
+                            const Icon(Icons.file_download_outlined, size: 16),
+                            const SizedBox(width: 11),
                             Text(
-                              'TRAININGSPLAN LADEN',
-                              style: TextStyle(
+                              l.btnTrainingsplanLaden,
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1.2,
@@ -1060,9 +1092,9 @@ class EmptyHeroCard extends StatelessWidget {
                           ),
                           padding: EdgeInsets.zero,
                         ),
-                        child: const Text(
-                          'COACH VERBINDEN →',
-                          style: TextStyle(
+                        child: Text(
+                          l.btnCoachVerbinden,
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.2,
