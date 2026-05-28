@@ -63,24 +63,13 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.text('Agent Setup'), findsOneWidget);
-    expect(find.text('Self-Hosted T4L Server'), findsOneWidget);
-    expect(find.text('Migrate Data'), findsOneWidget);
-    expect(find.text('Push Context'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Complete Agent Handoff'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Complete Agent Handoff'), findsOneWidget);
-    await tester.tap(find.text('Complete Agent Handoff'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('t4l-server serve'), findsWidgets);
+    expect(find.text('Apple Health'), findsWidgets);
+    expect(find.text('Nicht verbunden'), findsOneWidget);
+    expect(find.text('IN ZWISCHENABLAGE KOPIEREN'), findsOneWidget);
+    expect(find.text('VERBINDEN'), findsOneWidget);
   });
 
-  testWidgets('blocks page shows active block workout previews', (
-    tester,
-  ) async {
+  testWidgets('coach hub shows block banner and segment tabs', (tester) async {
     final controller = FitnessController(store: _WidgetStore());
     await controller.load();
     await tester.pumpWidget(
@@ -96,12 +85,13 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Blocks'));
+    await tester.tap(find.text('Coach'));
     await tester.pumpAndSettle();
 
     expect(find.text('Sample Block'), findsOneWidget);
-    expect(find.text('W1 D1 - Sample A'), findsOneWidget);
-    expect(find.text('W1 D2 - Sample B'), findsOneWidget);
+    expect(find.text('PLAN'), findsOneWidget);
+    expect(find.text('MEMORY'), findsOneWidget);
+    expect(find.text('SYNC'), findsOneWidget);
   });
 
   testWidgets('today workout rows keep long coaching text in details', (
@@ -139,6 +129,57 @@ void main() {
     expect(find.textContaining('This longer note belongs'), findsOneWidget);
     expect(find.byTooltip('Erklärvideo'), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('today workout rows show exercise Apple Health metrics', (
+    tester,
+  ) async {
+    final controller = FitnessController(
+      store: _WidgetStore(_activeWorkoutWithExerciseHealthData()),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('132 bpm'), findsOneWidget);
+    expect(find.text('18 kcal'), findsOneWidget);
+  });
+
+  testWidgets('progress tab shows weekly Apple Health charts', (tester) async {
+    final controller = FitnessController(
+      store: _WidgetStore(_progressHealthData()),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Progress'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CALORIES BURNED'), findsOneWidget);
+    expect(find.text('TRAINING HEART RATE'), findsOneWidget);
+    expect(find.text('270 kcal'), findsWidgets);
+    expect(find.text('128 bpm'), findsOneWidget);
   });
 
   testWidgets('today hero title uses workout title for daily coach plans', (
@@ -241,9 +282,7 @@ void main() {
     },
   );
 
-  testWidgets('coach tab prioritizes setup memory and plan review', (
-    tester,
-  ) async {
+  testWidgets('coach hub memory tab shows memories', (tester) async {
     final controller = FitnessController(store: _WidgetStore());
     await controller.load();
     await tester.pumpWidget(
@@ -262,10 +301,13 @@ void main() {
     await tester.tap(find.text('Coach'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Coach'), findsWidgets);
-    expect(find.text('Plan Review'), findsOneWidget);
-    expect(find.text('Memory Wiki'), findsOneWidget);
-    expect(find.text('Goblet Squat'), findsNothing);
+    expect(find.text('PLAN'), findsOneWidget);
+    expect(find.text('MEMORY'), findsOneWidget);
+
+    await tester.tap(find.text('MEMORY'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('+ Hinzufügen'), findsOneWidget);
   });
 }
 
@@ -349,6 +391,92 @@ FitnessData _longCoachData() {
     createdAt: block.createdAt,
   );
   return base.copyWith(blocks: [updatedBlock], activeBlockId: updatedBlock.id);
+}
+
+FitnessData _activeWorkoutWithExerciseHealthData() {
+  final base = sampleFitnessData();
+  final workout = base.activeBlock!.workouts.first;
+  final exercise = workout.exercises.first;
+  final startedAt = DateTime.now().subtract(const Duration(minutes: 12));
+  final completedAt = DateTime.now().subtract(const Duration(minutes: 8));
+  final activeLog = WorkoutLog(
+    id: 'log-active-health',
+    workoutId: workout.id,
+    title: workout.title,
+    startedAt: startedAt,
+    completedAt: null,
+    readiness: 3,
+    soreness: 2,
+    notes: '',
+    sets: const [],
+    healthWriteStatus: 'live_tracking',
+    exerciseTimings: [
+      ExerciseTiming(
+        exerciseId: exercise.exerciseId,
+        exerciseName: exercise.name,
+        startedAt: startedAt,
+        completedAt: completedAt,
+        healthSnapshot: LiveHealthMetrics(
+          updatedAt: completedAt,
+          sampleCount: 3,
+          heartRateBpm: 132,
+          activeEnergyKcal: 18,
+        ),
+      ),
+    ],
+  );
+  return base.copyWith(logs: [activeLog]);
+}
+
+FitnessData _progressHealthData() {
+  final base = sampleFitnessData();
+  final workout = base.activeBlock!.workouts.first;
+  final now = DateTime.now();
+  final logs = [
+    _completedHealthLog(
+      id: 'progress-health-this-week',
+      workout: workout,
+      startedAt: now.subtract(const Duration(days: 1, hours: 2)),
+      calories: 270,
+      heartRate: 128,
+    ),
+    _completedHealthLog(
+      id: 'progress-health-last-week',
+      workout: workout,
+      startedAt: now.subtract(const Duration(days: 8, hours: 1)),
+      calories: 220,
+      heartRate: 122,
+    ),
+  ];
+  return base.copyWith(logs: logs);
+}
+
+WorkoutLog _completedHealthLog({
+  required String id,
+  required PlannedWorkout workout,
+  required DateTime startedAt,
+  required double calories,
+  required double heartRate,
+}) {
+  final completedAt = startedAt.add(const Duration(minutes: 50));
+  return WorkoutLog(
+    id: id,
+    workoutId: workout.id,
+    title: workout.title,
+    startedAt: startedAt,
+    completedAt: completedAt,
+    readiness: 4,
+    soreness: 2,
+    notes: '',
+    sets: const [],
+    healthWriteStatus: 'matched_apple_health_workout',
+    healthMetrics: LiveHealthMetrics(
+      updatedAt: completedAt,
+      sampleCount: 5,
+      activeEnergyKcal: calories,
+      heartRateBpm: heartRate,
+    ),
+  );
 }
 
 FitnessData _dataWithCompletedFirstWorkoutToday() {

@@ -895,6 +895,978 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Coach-Analyse noch nicht eingetroffen. Exportiere den Tageskontext und warte auf die Antwort.'**
   String get noGuidanceHintMissing;
+
+  /// No description provided for @statusBereit.
+  ///
+  /// In de, this message translates to:
+  /// **'● BEREIT'**
+  String get statusBereit;
+
+  /// No description provided for @statusAktiv.
+  ///
+  /// In de, this message translates to:
+  /// **'● AKTIV'**
+  String get statusAktiv;
+
+  /// No description provided for @statusPause.
+  ///
+  /// In de, this message translates to:
+  /// **'⏸ PAUSE'**
+  String get statusPause;
+
+  /// No description provided for @statusFertig.
+  ///
+  /// In de, this message translates to:
+  /// **'✓ FERTIG'**
+  String get statusFertig;
+
+  /// No description provided for @statusAbgeschlossen.
+  ///
+  /// In de, this message translates to:
+  /// **'✓ ABGESCHLOSSEN'**
+  String get statusAbgeschlossen;
+
+  /// No description provided for @statAktivLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'AKTIV'**
+  String get statAktivLabel;
+
+  /// No description provided for @statRpeAvg.
+  ///
+  /// In de, this message translates to:
+  /// **'RPE ⌀'**
+  String get statRpeAvg;
+
+  /// No description provided for @statPlanzeit.
+  ///
+  /// In de, this message translates to:
+  /// **'PLANZEIT'**
+  String get statPlanzeit;
+
+  /// No description provided for @statTagLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'TAG'**
+  String get statTagLabel;
+
+  /// No description provided for @btnTrainingStarten.
+  ///
+  /// In de, this message translates to:
+  /// **'TRAINING STARTEN'**
+  String get btnTrainingStarten;
+
+  /// No description provided for @btnWorkoutAbschliessen.
+  ///
+  /// In de, this message translates to:
+  /// **'WORKOUT ABSCHLIESSEN'**
+  String get btnWorkoutAbschliessen;
+
+  /// No description provided for @btnWeiter.
+  ///
+  /// In de, this message translates to:
+  /// **'▶ WEITER'**
+  String get btnWeiter;
+
+  /// No description provided for @btnPauseLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'⏸ PAUSE'**
+  String get btnPauseLabel;
+
+  /// No description provided for @heroUebersicht.
+  ///
+  /// In de, this message translates to:
+  /// **'← Übersicht'**
+  String get heroUebersicht;
+
+  /// No description provided for @heroSaetze.
+  ///
+  /// In de, this message translates to:
+  /// **'SÄTZE'**
+  String get heroSaetze;
+
+  /// No description provided for @emptyKeinBlock.
+  ///
+  /// In de, this message translates to:
+  /// **'○ KEIN AKTIVER BLOCK'**
+  String get emptyKeinBlock;
+
+  /// No description provided for @emptyNichtVerbunden.
+  ///
+  /// In de, this message translates to:
+  /// **'○ NICHT VERBUNDEN'**
+  String get emptyNichtVerbunden;
+
+  /// No description provided for @emptyDein.
+  ///
+  /// In de, this message translates to:
+  /// **'DEIN'**
+  String get emptyDein;
+
+  /// No description provided for @emptyErster.
+  ///
+  /// In de, this message translates to:
+  /// **'ERSTER'**
+  String get emptyErster;
+
+  /// No description provided for @emptyTag.
+  ///
+  /// In de, this message translates to:
+  /// **'TAG.'**
+  String get emptyTag;
+
+  /// No description provided for @btnTrainingsplanLaden.
+  ///
+  /// In de, this message translates to:
+  /// **'TRAININGSPLAN LADEN'**
+  String get btnTrainingsplanLaden;
+
+  /// No description provided for @btnCoachVerbinden.
+  ///
+  /// In de, this message translates to:
+  /// **'COACH VERBINDEN →'**
+  String get btnCoachVerbinden;
+
+  /// No description provided for @rpeLegendWarmup.
+  ///
+  /// In de, this message translates to:
+  /// **'Warm-up'**
+  String get rpeLegendWarmup;
+
+  /// No description provided for @rpeLegendModerat.
+  ///
+  /// In de, this message translates to:
+  /// **'Moderat'**
+  String get rpeLegendModerat;
+
+  /// No description provided for @rpeLegendHart.
+  ///
+  /// In de, this message translates to:
+  /// **'Hart'**
+  String get rpeLegendHart;
+
+  /// No description provided for @btnSatzLoggen.
+  ///
+  /// In de, this message translates to:
+  /// **'Satz loggen'**
+  String get btnSatzLoggen;
+
+  /// No description provided for @blockAbgeschlossen.
+  ///
+  /// In de, this message translates to:
+  /// **'Block abgeschlossen'**
+  String get blockAbgeschlossen;
+
+  /// No description provided for @emptyAlleWorkoutsErledigt.
+  ///
+  /// In de, this message translates to:
+  /// **'Alle Workouts in diesem Block sind erledigt'**
+  String get emptyAlleWorkoutsErledigt;
+
+  /// No description provided for @emptyPlanErscheintHier.
+  ///
+  /// In de, this message translates to:
+  /// **'Dein Plan erscheint hier'**
+  String get emptyPlanErscheintHier;
+
+  /// No description provided for @fuelDiaryTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'FUEL DIARY'**
+  String get fuelDiaryTitle;
+
+  /// No description provided for @fuelDiarySentLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'SENT'**
+  String get fuelDiarySentLabel;
+
+  /// No description provided for @fuelQualityLevel.
+  ///
+  /// In de, this message translates to:
+  /// **'Fuel Quality Level'**
+  String get fuelQualityLevel;
+
+  /// No description provided for @fuelScalePoor.
+  ///
+  /// In de, this message translates to:
+  /// **'1 Schlecht'**
+  String get fuelScalePoor;
+
+  /// No description provided for @fuelScalePerfect.
+  ///
+  /// In de, this message translates to:
+  /// **'10 Perfekt'**
+  String get fuelScalePerfect;
+
+  /// No description provided for @fuelDiaryHint.
+  ///
+  /// In de, this message translates to:
+  /// **'Was hast du gegessen oder getrunken?'**
+  String get fuelDiaryHint;
+
+  /// No description provided for @fuelDiarySending.
+  ///
+  /// In de, this message translates to:
+  /// **'Wird gesendet...'**
+  String get fuelDiarySending;
+
+  /// No description provided for @fuelDiaryUpdateCoach.
+  ///
+  /// In de, this message translates to:
+  /// **'Update Coach'**
+  String get fuelDiaryUpdateCoach;
+
+  /// No description provided for @fuelDiarySendToCoach.
+  ///
+  /// In de, this message translates to:
+  /// **'An Coach senden'**
+  String get fuelDiarySendToCoach;
+
+  /// No description provided for @fuelDiaryEmptyHint.
+  ///
+  /// In de, this message translates to:
+  /// **'Logge was du gegessen hast, wie du dich fühlst, Supplements, Wasser — alles was Ernährung betrifft. Sende alles an deinen Coach wenn bereit.'**
+  String get fuelDiaryEmptyHint;
+
+  /// No description provided for @aktiverBlock.
+  ///
+  /// In de, this message translates to:
+  /// **'AKTIVER BLOCK'**
+  String get aktiverBlock;
+
+  /// No description provided for @sessionsLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'SESSIONS'**
+  String get sessionsLabel;
+
+  /// No description provided for @coachSegmentPlan.
+  ///
+  /// In de, this message translates to:
+  /// **'PLAN'**
+  String get coachSegmentPlan;
+
+  /// No description provided for @coachSegmentMemory.
+  ///
+  /// In de, this message translates to:
+  /// **'MEMORY'**
+  String get coachSegmentMemory;
+
+  /// No description provided for @coachSegmentSync.
+  ///
+  /// In de, this message translates to:
+  /// **'SYNC'**
+  String get coachSegmentSync;
+
+  /// No description provided for @verlauf.
+  ///
+  /// In de, this message translates to:
+  /// **'VERLAUF'**
+  String get verlauf;
+
+  /// No description provided for @nochKeineSessions.
+  ///
+  /// In de, this message translates to:
+  /// **'Noch keine Sessions abgeschlossen.'**
+  String get nochKeineSessions;
+
+  /// No description provided for @naechsteSession.
+  ///
+  /// In de, this message translates to:
+  /// **'NÄCHSTE SESSION'**
+  String get naechsteSession;
+
+  /// No description provided for @wirdHeuteAbendGeneriert.
+  ///
+  /// In de, this message translates to:
+  /// **'Wird heute Abend generiert'**
+  String get wirdHeuteAbendGeneriert;
+
+  /// No description provided for @verfuegbarNach2100.
+  ///
+  /// In de, this message translates to:
+  /// **'Verfügbar nach 21:00 Uhr'**
+  String get verfuegbarNach2100;
+
+  /// No description provided for @coachNotizLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'COACH NOTIZ'**
+  String get coachNotizLabel;
+
+  /// No description provided for @workoutStarten.
+  ///
+  /// In de, this message translates to:
+  /// **'Workout starten'**
+  String get workoutStarten;
+
+  /// No description provided for @serverVerbunden.
+  ///
+  /// In de, this message translates to:
+  /// **'Server verbunden'**
+  String get serverVerbunden;
+
+  /// No description provided for @keinServerKonfiguriert.
+  ///
+  /// In de, this message translates to:
+  /// **'Kein Server konfiguriert'**
+  String get keinServerKonfiguriert;
+
+  /// No description provided for @syncEinstellungen.
+  ///
+  /// In de, this message translates to:
+  /// **'⚙ Einstellungen'**
+  String get syncEinstellungen;
+
+  /// No description provided for @syncAktionen.
+  ///
+  /// In de, this message translates to:
+  /// **'SYNC-AKTIONEN'**
+  String get syncAktionen;
+
+  /// No description provided for @contextPushen.
+  ///
+  /// In de, this message translates to:
+  /// **'Context pushen'**
+  String get contextPushen;
+
+  /// No description provided for @contextPushenSub.
+  ///
+  /// In de, this message translates to:
+  /// **'Athletenprofil, Block & Logs an Coach senden'**
+  String get contextPushenSub;
+
+  /// No description provided for @ergebnisseAbrufen.
+  ///
+  /// In de, this message translates to:
+  /// **'Ergebnisse abrufen'**
+  String get ergebnisseAbrufen;
+
+  /// No description provided for @ergebnisseAbrufenSub.
+  ///
+  /// In de, this message translates to:
+  /// **'Neuen Trainingsplan oder Coach-Feedback laden'**
+  String get ergebnisseAbrufenSub;
+
+  /// No description provided for @serverConfigHint.
+  ///
+  /// In de, this message translates to:
+  /// **'Server-Konfiguration & Agent Handoff → Einstellungen'**
+  String get serverConfigHint;
+
+  /// No description provided for @syncErledigt.
+  ///
+  /// In de, this message translates to:
+  /// **'Erledigt'**
+  String get syncErledigt;
+
+  /// No description provided for @memFilterAlle.
+  ///
+  /// In de, this message translates to:
+  /// **'Alle'**
+  String get memFilterAlle;
+
+  /// No description provided for @memFilterMemories.
+  ///
+  /// In de, this message translates to:
+  /// **'Memories'**
+  String get memFilterMemories;
+
+  /// No description provided for @memFilterConstraints.
+  ///
+  /// In de, this message translates to:
+  /// **'Constraints'**
+  String get memFilterConstraints;
+
+  /// No description provided for @keineEintraege.
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Einträge'**
+  String get keineEintraege;
+
+  /// No description provided for @agentLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'AGENT'**
+  String get agentLabel;
+
+  /// No description provided for @ichLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'ICH'**
+  String get ichLabel;
+
+  /// No description provided for @vonDirLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'von dir'**
+  String get vonDirLabel;
+
+  /// No description provided for @coachEquals.
+  ///
+  /// In de, this message translates to:
+  /// **'Coach'**
+  String get coachEquals;
+
+  /// No description provided for @memHinzufuegen.
+  ///
+  /// In de, this message translates to:
+  /// **'+ Hinzufügen'**
+  String get memHinzufuegen;
+
+  /// No description provided for @constraintLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'CONSTRAINT'**
+  String get constraintLabel;
+
+  /// No description provided for @memoryLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'MEMORY'**
+  String get memoryLabel;
+
+  /// No description provided for @fortschrittStartetHier.
+  ///
+  /// In de, this message translates to:
+  /// **'Dein Fortschritt startet hier'**
+  String get fortschrittStartetHier;
+
+  /// No description provided for @fortschrittStartetHierSub.
+  ///
+  /// In de, this message translates to:
+  /// **'Schliesse dein erstes Workout ab und sieh wie sich deine Kraft, dein Volumen und deine Readiness entwickeln.'**
+  String get fortschrittStartetHierSub;
+
+  /// No description provided for @wasErwartetDich.
+  ///
+  /// In de, this message translates to:
+  /// **'WAS DICH ERWARTET'**
+  String get wasErwartetDich;
+
+  /// No description provided for @volumenProWoche.
+  ///
+  /// In de, this message translates to:
+  /// **'VOLUMEN / WOCHE'**
+  String get volumenProWoche;
+
+  /// No description provided for @volumePreviewSub.
+  ///
+  /// In de, this message translates to:
+  /// **'Dein wöchentliches Trainingsvolumen als Balkendiagramm mit Trend und Zuwachs.'**
+  String get volumePreviewSub;
+
+  /// No description provided for @staerkePRsTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'Stärke-PRs'**
+  String get staerkePRsTitle;
+
+  /// No description provided for @staerkePRsSub.
+  ///
+  /// In de, this message translates to:
+  /// **'Deine besten Gewichte pro Übung — mit Delta-Badge bei neuem Rekord.'**
+  String get staerkePRsSub;
+
+  /// No description provided for @bereitschaftErschoepfung.
+  ///
+  /// In de, this message translates to:
+  /// **'Bereitschaft & Erschöpfung'**
+  String get bereitschaftErschoepfung;
+
+  /// No description provided for @bereitschaftErschoepfungSub.
+  ///
+  /// In de, this message translates to:
+  /// **'Readiness- und Soreness-Verlauf der letzten Sessions als Sparkline.'**
+  String get bereitschaftErschoepfungSub;
+
+  /// No description provided for @volumeChartPlaceholder.
+  ///
+  /// In de, this message translates to:
+  /// **'Hier erscheint dein Volumen-Chart'**
+  String get volumeChartPlaceholder;
+
+  /// No description provided for @nochKeineDaten.
+  ///
+  /// In de, this message translates to:
+  /// **'Noch keine Daten'**
+  String get nochKeineDaten;
+
+  /// No description provided for @dieseWoche.
+  ///
+  /// In de, this message translates to:
+  /// **'Diese Woche'**
+  String get dieseWoche;
+
+  /// No description provided for @avgProWoche.
+  ///
+  /// In de, this message translates to:
+  /// **'Ø / Woche'**
+  String get avgProWoche;
+
+  /// No description provided for @zuwachs.
+  ///
+  /// In de, this message translates to:
+  /// **'Zuwachs'**
+  String get zuwachs;
+
+  /// No description provided for @staerkePRsLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'STÄRKE-PRS'**
+  String get staerkePRsLabel;
+
+  /// No description provided for @weniger.
+  ///
+  /// In de, this message translates to:
+  /// **'Weniger'**
+  String get weniger;
+
+  /// No description provided for @prHinzufuegen.
+  ///
+  /// In de, this message translates to:
+  /// **'+ PR hinzufügen'**
+  String get prHinzufuegen;
+
+  /// No description provided for @prHinzufuegenTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'PR hinzufügen'**
+  String get prHinzufuegenTitle;
+
+  /// No description provided for @prBearbeitenTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'PR bearbeiten'**
+  String get prBearbeitenTitle;
+
+  /// No description provided for @uebungLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Übung'**
+  String get uebungLabel;
+
+  /// No description provided for @gewichtKgLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Gewicht (kg)'**
+  String get gewichtKgLabel;
+
+  /// No description provided for @gewichtKgHint.
+  ///
+  /// In de, this message translates to:
+  /// **'z.B. 100'**
+  String get gewichtKgHint;
+
+  /// No description provided for @vorherigesGewichtLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Vorheriges Gewicht (kg)'**
+  String get vorherigesGewichtLabel;
+
+  /// No description provided for @optionalHint.
+  ///
+  /// In de, this message translates to:
+  /// **'optional'**
+  String get optionalHint;
+
+  /// No description provided for @imCoachKontextSenden.
+  ///
+  /// In de, this message translates to:
+  /// **'Im Coach-Kontext senden'**
+  String get imCoachKontextSenden;
+
+  /// No description provided for @imCoachKontextSendenSub.
+  ///
+  /// In de, this message translates to:
+  /// **'Wird beim nächsten Sync an den Coach übermittelt'**
+  String get imCoachKontextSendenSub;
+
+  /// No description provided for @dauerLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Dauer'**
+  String get dauerLabel;
+
+  /// No description provided for @heuteLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'HEUTE'**
+  String get heuteLabel;
+
+  /// No description provided for @zielLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Ziel:'**
+  String get zielLabel;
+
+  /// No description provided for @workoutSummaryTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'Workout-Zusammenfassung'**
+  String get workoutSummaryTitle;
+
+  /// No description provided for @workoutNotFound.
+  ///
+  /// In de, this message translates to:
+  /// **'Workout nicht gefunden'**
+  String get workoutNotFound;
+
+  /// No description provided for @uebungenUeberpruefen.
+  ///
+  /// In de, this message translates to:
+  /// **'Übungen überprüfen'**
+  String get uebungenUeberpruefen;
+
+  /// No description provided for @keineUebungenAufgezeichnet.
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Übungen aufgezeichnet.'**
+  String get keineUebungenAufgezeichnet;
+
+  /// No description provided for @satzHinzufuegen.
+  ///
+  /// In de, this message translates to:
+  /// **'Satz hinzufügen'**
+  String get satzHinzufuegen;
+
+  /// No description provided for @notizFuerCoach.
+  ///
+  /// In de, this message translates to:
+  /// **'Notiz für den Coach…'**
+  String get notizFuerCoach;
+
+  /// No description provided for @nachbericht.
+  ///
+  /// In de, this message translates to:
+  /// **'NACHBERICHT'**
+  String get nachbericht;
+
+  /// No description provided for @readinessLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Readiness'**
+  String get readinessLabel;
+
+  /// No description provided for @sorenessLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Soreness'**
+  String get sorenessLabel;
+
+  /// No description provided for @readinessSehrNiedrig.
+  ///
+  /// In de, this message translates to:
+  /// **'Sehr niedrig'**
+  String get readinessSehrNiedrig;
+
+  /// No description provided for @readinessNiedrig.
+  ///
+  /// In de, this message translates to:
+  /// **'Niedrig'**
+  String get readinessNiedrig;
+
+  /// No description provided for @readinessOk.
+  ///
+  /// In de, this message translates to:
+  /// **'OK'**
+  String get readinessOk;
+
+  /// No description provided for @readinessGut.
+  ///
+  /// In de, this message translates to:
+  /// **'Gut'**
+  String get readinessGut;
+
+  /// No description provided for @readinessTop.
+  ///
+  /// In de, this message translates to:
+  /// **'Top'**
+  String get readinessTop;
+
+  /// No description provided for @sorenessKeine.
+  ///
+  /// In de, this message translates to:
+  /// **'Keine'**
+  String get sorenessKeine;
+
+  /// No description provided for @sorenessLeicht.
+  ///
+  /// In de, this message translates to:
+  /// **'Leicht'**
+  String get sorenessLeicht;
+
+  /// No description provided for @sorenessModerat.
+  ///
+  /// In de, this message translates to:
+  /// **'Moderat'**
+  String get sorenessModerat;
+
+  /// No description provided for @sorenessStark.
+  ///
+  /// In de, this message translates to:
+  /// **'Stark'**
+  String get sorenessStark;
+
+  /// No description provided for @sorenessSehrStark.
+  ///
+  /// In de, this message translates to:
+  /// **'Sehr stark'**
+  String get sorenessSehrStark;
+
+  /// No description provided for @allgemeineNotizenHint.
+  ///
+  /// In de, this message translates to:
+  /// **'Allgemeine Notizen für den Coach — Technik, Energie, Anpassungen…'**
+  String get allgemeineNotizenHint;
+
+  /// No description provided for @gesendetLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'GESENDET'**
+  String get gesendetLabel;
+
+  /// No description provided for @zumCoachSenden.
+  ///
+  /// In de, this message translates to:
+  /// **'ZUM COACH SENDEN'**
+  String get zumCoachSenden;
+
+  /// No description provided for @conditioningLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'CONDITIONING'**
+  String get conditioningLabel;
+
+  /// No description provided for @selfHostedServer.
+  ///
+  /// In de, this message translates to:
+  /// **'Self-Hosted T4L Server'**
+  String get selfHostedServer;
+
+  /// No description provided for @configuredLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Konfiguriert'**
+  String get configuredLabel;
+
+  /// No description provided for @optionalLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Optional'**
+  String get optionalLabel;
+
+  /// No description provided for @serverDescription.
+  ///
+  /// In de, this message translates to:
+  /// **'Verbinde dich mit deinem eigenen T4L Server. Das Telefon bleibt die Quelle der Wahrheit, und neue Pläne erfordern deine Import-Bestätigung.'**
+  String get serverDescription;
+
+  /// No description provided for @noServerSyncYet.
+  ///
+  /// In de, this message translates to:
+  /// **'Noch kein Server-Sync'**
+  String get noServerSyncYet;
+
+  /// No description provided for @lastServerSync.
+  ///
+  /// In de, this message translates to:
+  /// **'Letzter Server-Sync:'**
+  String get lastServerSync;
+
+  /// No description provided for @rpeDescription6.
+  ///
+  /// In de, this message translates to:
+  /// **'Sehr komfortabel — 4 Wdhl. Reserve'**
+  String get rpeDescription6;
+
+  /// No description provided for @rpeDescription7.
+  ///
+  /// In de, this message translates to:
+  /// **'Kontrolliert — 3 Wdhl. Reserve'**
+  String get rpeDescription7;
+
+  /// No description provided for @rpeDescription8.
+  ///
+  /// In de, this message translates to:
+  /// **'Hartes Set — 2 Wdhl. Reserve'**
+  String get rpeDescription8;
+
+  /// No description provided for @rpeDescription9.
+  ///
+  /// In de, this message translates to:
+  /// **'Sehr hart — 1 Wdhl. Reserve'**
+  String get rpeDescription9;
+
+  /// No description provided for @rpeDescription10.
+  ///
+  /// In de, this message translates to:
+  /// **'Max Effort — alles gegeben'**
+  String get rpeDescription10;
+
+  /// No description provided for @gesamt.
+  ///
+  /// In de, this message translates to:
+  /// **'Gesamt'**
+  String get gesamt;
+
+  /// No description provided for @avgBereitschaft.
+  ///
+  /// In de, this message translates to:
+  /// **'Ø Bereitschaft'**
+  String get avgBereitschaft;
+
+  /// No description provided for @avgErschoepfung.
+  ///
+  /// In de, this message translates to:
+  /// **'Ø Erschöpfung'**
+  String get avgErschoepfung;
+
+  /// No description provided for @bereitschaftLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Bereitschaft'**
+  String get bereitschaftLabel;
+
+  /// No description provided for @erschoepfungLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'Erschöpfung'**
+  String get erschoepfungLabel;
+
+  /// No description provided for @heroTag.
+  ///
+  /// In de, this message translates to:
+  /// **'Tag {n}'**
+  String heroTag(int n);
+
+  /// No description provided for @blockAbgeschlossenInfo.
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Workouts im Block. Details bleiben in Blocks verfügbar.'**
+  String blockAbgeschlossenInfo(int count);
+
+  /// No description provided for @sessionsCount.
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Sessions'**
+  String sessionsCount(int count);
+
+  /// No description provided for @alleSessions.
+  ///
+  /// In de, this message translates to:
+  /// **'Alle {count} Sessions'**
+  String alleSessions(int count);
+
+  /// No description provided for @sessionNumber.
+  ///
+  /// In de, this message translates to:
+  /// **'Session {n}'**
+  String sessionNumber(int n);
+
+  /// No description provided for @exerciseCount.
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Übungen'**
+  String exerciseCount(int count);
+
+  /// No description provided for @imKontext.
+  ///
+  /// In de, this message translates to:
+  /// **'{count} im Kontext'**
+  String imKontext(int count);
+
+  /// No description provided for @mehrAnzeigen.
+  ///
+  /// In de, this message translates to:
+  /// **'+{count} mehr'**
+  String mehrAnzeigen(int count);
+
+  /// No description provided for @bereitschaftSessions.
+  ///
+  /// In de, this message translates to:
+  /// **'BEREITSCHAFT ({count} SESSIONS)'**
+  String bereitschaftSessions(int count);
+
+  /// No description provided for @logSaetze.
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Sätze'**
+  String logSaetze(int count);
+
+  /// No description provided for @wdhlCount.
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Wdhl.'**
+  String wdhlCount(int count);
+
+  /// No description provided for @satzVonTotal.
+  ///
+  /// In de, this message translates to:
+  /// **'Satz {current} / {total}'**
+  String satzVonTotal(int current, int total);
+
+  /// No description provided for @viewWeekly.
+  ///
+  /// In de, this message translates to:
+  /// **'Woche'**
+  String get viewWeekly;
+
+  /// No description provided for @viewDaily.
+  ///
+  /// In de, this message translates to:
+  /// **'Tag'**
+  String get viewDaily;
+
+  /// No description provided for @volumenProTag.
+  ///
+  /// In de, this message translates to:
+  /// **'VOLUMEN / TAG'**
+  String get volumenProTag;
+
+  /// No description provided for @heute.
+  ///
+  /// In de, this message translates to:
+  /// **'Heute'**
+  String get heute;
+
+  /// No description provided for @avgProTag.
+  ///
+  /// In de, this message translates to:
+  /// **'Ø / Tag'**
+  String get avgProTag;
+
+  /// No description provided for @dialogSetDuration.
+  ///
+  /// In de, this message translates to:
+  /// **'Dauer'**
+  String get dialogSetDuration;
+
+  /// No description provided for @goalsLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'ZIELE'**
+  String get goalsLabel;
+
+  /// No description provided for @yesterdayLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'GESTERN'**
+  String get yesterdayLabel;
+
+  /// No description provided for @tipsLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'BEACHTEN'**
+  String get tipsLabel;
+
+  /// No description provided for @daysLeft.
+  ///
+  /// In de, this message translates to:
+  /// **'{count} Tage übrig'**
+  String daysLeft(int count);
 }
 
 class _AppLocalizationsDelegate

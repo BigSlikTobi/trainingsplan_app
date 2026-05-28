@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app.dart';
 import '../design/design_tokens.dart';
+import '../l10n/app_localizations.dart';
 import '../models/fitness_models.dart';
 import '../state/fitness_controller.dart';
 import 'set_log_modal.dart';
@@ -12,12 +13,13 @@ class WorkoutSummaryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text(
-          'Workout Summary',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        title: Text(
+          l.workoutSummaryTitle,
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
       body: SafeArea(
@@ -74,10 +76,11 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final controller = FitnessScope.of(context);
     final log = _findLog(controller);
     if (log == null) {
-      return const Center(child: Text('Workout not found'));
+      return Center(child: Text(l.workoutNotFound));
     }
     if (!_seeded) {
       _readiness = log.readiness;
@@ -96,9 +99,9 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
     // Try to find the associated block for the banner
     final block = controller.activeBlock;
     final workout = block?.workouts.cast<PlannedWorkout?>().firstWhere(
-          (w) => w!.id == log.workoutId,
-          orElse: () => block.workouts.isNotEmpty ? block.workouts.first : null,
-        );
+      (w) => w!.id == log.workoutId,
+      orElse: () => block.workouts.isNotEmpty ? block.workouts.first : null,
+    );
     final completedInBlock = block == null
         ? 0
         : controller.data.logs
@@ -127,7 +130,7 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
             avgRpe: avgRpe,
           ),
           const SizedBox(height: 20),
-          _SectionLabel('Übungen überprüfen'),
+          _SectionLabel(l.uebungenUeberpruefen),
           const SizedBox(height: 10),
           ...log.exerciseTimings.map((t) {
             final pairs = <_IndexedSet>[];
@@ -151,7 +154,7 @@ class _WorkoutSummaryViewState extends State<WorkoutSummaryView> {
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
-                'Keine Übungen aufgezeichnet.',
+                l.keineUebungenAufgezeichnet,
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.paper.withValues(alpha: 0.28),
@@ -212,9 +215,10 @@ class _PostWorkoutBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final paper = AppColors.paper;
     final eyebrow = block != null && workout != null
-        ? '${block!.style.label} · Tag ${workout!.day} · Woche ${workout!.week}'
+        ? '${block!.style.label} · ${l.heroTag(workout!.day)} · ${l.woche(workout!.week)}'
               .toUpperCase()
         : '';
 
@@ -264,10 +268,7 @@ class _PostWorkoutBanner extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const _StatusPill(
-                        label: '✓ FERTIG',
-                        color: AppColors.sage,
-                      ),
+                      _StatusPill(label: l.statusFertig, color: AppColors.sage),
                       const Spacer(),
                       Text(
                         '$blockProgress% Block',
@@ -317,18 +318,21 @@ class _PostWorkoutBanner extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _BannerStat(
-                          label: 'DAUER',
+                          label: l.dauerLabel.toUpperCase(),
                           value: _fmtDuration(activeSeconds),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _BannerStat(label: 'SÄTZE', value: '$totalSets'),
+                        child: _BannerStat(
+                          label: l.heroSaetze,
+                          value: '$totalSets',
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: _BannerStat(
-                          label: 'Ø RPE',
+                          label: l.statRpeAvg,
                           value: avgRpe?.toStringAsFixed(1) ?? '—',
                         ),
                       ),
@@ -499,6 +503,7 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final controller = FitnessScope.of(context);
     final dur = widget.timing.durationSeconds;
     final durText = dur == null ? '--' : _fmtDuration(dur);
@@ -533,6 +538,13 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
                           color: AppColors.paper,
                         ),
                       ),
+                      if (widget.timing.healthSnapshot?.hasAnyValue ??
+                          false) ...[
+                        const SizedBox(height: 7),
+                        _ExerciseHealthSummary(
+                          metrics: widget.timing.healthSnapshot!,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -586,9 +598,9 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  const Text(
-                    'Satz hinzufügen',
-                    style: TextStyle(
+                  Text(
+                    l.satzHinzufuegen,
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.sage,
@@ -619,7 +631,7 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   filled: false,
-                  hintText: 'Notiz für den Coach…',
+                  hintText: l.notizFuerCoach,
                   hintStyle: TextStyle(
                     fontSize: 13,
                     color: AppColors.paper.withValues(alpha: 0.28),
@@ -639,6 +651,7 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
     FitnessController controller,
     _IndexedSet pair,
   ) async {
+    final l = AppLocalizations.of(context)!;
     final sameExercise = widget.indexedSets.map((p) => p.set).toList();
     final result = await showSetLogModal(
       context,
@@ -654,7 +667,7 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
           .where((s) => s.setNumber != pair.set.setNumber)
           .toList(),
       allowDelete: true,
-      saveLabel: 'Speichern',
+      saveLabel: l.btnSpeichern,
     );
     if (result == null) return;
     if (result.delete) {
@@ -671,6 +684,86 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
   }
 }
 
+class _ExerciseHealthSummary extends StatelessWidget {
+  const _ExerciseHealthSummary({required this.metrics});
+
+  final LiveHealthMetrics metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[
+      if (metrics.heartRateBpm != null)
+        _HealthMetricChip(
+          icon: Icons.favorite,
+          text: '${_fmtNum(metrics.heartRateBpm!)} bpm',
+          color: AppColors.coral,
+        ),
+      if (metrics.activeEnergyKcal != null)
+        _HealthMetricChip(
+          icon: Icons.local_fire_department,
+          text: '${_fmtNum(metrics.activeEnergyKcal!)} kcal',
+          color: AppColors.gold,
+        ),
+      if (metrics.steps != null)
+        _HealthMetricChip(
+          icon: Icons.directions_walk,
+          text: '${metrics.steps} steps',
+          color: AppColors.sage,
+        ),
+      if (metrics.bloodOxygenPercent != null)
+        _HealthMetricChip(
+          icon: Icons.water_drop,
+          text: '${_fmtNum(metrics.bloodOxygenPercent!)}%',
+          color: AppColors.sage,
+        ),
+    ];
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Wrap(spacing: 6, runSpacing: 5, children: chips);
+  }
+}
+
+class _HealthMetricChip extends StatelessWidget {
+  const _HealthMetricChip({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              height: 1,
+              fontWeight: FontWeight.w800,
+              color: AppColors.paper.withValues(alpha: 0.72),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SetRow extends StatelessWidget {
   const _SetRow({
     required this.set,
@@ -684,7 +777,9 @@ class _SetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final rpeColor = _rpeColorForValue(set.rpe);
+    final isTime = set.isTimeBased;
     final weightText = set.weightKg == 0
         ? ''
         : ' · ${_fmtNum(set.weightKg)} kg';
@@ -711,29 +806,38 @@ class _SetRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '${set.reps} Wdhl.',
+              child: isTime
+                  ? Text(
+                      _fmtDurationSummary(set.durationSeconds!),
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppColors.paper,
                       ),
-                    ),
-                    if (weightText.isNotEmpty)
+                    )
+                  : Text.rich(
                       TextSpan(
-                        text: weightText,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.paper.withValues(alpha: 0.48),
-                        ),
+                        children: [
+                          TextSpan(
+                            text: l.wdhlCount(set.reps),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.paper,
+                            ),
+                          ),
+                          if (weightText.isNotEmpty)
+                            TextSpan(
+                              text: weightText,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.paper.withValues(alpha: 0.48),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
+                    ),
             ),
             Container(
               width: 6,
@@ -782,25 +886,27 @@ class _ReflectionCard extends StatelessWidget {
   final ValueChanged<int> onReadiness;
   final ValueChanged<int> onSoreness;
 
-  static const _readinessLabels = [
+  List<String> _readinessLabels(AppLocalizations l) => [
     '—',
-    'Sehr niedrig',
-    'Niedrig',
-    'OK',
-    'Gut',
-    'Top',
+    l.readinessSehrNiedrig,
+    l.readinessNiedrig,
+    l.readinessOk,
+    l.readinessGut,
+    l.readinessTop,
   ];
-  static const _sorenessLabels = [
+
+  List<String> _sorenessLabels(AppLocalizations l) => [
     '—',
-    'Keine',
-    'Leicht',
-    'Moderat',
-    'Stark',
-    'Sehr stark',
+    l.sorenessKeine,
+    l.sorenessLeicht,
+    l.sorenessModerat,
+    l.sorenessStark,
+    l.sorenessSehrStark,
   ];
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final border = AppColors.paper.withValues(alpha: 0.06);
     return Container(
       decoration: BoxDecoration(
@@ -821,7 +927,7 @@ class _ReflectionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'NACHBERICHT',
+                  l.nachbericht,
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -831,16 +937,16 @@ class _ReflectionCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 _DotScaleRow(
-                  label: 'Readiness',
-                  description: _readinessLabels[readiness.clamp(0, 5)],
+                  label: l.readinessLabel,
+                  description: _readinessLabels(l)[readiness.clamp(0, 5)],
                   value: readiness,
                   color: AppColors.sage,
                   onChanged: onReadiness,
                 ),
                 const SizedBox(height: 16),
                 _DotScaleRow(
-                  label: 'Soreness',
-                  description: _sorenessLabels[soreness.clamp(0, 5)],
+                  label: l.sorenessLabel,
+                  description: _sorenessLabels(l)[soreness.clamp(0, 5)],
                   value: soreness,
                   color: AppColors.gold,
                   onChanged: onSoreness,
@@ -866,8 +972,7 @@ class _ReflectionCard extends StatelessWidget {
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 filled: false,
-                hintText:
-                    'Allgemeine Notizen für den Coach — Technik, Energie, Anpassungen…',
+                hintText: l.allgemeineNotizenHint,
                 hintStyle: TextStyle(
                   fontSize: 13,
                   color: AppColors.paper.withValues(alpha: 0.28),
@@ -1002,6 +1107,7 @@ class _SendButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     if (sent) {
       return Container(
         height: 56,
@@ -1010,14 +1116,14 @@ class _SendButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.sage.withValues(alpha: 0.30)),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.check, color: AppColors.sage, size: 18),
-            SizedBox(width: 10),
+            const Icon(Icons.check, color: AppColors.sage, size: 18),
+            const SizedBox(width: 10),
             Text(
-              'GESENDET',
-              style: TextStyle(
+              l.gesendetLabel,
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.0,
@@ -1041,14 +1147,14 @@ class _SendButton extends StatelessWidget {
           ),
           padding: EdgeInsets.zero,
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.send, size: 16),
-            SizedBox(width: 10),
+            const Icon(Icons.send, size: 16),
+            const SizedBox(width: 10),
             Text(
-              'ZUM COACH SENDEN',
-              style: TextStyle(
+              l.zumCoachSenden,
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.0,
@@ -1082,4 +1188,10 @@ Color _rpeColorForValue(double rpe) {
   if (rpe <= 4) return AppColors.sage;
   if (rpe <= 6) return AppColors.gold;
   return AppColors.coral;
+}
+
+String _fmtDurationSummary(int totalSeconds) {
+  final m = totalSeconds ~/ 60;
+  final s = totalSeconds % 60;
+  return s == 0 ? '$m min' : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }

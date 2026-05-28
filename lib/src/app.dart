@@ -71,11 +71,11 @@ class _T4LTrainerAppState extends State<T4LTrainerApp>
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       localeResolutionCallback: (locale, supportedLocales) {
-        if (locale == null) return const Locale('de');
+        if (locale == null) return const Locale('en');
         for (final supported in supportedLocales) {
           if (supported.languageCode == locale.languageCode) return supported;
         }
-        return const Locale('de');
+        return const Locale('en');
       },
       theme: ThemeData(
         useMaterial3: true,

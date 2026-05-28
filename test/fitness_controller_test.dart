@@ -307,6 +307,21 @@ void main() {
     },
   );
 
+  test('server result check stays quiet when there are no results', () async {
+    final store = _MemoryStore()
+      ..bridgeConfig = const LocalBridgeConfig(
+        baseUrl: 'http://127.0.0.1:8787',
+        token: '123-456',
+      );
+    final bridge = _ResultBridgeService(pendingKinds: const [], results: {});
+    final controller = FitnessController(store: store, bridge: bridge);
+    await controller.load();
+
+    await controller.pullBridgeResults();
+
+    expect(controller.status, isEmpty);
+  });
+
   test(
     'server migration uploads full snapshot without mutating phone data',
     () async {

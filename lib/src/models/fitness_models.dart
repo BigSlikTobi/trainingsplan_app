@@ -28,6 +28,8 @@ enum TrainingStyle {
   final String description;
 }
 
+enum TrackingMode { weightAndReps, repsOnly, timeOnly }
+
 enum MemoryCategory {
   training('Training'),
   form('Form'),
@@ -275,6 +277,8 @@ class ExercisePrescription {
     required this.targetRpe,
     required this.restSeconds,
     required this.coachCue,
+    this.trackingMode = TrackingMode.weightAndReps,
+    this.targetDurationSeconds,
     this.loadLabel,
     this.primaryCue,
     this.detailNote,
@@ -290,6 +294,8 @@ class ExercisePrescription {
   final double targetRpe;
   final int restSeconds;
   final String coachCue;
+  final TrackingMode trackingMode;
+  final int? targetDurationSeconds;
   final String? loadLabel;
   final String? primaryCue;
   final String? detailNote;
@@ -321,6 +327,10 @@ class ExercisePrescription {
     'targetRpe': targetRpe,
     'restSeconds': restSeconds,
     'coachCue': coachCue,
+    if (trackingMode != TrackingMode.weightAndReps)
+      'trackingMode': trackingMode.name,
+    if (targetDurationSeconds != null)
+      'targetDurationSeconds': targetDurationSeconds,
     if (loadLabel?.trim().isNotEmpty ?? false) 'loadLabel': loadLabel,
     if (primaryCue?.trim().isNotEmpty ?? false) 'primaryCue': primaryCue,
     if (detailNote?.trim().isNotEmpty ?? false) 'detailNote': detailNote,
@@ -338,6 +348,12 @@ class ExercisePrescription {
       targetRpe: _doubleValue(json['targetRpe'], 7),
       restSeconds: _intValue(json['restSeconds'], 90),
       coachCue: json['coachCue'] as String? ?? '',
+      trackingMode: _enumValue(
+        json['trackingMode'],
+        TrackingMode.values,
+        TrackingMode.weightAndReps,
+      ),
+      targetDurationSeconds: _nullableIntValue(json['targetDurationSeconds']),
       loadLabel: json['loadLabel'] as String?,
       primaryCue: json['primaryCue'] as String?,
       detailNote: json['detailNote'] as String?,
@@ -480,6 +496,7 @@ class LoggedSet {
     required this.weightKg,
     required this.reps,
     required this.rpe,
+    this.durationSeconds,
   });
 
   final String exerciseId;
@@ -488,8 +505,11 @@ class LoggedSet {
   final double weightKg;
   final int reps;
   final double rpe;
+  final int? durationSeconds;
 
   double get volume => weightKg * reps;
+
+  bool get isTimeBased => durationSeconds != null && weightKg == 0 && reps == 0;
 
   Map<String, dynamic> toJson() => {
     'exerciseId': exerciseId,
@@ -498,6 +518,7 @@ class LoggedSet {
     'weightKg': weightKg,
     'reps': reps,
     'rpe': rpe,
+    if (durationSeconds != null) 'durationSeconds': durationSeconds,
   };
 
   factory LoggedSet.fromJson(Map<String, dynamic> json) {
@@ -508,6 +529,7 @@ class LoggedSet {
       weightKg: _doubleValue(json['weightKg'], 0),
       reps: _intValue(json['reps'], 0),
       rpe: _doubleValue(json['rpe'], 7),
+      durationSeconds: _nullableIntValue(json['durationSeconds']),
     );
   }
 }
@@ -1372,6 +1394,123 @@ class MemoryEntry {
   }
 }
 
+class PersonalRecord {
+  const PersonalRecord({
+    required this.id,
+    required this.exerciseName,
+    required this.weightKg,
+    required this.previousKg,
+    required this.updatedAt,
+    required this.includeInContext,
+  });
+
+  final String id;
+  final String exerciseName;
+  final double weightKg;
+  final double? previousKg;
+  final DateTime updatedAt;
+  final bool includeInContext;
+
+  String get delta {
+    final prev = previousKg;
+    if (prev == null || prev >= weightKg) return '';
+    final diff = weightKg - prev;
+    return '+${diff == diff.roundToDouble() ? diff.toInt().toString() : diff.toStringAsFixed(1)} kg';
+  }
+
+  PersonalRecord copyWith({
+    String? exerciseName,
+    double? weightKg,
+    double? previousKg,
+    bool clearPreviousKg = false,
+    DateTime? updatedAt,
+    bool? includeInContext,
+  }) {
+    return PersonalRecord(
+      id: id,
+      exerciseName: exerciseName ?? this.exerciseName,
+      weightKg: weightKg ?? this.weightKg,
+      previousKg: clearPreviousKg ? null : (previousKg ?? this.previousKg),
+      updatedAt: updatedAt ?? this.updatedAt,
+      includeInContext: includeInContext ?? this.includeInContext,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'exerciseName': exerciseName,
+    'weightKg': weightKg,
+    if (previousKg != null) 'previousKg': previousKg,
+    'updatedAt': updatedAt.toIso8601String(),
+    'includeInContext': includeInContext,
+  };
+
+  factory PersonalRecord.fromJson(Map<String, dynamic> json) {
+    return PersonalRecord(
+      id: json['id'] as String? ?? _id('pr'),
+      exerciseName: json['exerciseName'] as String? ?? '',
+      weightKg: _doubleValue(json['weightKg'], 0),
+      previousKg: _nullableDoubleValue(json['previousKg']),
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+          DateTime.now(),
+      includeInContext: _boolValue(json['includeInContext'], true),
+    );
+  }
+}
+
+class YesterdaySummary {
+  const YesterdaySummary({
+    required this.headline,
+    required this.highlights,
+    required this.tips,
+  });
+
+  final String headline;
+  final List<String> highlights;
+  final List<String> tips;
+
+  Map<String, dynamic> toJson() => {
+    'headline': headline,
+    'highlights': highlights,
+    'tips': tips,
+  };
+
+  factory YesterdaySummary.fromJson(Map<String, dynamic> json) {
+    return YesterdaySummary(
+      headline: json['headline'] as String? ?? '',
+      highlights: _stringList(json['highlights']),
+      tips: _stringList(json['tips']),
+    );
+  }
+}
+
+class CoachingGoals {
+  const CoachingGoals({
+    required this.longTerm,
+    required this.shortTerm,
+    this.blockReviewDate,
+  });
+
+  final String longTerm;
+  final String shortTerm;
+  final String? blockReviewDate;
+
+  Map<String, dynamic> toJson() => {
+    'longTerm': longTerm,
+    'shortTerm': shortTerm,
+    if (blockReviewDate != null) 'blockReviewDate': blockReviewDate,
+  };
+
+  factory CoachingGoals.fromJson(Map<String, dynamic> json) {
+    return CoachingGoals(
+      longTerm: json['longTerm'] as String? ?? '',
+      shortTerm: json['shortTerm'] as String? ?? '',
+      blockReviewDate: json['blockReviewDate'] as String?,
+    );
+  }
+}
+
 class FitnessData {
   const FitnessData({
     required this.profile,
@@ -1387,6 +1526,10 @@ class FitnessData {
     this.latestFuelCheckIn,
     this.fuelDiary = const [],
     this.fuelDiarySentAt,
+    this.personalRecords = const [],
+    this.dailyMotto,
+    this.yesterdaySummary,
+    this.coachingGoals,
   });
 
   final AthleteProfile profile;
@@ -1402,6 +1545,10 @@ class FitnessData {
   final FuelCheckIn? latestFuelCheckIn;
   final List<FuelDiaryEntry> fuelDiary;
   final DateTime? fuelDiarySentAt;
+  final List<PersonalRecord> personalRecords;
+  final String? dailyMotto;
+  final YesterdaySummary? yesterdaySummary;
+  final CoachingGoals? coachingGoals;
 
   TrainingBlock? get activeBlock {
     for (final block in blocks) {
@@ -1445,6 +1592,10 @@ class FitnessData {
     Object? latestFuelCheckIn = _sentinel,
     List<FuelDiaryEntry>? fuelDiary,
     Object? fuelDiarySentAt = _sentinel,
+    List<PersonalRecord>? personalRecords,
+    Object? dailyMotto = _sentinel,
+    Object? yesterdaySummary = _sentinel,
+    Object? coachingGoals = _sentinel,
   }) {
     return FitnessData(
       profile: profile ?? this.profile,
@@ -1470,6 +1621,16 @@ class FitnessData {
       fuelDiarySentAt: fuelDiarySentAt == _sentinel
           ? this.fuelDiarySentAt
           : fuelDiarySentAt as DateTime?,
+      personalRecords: personalRecords ?? this.personalRecords,
+      dailyMotto: dailyMotto == _sentinel
+          ? this.dailyMotto
+          : dailyMotto as String?,
+      yesterdaySummary: yesterdaySummary == _sentinel
+          ? this.yesterdaySummary
+          : yesterdaySummary as YesterdaySummary?,
+      coachingGoals: coachingGoals == _sentinel
+          ? this.coachingGoals
+          : coachingGoals as CoachingGoals?,
     );
   }
 
@@ -1490,6 +1651,11 @@ class FitnessData {
     'fuelDiary': fuelDiary.map((e) => e.toJson()).toList(),
     if (fuelDiarySentAt != null)
       'fuelDiarySentAt': fuelDiarySentAt!.toIso8601String(),
+    'personalRecords': personalRecords.map((item) => item.toJson()).toList(),
+    if (dailyMotto != null) 'dailyMotto': dailyMotto,
+    if (yesterdaySummary != null)
+      'yesterdaySummary': yesterdaySummary!.toJson(),
+    if (coachingGoals != null) 'coachingGoals': coachingGoals!.toJson(),
   };
 
   factory FitnessData.fromJson(Map<String, dynamic> json) {
@@ -1514,6 +1680,10 @@ class FitnessData {
       fuelDiarySentAt: DateTime.tryParse(
         json['fuelDiarySentAt'] as String? ?? '',
       ),
+      personalRecords: _objectList(json['personalRecords'], PersonalRecord.fromJson),
+      dailyMotto: json['dailyMotto'] as String?,
+      yesterdaySummary: _yesterdaySummaryValue(json['yesterdaySummary']),
+      coachingGoals: _coachingGoalsValue(json['coachingGoals']),
     );
   }
 }
@@ -1656,4 +1826,14 @@ FuelGuidance? _fuelGuidanceValue(Object? value) {
 FuelCheckIn? _fuelCheckInValue(Object? value) {
   if (value is! Map) return null;
   return FuelCheckIn.fromJson(value.cast<String, dynamic>());
+}
+
+YesterdaySummary? _yesterdaySummaryValue(Object? value) {
+  if (value is! Map) return null;
+  return YesterdaySummary.fromJson(value.cast<String, dynamic>());
+}
+
+CoachingGoals? _coachingGoalsValue(Object? value) {
+  if (value is! Map) return null;
+  return CoachingGoals.fromJson(value.cast<String, dynamic>());
 }

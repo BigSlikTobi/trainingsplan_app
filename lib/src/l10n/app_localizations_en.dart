@@ -443,4 +443,523 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get noGuidanceHintMissing =>
       'Coach analysis hasn\'t arrived yet. Export today\'s context and wait for the response.';
+
+  @override
+  String get statusBereit => '● READY';
+
+  @override
+  String get statusAktiv => '● ACTIVE';
+
+  @override
+  String get statusPause => '⏸ PAUSE';
+
+  @override
+  String get statusFertig => '✓ DONE';
+
+  @override
+  String get statusAbgeschlossen => '✓ COMPLETED';
+
+  @override
+  String get statAktivLabel => 'ACTIVE';
+
+  @override
+  String get statRpeAvg => 'RPE ⌀';
+
+  @override
+  String get statPlanzeit => 'EST. TIME';
+
+  @override
+  String get statTagLabel => 'DAY';
+
+  @override
+  String get btnTrainingStarten => 'START TRAINING';
+
+  @override
+  String get btnWorkoutAbschliessen => 'COMPLETE WORKOUT';
+
+  @override
+  String get btnWeiter => '▶ RESUME';
+
+  @override
+  String get btnPauseLabel => '⏸ PAUSE';
+
+  @override
+  String get heroUebersicht => '← Overview';
+
+  @override
+  String get heroSaetze => 'SETS';
+
+  @override
+  String get emptyKeinBlock => '○ NO ACTIVE BLOCK';
+
+  @override
+  String get emptyNichtVerbunden => '○ NOT CONNECTED';
+
+  @override
+  String get emptyDein => 'YOUR';
+
+  @override
+  String get emptyErster => 'FIRST';
+
+  @override
+  String get emptyTag => 'DAY.';
+
+  @override
+  String get btnTrainingsplanLaden => 'LOAD TRAINING PLAN';
+
+  @override
+  String get btnCoachVerbinden => 'CONNECT COACH →';
+
+  @override
+  String get rpeLegendWarmup => 'Warm-up';
+
+  @override
+  String get rpeLegendModerat => 'Moderate';
+
+  @override
+  String get rpeLegendHart => 'Hard';
+
+  @override
+  String get btnSatzLoggen => 'Log set';
+
+  @override
+  String get blockAbgeschlossen => 'Block completed';
+
+  @override
+  String get emptyAlleWorkoutsErledigt => 'All workouts in this block are done';
+
+  @override
+  String get emptyPlanErscheintHier => 'Your plan will appear here';
+
+  @override
+  String get fuelDiaryTitle => 'FUEL DIARY';
+
+  @override
+  String get fuelDiarySentLabel => 'SENT';
+
+  @override
+  String get fuelQualityLevel => 'Fuel Quality Level';
+
+  @override
+  String get fuelScalePoor => '1 Poor';
+
+  @override
+  String get fuelScalePerfect => '10 Perfect';
+
+  @override
+  String get fuelDiaryHint => 'What did you eat or drink?';
+
+  @override
+  String get fuelDiarySending => 'Sending...';
+
+  @override
+  String get fuelDiaryUpdateCoach => 'Update Coach';
+
+  @override
+  String get fuelDiarySendToCoach => 'Send to Coach';
+
+  @override
+  String get fuelDiaryEmptyHint =>
+      'Log what you ate, how you feel, supplements, water — anything fuel-related. Send it all to your coach when ready.';
+
+  @override
+  String get aktiverBlock => 'ACTIVE BLOCK';
+
+  @override
+  String get sessionsLabel => 'SESSIONS';
+
+  @override
+  String get coachSegmentPlan => 'PLAN';
+
+  @override
+  String get coachSegmentMemory => 'MEMORY';
+
+  @override
+  String get coachSegmentSync => 'SYNC';
+
+  @override
+  String get verlauf => 'HISTORY';
+
+  @override
+  String get nochKeineSessions => 'No sessions completed yet.';
+
+  @override
+  String get naechsteSession => 'NEXT SESSION';
+
+  @override
+  String get wirdHeuteAbendGeneriert => 'Will be generated tonight';
+
+  @override
+  String get verfuegbarNach2100 => 'Available after 9:00 PM';
+
+  @override
+  String get coachNotizLabel => 'COACH NOTE';
+
+  @override
+  String get workoutStarten => 'Start workout';
+
+  @override
+  String get serverVerbunden => 'Server connected';
+
+  @override
+  String get keinServerKonfiguriert => 'No server configured';
+
+  @override
+  String get syncEinstellungen => '⚙ Settings';
+
+  @override
+  String get syncAktionen => 'SYNC ACTIONS';
+
+  @override
+  String get contextPushen => 'Push context';
+
+  @override
+  String get contextPushenSub => 'Send athlete profile, block & logs to coach';
+
+  @override
+  String get ergebnisseAbrufen => 'Fetch results';
+
+  @override
+  String get ergebnisseAbrufenSub => 'Load new training plan or coach feedback';
+
+  @override
+  String get serverConfigHint => 'Server config & agent handoff → Settings';
+
+  @override
+  String get syncErledigt => 'Done';
+
+  @override
+  String get memFilterAlle => 'All';
+
+  @override
+  String get memFilterMemories => 'Memories';
+
+  @override
+  String get memFilterConstraints => 'Constraints';
+
+  @override
+  String get keineEintraege => 'No entries';
+
+  @override
+  String get agentLabel => 'AGENT';
+
+  @override
+  String get ichLabel => 'ME';
+
+  @override
+  String get vonDirLabel => 'by you';
+
+  @override
+  String get coachEquals => 'Coach';
+
+  @override
+  String get memHinzufuegen => '+ Add';
+
+  @override
+  String get constraintLabel => 'CONSTRAINT';
+
+  @override
+  String get memoryLabel => 'MEMORY';
+
+  @override
+  String get fortschrittStartetHier => 'Your progress starts here';
+
+  @override
+  String get fortschrittStartetHierSub =>
+      'Complete your first workout and see how your strength, volume, and readiness develop.';
+
+  @override
+  String get wasErwartetDich => 'WHAT TO EXPECT';
+
+  @override
+  String get volumenProWoche => 'VOLUME / WEEK';
+
+  @override
+  String get volumePreviewSub =>
+      'Your weekly training volume as a bar chart with trend and growth.';
+
+  @override
+  String get staerkePRsTitle => 'Strength PRs';
+
+  @override
+  String get staerkePRsSub =>
+      'Your best weights per exercise — with delta badge on new records.';
+
+  @override
+  String get bereitschaftErschoepfung => 'Readiness & Fatigue';
+
+  @override
+  String get bereitschaftErschoepfungSub =>
+      'Readiness and soreness history of recent sessions as sparkline.';
+
+  @override
+  String get volumeChartPlaceholder => 'Your volume chart will appear here';
+
+  @override
+  String get nochKeineDaten => 'No data yet';
+
+  @override
+  String get dieseWoche => 'This week';
+
+  @override
+  String get avgProWoche => 'Ø / Week';
+
+  @override
+  String get zuwachs => 'Growth';
+
+  @override
+  String get staerkePRsLabel => 'STRENGTH PRS';
+
+  @override
+  String get weniger => 'Less';
+
+  @override
+  String get prHinzufuegen => '+ Add PR';
+
+  @override
+  String get prHinzufuegenTitle => 'Add PR';
+
+  @override
+  String get prBearbeitenTitle => 'Edit PR';
+
+  @override
+  String get uebungLabel => 'Exercise';
+
+  @override
+  String get gewichtKgLabel => 'Weight (kg)';
+
+  @override
+  String get gewichtKgHint => 'e.g. 100';
+
+  @override
+  String get vorherigesGewichtLabel => 'Previous weight (kg)';
+
+  @override
+  String get optionalHint => 'optional';
+
+  @override
+  String get imCoachKontextSenden => 'Include in coach context';
+
+  @override
+  String get imCoachKontextSendenSub => 'Will be sent to coach on next sync';
+
+  @override
+  String get dauerLabel => 'Duration';
+
+  @override
+  String get heuteLabel => 'TODAY';
+
+  @override
+  String get zielLabel => 'Target:';
+
+  @override
+  String get workoutSummaryTitle => 'Workout Summary';
+
+  @override
+  String get workoutNotFound => 'Workout not found';
+
+  @override
+  String get uebungenUeberpruefen => 'Review exercises';
+
+  @override
+  String get keineUebungenAufgezeichnet => 'No exercises recorded.';
+
+  @override
+  String get satzHinzufuegen => 'Add set';
+
+  @override
+  String get notizFuerCoach => 'Note for the coach…';
+
+  @override
+  String get nachbericht => 'DEBRIEF';
+
+  @override
+  String get readinessLabel => 'Readiness';
+
+  @override
+  String get sorenessLabel => 'Soreness';
+
+  @override
+  String get readinessSehrNiedrig => 'Very low';
+
+  @override
+  String get readinessNiedrig => 'Low';
+
+  @override
+  String get readinessOk => 'OK';
+
+  @override
+  String get readinessGut => 'Good';
+
+  @override
+  String get readinessTop => 'Top';
+
+  @override
+  String get sorenessKeine => 'None';
+
+  @override
+  String get sorenessLeicht => 'Mild';
+
+  @override
+  String get sorenessModerat => 'Moderate';
+
+  @override
+  String get sorenessStark => 'Severe';
+
+  @override
+  String get sorenessSehrStark => 'Very severe';
+
+  @override
+  String get allgemeineNotizenHint =>
+      'General notes for the coach — technique, energy, adjustments…';
+
+  @override
+  String get gesendetLabel => 'SENT';
+
+  @override
+  String get zumCoachSenden => 'SEND TO COACH';
+
+  @override
+  String get conditioningLabel => 'CONDITIONING';
+
+  @override
+  String get selfHostedServer => 'Self-Hosted T4L Server';
+
+  @override
+  String get configuredLabel => 'Configured';
+
+  @override
+  String get optionalLabel => 'Optional';
+
+  @override
+  String get serverDescription =>
+      'Connect to your own T4L server. The phone stays the source of truth, and new plans still need your import confirmation.';
+
+  @override
+  String get noServerSyncYet => 'No server sync yet';
+
+  @override
+  String get lastServerSync => 'Last server sync:';
+
+  @override
+  String get rpeDescription6 => 'Very comfortable — 4 reps in reserve';
+
+  @override
+  String get rpeDescription7 => 'Controlled — 3 reps in reserve';
+
+  @override
+  String get rpeDescription8 => 'Hard set — 2 reps in reserve';
+
+  @override
+  String get rpeDescription9 => 'Very hard — 1 rep in reserve';
+
+  @override
+  String get rpeDescription10 => 'Max effort — nothing left';
+
+  @override
+  String get gesamt => 'All';
+
+  @override
+  String get avgBereitschaft => 'Ø Readiness';
+
+  @override
+  String get avgErschoepfung => 'Ø Fatigue';
+
+  @override
+  String get bereitschaftLabel => 'Readiness';
+
+  @override
+  String get erschoepfungLabel => 'Fatigue';
+
+  @override
+  String heroTag(int n) {
+    return 'Day $n';
+  }
+
+  @override
+  String blockAbgeschlossenInfo(int count) {
+    return '$count workouts in the block. Details remain available in Blocks.';
+  }
+
+  @override
+  String sessionsCount(int count) {
+    return '$count Sessions';
+  }
+
+  @override
+  String alleSessions(int count) {
+    return 'All $count sessions';
+  }
+
+  @override
+  String sessionNumber(int n) {
+    return 'Session $n';
+  }
+
+  @override
+  String exerciseCount(int count) {
+    return '$count exercises';
+  }
+
+  @override
+  String imKontext(int count) {
+    return '$count in context';
+  }
+
+  @override
+  String mehrAnzeigen(int count) {
+    return '+$count more';
+  }
+
+  @override
+  String bereitschaftSessions(int count) {
+    return 'READINESS ($count SESSIONS)';
+  }
+
+  @override
+  String logSaetze(int count) {
+    return '$count sets';
+  }
+
+  @override
+  String wdhlCount(int count) {
+    return '$count reps';
+  }
+
+  @override
+  String satzVonTotal(int current, int total) {
+    return 'Set $current / $total';
+  }
+
+  @override
+  String get viewWeekly => 'Weekly';
+
+  @override
+  String get viewDaily => 'Daily';
+
+  @override
+  String get volumenProTag => 'VOLUME / DAY';
+
+  @override
+  String get heute => 'Today';
+
+  @override
+  String get avgProTag => 'Ø / Day';
+
+  @override
+  String get dialogSetDuration => 'Duration';
+
+  @override
+  String get goalsLabel => 'GOALS';
+
+  @override
+  String get yesterdayLabel => 'YESTERDAY';
+
+  @override
+  String get tipsLabel => 'WATCH OUT';
+
+  @override
+  String daysLeft(int count) {
+    return '$count days left';
+  }
 }
