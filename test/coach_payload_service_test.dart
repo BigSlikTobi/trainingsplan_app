@@ -22,9 +22,9 @@ void main() {
     final payload = service.buildDayContext(
       data: sampleFitnessData(),
       activityReport: DayActivityReport(
-        summary: DayActivitySummary(
+        summary: const DayActivitySummary(
           readStatus: 'ok',
-          missingPermissions: const [],
+          missingPermissions: [],
           sampleCount: 4,
           steps: 12000,
           activeEnergyKcal: 650,

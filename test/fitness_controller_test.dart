@@ -323,6 +323,63 @@ void main() {
   });
 
   test(
+    'malformed result is consumed once so it cannot wedge the pull loop',
+    () async {
+      final store = _MemoryStore()
+        ..bridgeConfig = const LocalBridgeConfig(
+          baseUrl: 'http://127.0.0.1:8787',
+          token: '123-456',
+        );
+      final bridge = _ResultBridgeService(
+        pendingKinds: const ['nutrition_analysis_result'],
+        results: {
+          // calories <= 0 makes the parser throw FormatException; before the
+          // fix this skipped without consuming and re-failed on every pull.
+          'nutrition_analysis_result': {
+            'schema': 'nutrition_analysis_result.v1',
+            'result': {'requestId': 'x', 'calories': 0},
+          },
+        },
+      );
+      final controller = FitnessController(store: store, bridge: bridge);
+      // load() performs the first pull: the bad result is consumed (not applied)
+      // and the failure is surfaced.
+      await controller.load();
+      expect(bridge.consumedKinds, ['nutrition_analysis_result']);
+      expect(controller.pendingMealResult, isNull);
+      expect(controller.status, contains('Discarded unreadable'));
+
+      await controller.pullBridgeResults();
+      // Second pull: the bad artifact no longer re-appears (no wedge), so it is
+      // not consumed again and the loop is quiet.
+      expect(bridge.consumedKinds, ['nutrition_analysis_result']);
+      expect(controller.pendingMealResult, isNull);
+    },
+  );
+
+  test('unknown result kind is left pending for forward compatibility', () async {
+    final store = _MemoryStore()
+      ..bridgeConfig = const LocalBridgeConfig(
+        baseUrl: 'http://127.0.0.1:8787',
+        token: '123-456',
+      );
+    final bridge = _ResultBridgeService(
+      pendingKinds: const ['some_future_result'],
+      results: {
+        'some_future_result': {'schema': 'some_future_result.v1'},
+      },
+    );
+    final controller = FitnessController(store: store, bridge: bridge);
+    await controller.load();
+
+    await controller.pullBridgeResults();
+
+    // Not consumed: a newer app version may know how to apply it.
+    expect(bridge.consumedKinds, isEmpty);
+    expect(controller.status, isEmpty);
+  });
+
+  test(
     'server migration uploads full snapshot without mutating phone data',
     () async {
       final store = _MemoryStore();
@@ -1018,6 +1075,9 @@ class _ResultBridgeService extends LocalBridgeService {
 class _FakeWatchSync extends WatchSyncService {
   final sentPayloads = <Map<String, dynamic>>[];
   final endedWorkoutIds = <String>[];
+  // Test double: this broadcast controller lives for the test process and is
+  // intentionally not closed.
+  // ignore: close_sinks
   final eventsController = StreamController<Map<String, dynamic>>.broadcast();
 
   @override
@@ -1178,13 +1238,13 @@ class _TimerHealthSync extends HealthSyncService {
 
   @override
   Future<DayActivityReport> readDayActivityReport(DateTime day) async {
-    return DayActivityReport(
-      summary: const DayActivitySummary(
+    return const DayActivityReport(
+      summary: DayActivitySummary(
         readStatus: 'ok',
         missingPermissions: [],
         sampleCount: 0,
       ),
-      sessions: const [],
+      sessions: [],
     );
   }
 }

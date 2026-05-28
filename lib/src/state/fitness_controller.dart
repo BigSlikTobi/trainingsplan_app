@@ -12,6 +12,16 @@ import '../services/health_sync_service.dart';
 import '../services/local_bridge_service.dart';
 import '../services/media_capture_service.dart';
 import '../services/watch_sync_service.dart';
+import '../util/app_log.dart';
+
+/// Outcome of attempting to apply a single coach result pulled from the server.
+///
+/// The distinction drives whether the artifact is consumed on the server:
+/// [applied] and [rejected] are both terminal (consume so they never re-appear),
+/// while [awaitingUser] and [unknownKind] deliberately leave the artifact
+/// pending. [rejected] specifically prevents a malformed payload from wedging
+/// the pull loop by re-downloading and re-failing forever.
+enum _ResultImport { applied, awaitingUser, rejected, unknownKind }
 
 class FitnessController extends ChangeNotifier {
   FitnessController({
@@ -37,6 +47,7 @@ class FitnessController extends ChangeNotifier {
 
   FitnessData _data = createEmptyFitnessData();
   bool _isLoading = true;
+  bool _disposed = false;
   bool _hasPendingCoachBlock = false;
   bool _hasPendingNutritionAnalysis = false;
   bool _isHealthTracking = false;
@@ -494,7 +505,12 @@ class FitnessController extends ChangeNotifier {
     try {
       await _bridge.health(_bridgeConfig);
       _status = 'Self-hosted server connected';
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.warn(
+        'Self-hosted server connection failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Self-hosted server connection failed: $error';
     }
     notifyListeners();
@@ -521,7 +537,12 @@ class FitnessController extends ChangeNotifier {
       await _store.saveBridgeConfig(_bridgeConfig);
       _status =
           'Migrated local training snapshot to self-hosted server. Phone data unchanged.';
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.error(
+        'Server migration failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Server migration failed: $error';
     }
     notifyListeners();
@@ -550,7 +571,8 @@ class FitnessController extends ChangeNotifier {
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
       _status = 'Pushed ${uploaded.join(', ')} to self-hosted server';
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.error('Server push failed', error: error, stackTrace: stackTrace);
       _status = 'Server push failed: $error';
     }
     notifyListeners();
@@ -562,31 +584,76 @@ class FitnessController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final downloaded = <String>[];
+    final applied = <String>[];
+    final rejected = <String>[];
+    var awaitingBlock = false;
     try {
       final pendingKinds = await _bridge.pendingResultKinds(_bridgeConfig);
       for (final kind in pendingKinds) {
         final payload = await _bridge.downloadResult(_bridgeConfig, kind);
         if (payload == null) continue;
-        final imported = await _importBridgeResult(kind, payload);
-        if (imported == null) continue;
-        if (imported.consume) {
-          await _bridge.markResultConsumed(_bridgeConfig, kind);
+        final outcome = await _importBridgeResult(kind, payload);
+        switch (outcome) {
+          case _ResultImport.applied:
+            await _bridge.markResultConsumed(_bridgeConfig, kind);
+            applied.add(kind);
+          case _ResultImport.rejected:
+            // A malformed payload will never parse, so consume it to stop it
+            // re-appearing on every pull and wedging the loop forever. The
+            // failure is surfaced below and logged via parse error reporting.
+            await _bridge.markResultConsumed(_bridgeConfig, kind);
+            rejected.add(kind);
+          case _ResultImport.awaitingUser:
+            // Training blocks require explicit user import; leave them pending.
+            awaitingBlock = true;
+          case _ResultImport.unknownKind:
+            // A result this app version does not understand: leave it pending
+            // so a future version can apply it. Forward compatibility.
+            break;
         }
-        downloaded.add(imported.label);
       }
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
-      _status = downloaded.isEmpty
-          ? ''
-          : 'Pulled ${downloaded.join(', ')} from self-hosted server';
-    } on Object catch (error) {
+      _status = _composePullStatus(
+        applied: applied,
+        rejected: rejected,
+        awaitingBlock: awaitingBlock,
+      );
+    } on Object catch (error, stackTrace) {
+      // Transport/server errors are transient: do not consume anything, so the
+      // next pull retries cleanly.
+      AppLog.warn(
+        'Server result check failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Server result check failed: $error';
     }
     notifyListeners();
   }
 
-  Future<({String label, bool consume})?> _importBridgeResult(
+  String _composePullStatus({
+    required List<String> applied,
+    required List<String> rejected,
+    required bool awaitingBlock,
+  }) {
+    final parts = <String>[];
+    if (applied.isNotEmpty) {
+      parts.add('Pulled ${applied.join(', ')} from self-hosted server');
+    }
+    if (awaitingBlock) {
+      parts.add('New T4L Gym Bro training block available');
+    }
+    if (rejected.isNotEmpty) {
+      parts.add(
+        'Discarded unreadable ${rejected.join(', ')} from the coach; '
+        'ask it to resend.',
+      );
+    }
+    return parts.join(' · ');
+  }
+
+  Future<_ResultImport> _importBridgeResult(
     String kind,
     Map<String, dynamic> payload,
   ) async {
@@ -601,32 +668,35 @@ class FitnessController extends ChangeNotifier {
             coachingGoals: parsed.goals ?? _data.coachingGoals,
           );
           await _store.save(_data);
-          return (label: 'next_day_plan', consume: true);
+          return _ResultImport.applied;
         case 'training_block_plan':
           final parsed = _coach.parseTrainingBlockPlanWithContext(payload);
           _pendingTrainingBlockPlanPayload = payload;
           _pendingTrainingBlockGoals = parsed.goals;
           _hasPendingCoachBlock = true;
-          _status = 'New T4L Gym Bro training block available';
-          return (label: 'training_block_plan', consume: false);
+          return _ResultImport.awaitingUser;
         case 'nutrition_analysis_result':
           final result = _coach.parseNutritionAnalysisResult(payload);
           _data = _data.copyWith(pendingMealResult: result);
           _hasPendingNutritionAnalysis = true;
           await _store.save(_data);
-          return (label: 'nutrition_analysis_result', consume: true);
+          return _ResultImport.applied;
         case 'fuel_guidance':
           final guidance = _coach.parseFuelGuidance(payload);
           _data = _data.copyWith(fuelGuidance: guidance);
           await _store.save(_data);
-          return (label: 'fuel_guidance', consume: true);
+          return _ResultImport.applied;
+        default:
+          return _ResultImport.unknownKind;
       }
-    } on FormatException catch (e) {
-      _status = 'Invalid $kind payload from server: $e';
-      notifyListeners();
-      return null;
+    } on FormatException catch (error, stackTrace) {
+      AppLog.warn(
+        'Rejected unreadable $kind payload from server',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return _ResultImport.rejected;
     }
-    return null;
   }
 
   Future<void> importNextDayWorkout(
@@ -1394,13 +1464,23 @@ class FitnessController extends ChangeNotifier {
       if (_bridgeConfig.isConfigured) {
         await _exportDayContext(notify: false);
         _status = 'Sent Fuel diary to T4L Gym Bro';
-        Future.delayed(const Duration(seconds: 5), () {
-          if (_bridgeConfig.isConfigured) checkForCoachUpdates();
-        });
+        unawaited(
+          Future.delayed(const Duration(seconds: 5), () {
+            if (_disposed) return;
+            if (_bridgeConfig.isConfigured) {
+              unawaited(checkForCoachUpdates());
+            }
+          }),
+        );
       } else {
         _status = 'Saved Fuel diary locally';
       }
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.warn(
+        'Fuel diary saved locally, server push failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Fuel diary saved locally, server push failed: $error';
     }
     notifyListeners();
@@ -1518,15 +1598,30 @@ class FitnessController extends ChangeNotifier {
   Future<void> connectHealth() async {
     try {
       _status = await _health.requestPermissions();
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.warn(
+        'HealthKit setup failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'HealthKit setup failed: $error';
     }
     notifyListeners();
   }
 
   @override
+  void notifyListeners() {
+    // Timers and delayed callbacks can fire after the controller is disposed
+    // (e.g. the app is torn down mid-workout). Guarding here prevents the
+    // "notifyListeners after dispose" assertion from any of the many call sites.
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
+  @override
   void dispose() {
-    _watchEvents?.cancel();
+    _disposed = true;
+    unawaited(_watchEvents?.cancel());
     _healthPoller?.cancel();
     _uiTicker?.cancel();
     super.dispose();
@@ -1862,7 +1957,7 @@ List<T> _payloadObjects<T>(
 ) {
   if (value is! List) return const [];
   return value
-      .whereType<Map>()
+      .whereType<Map<dynamic, dynamic>>()
       .map((item) => fromJson(item.cast<String, dynamic>()))
       .toList();
 }

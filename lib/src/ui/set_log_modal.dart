@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../design/design_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../models/fitness_models.dart';
+import '../util/haptics.dart';
 
 class SetLogResult {
   const SetLogResult.save({
@@ -312,15 +313,20 @@ class _SetLogSheetState extends State<_SetLogSheet> {
               children: [
                 if (widget.allowDelete) ...[
                   _DeleteIconButton(
-                    onTap: () =>
-                        Navigator.of(context).pop(const SetLogResult.delete()),
+                    onTap: () {
+                      Haptics.warning();
+                      Navigator.of(context).pop(const SetLogResult.delete());
+                    },
                   ),
                   const SizedBox(width: 10),
                 ],
                 Expanded(
                   child: _LogButton(
                     label: widget.saveLabel ?? l.btnSatzLoggen,
-                    onTap: () => Navigator.of(context).pop(_buildResult()),
+                    onTap: () {
+                      Haptics.selection();
+                      Navigator.of(context).pop(_buildResult());
+                    },
                   ),
                 ),
               ],
@@ -364,7 +370,6 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Text(
@@ -562,7 +567,7 @@ class _StepperRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = AppColors.paper.withValues(alpha: 0.06);
-    final faint = AppColors.surface2;
+    const faint = AppColors.surface2;
     return Container(
       height: 52,
       decoration: BoxDecoration(

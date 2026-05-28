@@ -216,7 +216,7 @@ class _PostWorkoutBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     final eyebrow = block != null && workout != null
         ? '${block!.style.label} · ${l.heroTag(workout!.day)} · ${l.woche(workout!.week)}'
               .toUpperCase()
@@ -295,7 +295,7 @@ class _PostWorkoutBanner extends StatelessWidget {
                   if (eyebrow.isNotEmpty) const SizedBox(height: 7),
                   Text(
                     (workout?.title ?? title).toUpperCase(),
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 34,
                       height: 0.93,
                       fontWeight: FontWeight.w900,
@@ -384,7 +384,7 @@ class _BannerStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -407,12 +407,12 @@ class _BannerStat extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w900,
               height: 1.0,
               color: paper,
-              fontFeatures: const [FontFeature.tabularFigures()],
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -588,7 +588,7 @@ class _ExerciseReviewCardState extends State<_ExerciseReviewCard> {
               ),
               child: Row(
                 children: [
-                  Text(
+                  const Text(
                     '+',
                     style: TextStyle(
                       fontSize: 16,

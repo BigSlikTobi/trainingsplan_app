@@ -6,7 +6,7 @@ import 'package:trainingsplan_app/src/models/fitness_models.dart';
 /// on production seed data (which is now an empty shell filled by the agent).
 FitnessData sampleFitnessData() {
   final empty = createEmptyFitnessData();
-  final workout1 = PlannedWorkout(
+  const workout1 = PlannedWorkout(
     id: 'sample_w1_d1',
     week: 1,
     day: 1,
@@ -14,7 +14,7 @@ FitnessData sampleFitnessData() {
     focus: 'Sample focus A',
     rationale: 'Sample rationale A for test fixture.',
     conditioning: '10 min easy walk',
-    exercises: const [
+    exercises: [
       ExercisePrescription(
         exerciseId: 'goblet_squat',
         name: 'Goblet Squat',
@@ -27,7 +27,7 @@ FitnessData sampleFitnessData() {
       ),
     ],
   );
-  final workout2 = PlannedWorkout(
+  const workout2 = PlannedWorkout(
     id: 'sample_w1_d2',
     week: 1,
     day: 2,
@@ -35,7 +35,7 @@ FitnessData sampleFitnessData() {
     focus: 'Sample focus B',
     rationale: 'Sample rationale B for test fixture.',
     conditioning: '10 min easy bike',
-    exercises: const [
+    exercises: [
       ExercisePrescription(
         exerciseId: 'romanian_deadlift',
         name: 'Romanian Deadlift',

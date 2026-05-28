@@ -315,7 +315,7 @@ class _HeroOverview extends StatelessWidget {
     final running =
         status == HeroWorkoutStatus.aktiv || status == HeroWorkoutStatus.pause;
     final done = status == HeroWorkoutStatus.fertig;
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     final stats = running
         ? [
             (l.statAktivLabel, _fmtElapsed(sessionElapsed ?? Duration.zero)),
@@ -377,7 +377,7 @@ class _HeroOverview extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           workout.title.toUpperCase(),
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 34,
             height: 0.95,
             fontWeight: FontWeight.w900,
@@ -483,7 +483,7 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
@@ -507,13 +507,13 @@ class _StatTile extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w900,
               height: 1.0,
               color: paper,
               letterSpacing: -0.2,
-              fontFeatures: const [FontFeature.tabularFigures()],
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
             overflow: TextOverflow.fade,
             softWrap: false,
@@ -575,7 +575,7 @@ class _OverviewReadyControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     return Column(
       children: [
         _OverviewStartButton(onTap: onStart),
@@ -620,7 +620,7 @@ class _OverviewActiveControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     return Row(
       children: [
         Expanded(
@@ -715,7 +715,7 @@ class _HeroExercise extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     final pre =
         '${exercise.sets} × ${exercise.reps}'
         '${exercise.displayLoadLabel.isEmpty ? '' : ' · ${exercise.displayLoadLabel}'}';
@@ -780,7 +780,7 @@ class _HeroExercise extends StatelessWidget {
         for (final word in words)
           Text(
             word.toUpperCase(),
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 30,
               height: 0.95,
               fontWeight: FontWeight.w900,
@@ -905,7 +905,7 @@ class EmptyHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -997,7 +997,7 @@ class EmptyHeroCard extends StatelessWidget {
                   const SizedBox(height: 22),
                   Text(
                     l.emptyDein,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 40,
                       height: 0.9,
                       fontWeight: FontWeight.w900,
@@ -1007,7 +1007,7 @@ class EmptyHeroCard extends StatelessWidget {
                   ),
                   Text(
                     l.emptyErster,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 40,
                       height: 0.9,
                       fontWeight: FontWeight.w900,
@@ -1119,7 +1119,7 @@ class _GhostStatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paper = AppColors.paper;
+    const paper = AppColors.paper;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
@@ -1161,7 +1161,7 @@ class GhostExerciseSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = const [0.66, 0.50, 0.74, 0.42];
+    const rows = [0.66, 0.50, 0.74, 0.42];
     return Opacity(
       opacity: 0.5,
       child: Container(

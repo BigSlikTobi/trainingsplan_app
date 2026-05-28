@@ -1798,7 +1798,7 @@ List<T> _objectList<T>(
 ) {
   if (value is! List) return const [];
   return value
-      .whereType<Map>()
+      .whereType<Map<dynamic, dynamic>>()
       .map((item) => fromJson(item.cast<String, dynamic>()))
       .toList();
 }

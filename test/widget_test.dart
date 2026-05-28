@@ -336,7 +336,7 @@ FitnessData _longCoachData() {
   final base = sampleFitnessData();
   final block = base.activeBlock!;
   final workout = block.workouts.first;
-  final longExercise = ExercisePrescription(
+  const longExercise = ExercisePrescription(
     exerciseId: 'long_goblet_squat',
     name: 'Goblet Squat With Deliberately Long Name',
     sets: 4,
@@ -353,7 +353,7 @@ FitnessData _longCoachData() {
         'This longer note belongs in the exercise detail sheet where the athlete can read setup, intent, and rationale without stretching the row.',
     warningCue:
         'Stop or reduce range immediately if knee pain increases during the set.',
-    media: const ExerciseMedia(
+    media: ExerciseMedia(
       explainerUrl: 'https://www.youtube.com/watch?v=abc123',
       setup:
           'Set the feet just outside hip width, hold the bell high against the sternum, and create a tripod foot before the first descent.',
