@@ -4,7 +4,9 @@ import 'package:trainingsplan_app/src/app.dart';
 import 'package:trainingsplan_app/src/data/local_store.dart';
 import 'package:trainingsplan_app/src/l10n/app_localizations.dart';
 import 'package:trainingsplan_app/src/models/fitness_models.dart';
+import 'package:trainingsplan_app/src/services/health_sync_service.dart';
 import 'package:trainingsplan_app/src/services/local_bridge_service.dart';
+import 'package:trainingsplan_app/src/services/watch_sync_service.dart';
 import 'package:trainingsplan_app/src/state/fitness_controller.dart';
 import 'package:trainingsplan_app/src/ui/dashboard.dart';
 import 'package:trainingsplan_app/src/ui/workout_summary_screen.dart';
@@ -206,7 +208,7 @@ void main() {
     expect(find.text('DAILY COACH PLANS'), findsNothing);
   });
 
-  testWidgets('today tab shows next workout after one completed today', (
+  testWidgets('today shows the finished workout after the session is done', (
     tester,
   ) async {
     final controller = FitnessController(
@@ -226,8 +228,51 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Sample focus B'), findsOneWidget);
-    expect(find.byType(WorkoutSummaryView), findsNothing);
+    // A workout finished today shows its summary, not the next workout's
+    // open/Start state ("don't make me train again").
+    expect(find.byType(WorkoutSummaryView), findsOneWidget);
+    expect(find.text('Sample focus B'), findsNothing);
+  });
+
+  testWidgets('today keeps the just-finished workout for set logging', (
+    tester,
+  ) async {
+    // Fakes keep the completion path hermetic: the real day-context export
+    // reads HealthKit, which never completes under the widget-test binding.
+    final controller = FitnessController(
+      store: _WidgetStore(),
+      health: _FakeHealthSync(),
+      watchSync: _NoopWatchSync(),
+    );
+    await controller.load();
+    final block = controller.activeBlock!;
+    // More than one workout means a next workout exists — so this proves the
+    // Today view shows the finished workout's summary (log sets / comments)
+    // instead of falling back to the next workout's "Start" state.
+    expect(block.workouts.length, greaterThan(1));
+    final finished = block.workouts.first;
+
+    // Finish the workout live (watch completion path — no HealthKit needed).
+    await controller.handleWatchWorkoutCompleted(
+      _watchCompletionPayloadFor(finished),
+    );
+    expect(controller.justCompletedLog, isNotNull);
+    expect(controller.nextWorkout, isNotNull);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(WorkoutSummaryView), findsOneWidget);
   });
 
   testWidgets('today shows completed workout summary when no workout is open', (
@@ -330,6 +375,39 @@ class _WidgetStore extends LocalFitnessStore {
   Future<void> saveBridgeConfig(LocalBridgeConfig config) async {
     bridgeConfig = config;
   }
+}
+
+class _FakeHealthSync extends HealthSyncService {
+  @override
+  Future<DayActivityReport> readDayActivityReport(DateTime day) async {
+    return const DayActivityReport(
+      summary: DayActivitySummary(
+        readStatus: 'ok',
+        missingPermissions: [],
+        sampleCount: 0,
+      ),
+      sessions: [],
+    );
+  }
+}
+
+class _NoopWatchSync extends WatchSyncService {
+  @override
+  Stream<Map<String, dynamic>> get events =>
+      const Stream<Map<String, dynamic>>.empty();
+
+  @override
+  Future<String> syncWorkout({
+    required PlannedWorkout workout,
+    WorkoutLog? activeLog,
+    WorkoutLog? completedLog,
+  }) async => 'noop';
+
+  @override
+  Future<void> markCompletionHandled(String completionId) async {}
+
+  @override
+  Future<void> endWatchWorkout(String workoutId) async {}
 }
 
 FitnessData _longCoachData() {
@@ -495,6 +573,41 @@ FitnessData _dataWithCompletedFirstWorkoutToday() {
     healthWriteStatus: 'not_synced',
   );
   return base.copyWith(logs: [completed]);
+}
+
+Map<String, dynamic> _watchCompletionPayloadFor(PlannedWorkout workout) {
+  final exercise = workout.exercises.first;
+  final started = DateTime.now().subtract(const Duration(minutes: 40));
+  final completed = DateTime.now().subtract(const Duration(minutes: 2));
+  return {
+    'schemaVersion': 1,
+    'completionId': 'completion-${workout.id}',
+    'workoutId': workout.id,
+    'title': workout.title,
+    'startedAt': started.toIso8601String(),
+    'completedAt': completed.toIso8601String(),
+    'pausedSeconds': 0,
+    'healthWriteStatus': 'watch_health_synced',
+    'sets': [
+      {
+        'exerciseId': exercise.exerciseId,
+        'exerciseName': exercise.name,
+        'setNumber': 1,
+        'weightKg': 20,
+        'reps': 8,
+        'rpe': 7,
+      },
+    ],
+    'exerciseTimings': [
+      {
+        'exerciseId': exercise.exerciseId,
+        'exerciseName': exercise.name,
+        'startedAt': started.toIso8601String(),
+        'completedAt': completed.toIso8601String(),
+        'pausedSeconds': 0,
+      },
+    ],
+  };
 }
 
 FitnessData _dataWithCompletedBlock() {

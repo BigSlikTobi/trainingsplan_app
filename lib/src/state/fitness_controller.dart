@@ -55,8 +55,29 @@ class FitnessController extends ChangeNotifier {
   Timer? _healthPoller;
   Timer? _uiTicker;
   String _status = 'Loading local training data...';
-  WorkoutLog? _justCompletedLog;
   LocalBridgeConfig _bridgeConfig = const LocalBridgeConfig();
+
+  /// The workout just completed this session, surfaced on Today (summary + set
+  /// logging) instead of advancing to the next workout. Backed by the
+  /// persisted [FitnessData.justCompletedLogId] so it survives an app relaunch
+  /// and the watch→phone background hand-off, and bounded to *today* so a stale
+  /// marker expires (the next day's workout then shows). Cleared on
+  /// acknowledge / start-next / plan-import via the setter.
+  WorkoutLog? get _justCompletedLog {
+    final id = _data.justCompletedLogId;
+    if (id == null) return null;
+    for (final log in _data.logs) {
+      if (log.id != id) continue;
+      final completedAt = log.completedAt;
+      if (completedAt == null) return null;
+      return dateKey(completedAt) == dateKey(DateTime.now()) ? log : null;
+    }
+    return null;
+  }
+
+  set _justCompletedLog(WorkoutLog? log) {
+    _data = _data.copyWith(justCompletedLogId: log?.id);
+  }
   Map<String, dynamic>? _pendingTrainingBlockPlanPayload;
   CoachingGoals? _pendingTrainingBlockGoals;
   StreamSubscription<Map<String, dynamic>>? _watchEvents;
@@ -65,6 +86,23 @@ class FitnessController extends ChangeNotifier {
 
   @visibleForTesting
   String? get debugActiveWatchSessionWorkoutId => _activeWatchSessionWorkoutId;
+
+  /// True while an Apple Watch session owns the active workout's exercise
+  /// lifecycle. In this state the phone mirrors the watch and suppresses its
+  /// own start/stop controls so the two devices never drive the session in
+  /// parallel. When no watch session is active this is false and the phone
+  /// owns the workout (e.g. training without a watch).
+  bool get isWatchControllingSession => _activeWatchSessionWorkoutId != null;
+
+  /// Guards a phone-initiated workout/exercise mutation: while the watch owns
+  /// the live session the phone defers to it (single source of truth) and the
+  /// caller bails out. Returns true if the action was blocked.
+  bool _deferToWatchSession() {
+    if (_activeWatchSessionWorkoutId == null) return false;
+    _status = 'Exercise control is active on your Apple Watch';
+    notifyListeners();
+    return true;
+  }
 
   FitnessData get data => _data;
   bool get isLoading => _isLoading;
@@ -78,6 +116,46 @@ class FitnessController extends ChangeNotifier {
   bool get hasActiveWorkout => _data.hasActiveWorkout;
   WorkoutLog? get activeWorkoutLog => _activeWorkoutLog();
   WorkoutLog? get justCompletedLog => _justCompletedLog;
+
+  /// The workout completed for *today's* session — what the Today screen shows
+  /// (summary + set logging) instead of presenting a workout to train again.
+  ///
+  /// Derived directly from the persisted logs by date, so it's robust across
+  /// app relaunches and regardless of how the workout was finished (phone or
+  /// watch) — unlike [justCompletedLog], it doesn't depend on a runtime marker
+  /// being set, so a session finished earlier (or in a previous build) is still
+  /// recognised. Null while a workout is active, or once the day rolls over
+  /// (the next session then shows).
+  WorkoutLog? get todaysCompletedWorkout {
+    if (hasActiveWorkout) return null;
+    final block = _data.activeBlock;
+    if (block == null) return null;
+    final todayKey = dateKey(DateTime.now());
+    final blockWorkoutIds = block.workouts.map((w) => w.id).toSet();
+    WorkoutLog? best;
+    for (final log in _data.logs) {
+      final completedAt = log.completedAt;
+      if (completedAt == null) continue;
+      if (dateKey(completedAt) != todayKey) continue;
+      if (!blockWorkoutIds.contains(log.workoutId)) continue;
+      if (best == null || completedAt.isAfter(best.completedAt!)) best = log;
+    }
+    return best;
+  }
+
+  /// Re-establishes the "just completed" marker on launch when today's session
+  /// is already done but the persisted marker is missing (e.g. it was finished
+  /// on the watch, or in a previous app launch / build), and pushes the done
+  /// state to the watch so it stays consistent with the phone instead of
+  /// re-opening the workout. Within a session, import / start-next clear the
+  /// marker as usual, so this never fights the advance flow.
+  void _restoreCompletedSessionMarker() {
+    if (_data.justCompletedLogId != null) return;
+    final completed = todaysCompletedWorkout;
+    if (completed == null) return;
+    _data = _data.copyWith(justCompletedLogId: completed.id);
+    unawaited(syncWorkoutToWatch());
+  }
   MealAnalysisRequest? get pendingMealRequest => _data.pendingMealRequest;
   MealAnalysisResult? get pendingMealResult => _data.pendingMealResult;
   FuelGuidance? get fuelGuidance => _data.fuelGuidance;
@@ -196,11 +274,12 @@ class FitnessController extends ChangeNotifier {
     _stopHealthPolling();
     _stopUiTicker();
     _data = _data.copyWith(logs: logs);
-    _justCompletedLog = logs.firstWhere(
+    final justCompleted = logs.firstWhere(
       (log) => log.workoutId == completion.workoutId && log.completedAt != null,
       orElse: () => completion,
     );
-    _captureWorkoutMemory(_justCompletedLog!);
+    _justCompletedLog = justCompleted;
+    _captureWorkoutMemory(justCompleted);
     await _persist('Imported Apple Watch workout');
     await _exportDayContext(notify: false);
     // Push the completion back to the watch so its UI flips from "Start"
@@ -249,8 +328,10 @@ class FitnessController extends ChangeNotifier {
     }
 
     _data = _data.copyWith(logs: logs);
+    // The watch owns the live session while it streams progress, so don't echo
+    // its own state back to it (it ignores echoes of its active session, and
+    // the phone defers to it — see _deferToWatchSession).
     await _persist('Imported Apple Watch progress');
-    unawaited(syncWorkoutToWatch());
   }
 
   void _markWatchCompletionHandled(Map<String, dynamic> payload) {
@@ -394,6 +475,7 @@ class FitnessController extends ChangeNotifier {
     _bridgeConfig = await _store.loadBridgeConfig();
     _isLoading = false;
     _status = 'Local-first coaching data loaded';
+    _restoreCompletedSessionMarker();
     try {
       _watchEvents ??= _watchSync.events.listen((event) {
         switch (event['type']) {
@@ -431,7 +513,10 @@ class FitnessController extends ChangeNotifier {
       notifyListeners();
       return '';
     }
-    final dayContext = await _exportDayContext(notify: false);
+    final dayContext = await _exportDayContext(
+      notify: false,
+      includeSnapshot: false,
+    );
     final dailySnapshot = _coach.buildDailySnapshot(_data);
     await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
     _status = 'Pushed T4L Gym Bro day context and daily snapshot';
@@ -523,7 +608,10 @@ class FitnessController extends ChangeNotifier {
       return;
     }
     try {
-      final dayContext = await _exportDayContext(notify: false);
+      final dayContext = await _exportDayContext(
+        notify: false,
+        includeSnapshot: false,
+      );
       final dailySnapshot = _coach.buildDailySnapshot(_data);
       await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
       await _bridge.uploadAppSnapshot(_bridgeConfig, {
@@ -555,7 +643,7 @@ class FitnessController extends ChangeNotifier {
       return;
     }
     try {
-      await _exportDayContext(notify: false);
+      await _exportDayContext(notify: false, includeSnapshot: false);
       final dailySnapshot = _coach.buildDailySnapshot(_data);
       await _bridge.uploadProfile(_bridgeConfig, {
         'schema': 'athlete_profile.v1',
@@ -816,6 +904,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> startCurrentWorkout() async {
+    if (_deferToWatchSession()) return;
     // Starting a new session means the user has moved past the previous
     // completion — release the watch from the "Done" parked state so it
     // syncs the new active workout.
@@ -874,6 +963,7 @@ class FitnessController extends ChangeNotifier {
     required String exerciseId,
     required String exerciseName,
   }) async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) {
       _status = 'Start the workout before timing an exercise';
@@ -901,6 +991,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> pauseExerciseTimer(String exerciseId) async {
+    if (_deferToWatchSession()) return;
     final mutated = _mutateActiveExerciseTiming(
       exerciseId,
       (t) => t.isRunning ? t.copyWith(pausedAt: DateTime.now()) : null,
@@ -912,6 +1003,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> resumeExerciseTimer(String exerciseId) async {
+    if (_deferToWatchSession()) return;
     final mutated = _mutateActiveExerciseTiming(exerciseId, (t) {
       if (!t.isPaused) return null;
       final added = DateTime.now().difference(t.pausedAt!).inSeconds;
@@ -930,6 +1022,7 @@ class FitnessController extends ChangeNotifier {
     String exerciseId, {
     bool autoCloseWorkout = true,
   }) async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) return;
     final log = _data.logs[index];
@@ -971,6 +1064,7 @@ class FitnessController extends ChangeNotifier {
   Future<void> tryAutoCloseWorkout() => _maybeAutoCloseWorkout();
 
   Future<void> pauseCurrentWorkout() async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) return;
     final log = _data.logs[index];
@@ -984,6 +1078,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> resumeCurrentWorkout() async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) return;
     final log = _data.logs[index];
@@ -1689,7 +1784,10 @@ class FitnessController extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> _exportDayContext({bool notify = true}) async {
+  Future<Map<String, dynamic>> _exportDayContext({
+    bool notify = true,
+    bool includeSnapshot = true,
+  }) async {
     final now = DateTime.now();
     final activityReport = await _health.readDayActivityReport(now);
     final payload = _coach.buildDayContext(
@@ -1699,6 +1797,25 @@ class FitnessController extends ChangeNotifier {
     );
     if (_bridgeConfig.isConfigured) {
       await _bridge.uploadDayContext(_bridgeConfig, payload);
+      // Refresh the daily snapshot alongside the day context so the coach's
+      // recent-history view (recentLogs) stays current after every workout or
+      // fuel event, without waiting for a manual Context Push. Best-effort: a
+      // snapshot failure must not break the flow that triggered it. Callers
+      // that upload the snapshot themselves pass includeSnapshot: false.
+      if (includeSnapshot) {
+        try {
+          await _bridge.uploadDailySnapshot(
+            _bridgeConfig,
+            _coach.buildDailySnapshot(_data),
+          );
+        } on Object catch (error, stackTrace) {
+          AppLog.warn(
+            'Daily snapshot refresh failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
     }
     if (notify) {
       _status = _bridgeConfig.isConfigured

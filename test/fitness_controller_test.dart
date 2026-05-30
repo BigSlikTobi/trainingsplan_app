@@ -750,6 +750,77 @@ void main() {
     expect(completedJson['completedAt'], isNotNull);
   });
 
+  test('a finished workout still surfaces after relaunch', () async {
+    final store = _MemoryStore();
+    final first = FitnessController(
+      store: store,
+      health: _TimerHealthSync(),
+      watchSync: _FakeWatchSync(),
+    );
+    await first.load();
+    final workout = first.nextWorkout!;
+    final exercise = workout.exercises.first;
+    await first.logSet(exercise, 20, 8, 6);
+    await first.completeCurrentWorkout();
+    await Future<void>.delayed(Duration.zero);
+    expect(first.justCompletedLog, isNotNull);
+
+    // Simulate the watch→phone background hand-off / app relaunch: a fresh
+    // controller loading the persisted data must still surface the finished
+    // workout (so Today shows its summary, not the next workout as "open").
+    final relaunched = FitnessController(
+      store: store,
+      health: _TimerHealthSync(),
+      watchSync: _FakeWatchSync(),
+    );
+    await relaunched.load();
+    expect(relaunched.activeWorkoutLog, isNull);
+    // The Today screen surfaces it (date-based, so it survives the relaunch).
+    expect(relaunched.todaysCompletedWorkout, isNotNull);
+    expect(relaunched.todaysCompletedWorkout!.workoutId, workout.id);
+    expect(relaunched.justCompletedLog, isNotNull);
+  });
+
+  test('a session finished before launch (no marker) syncs done to the watch', () async {
+    final store = _MemoryStore();
+    final base = sampleFitnessData();
+    final workout = base.activeBlock!.workouts.first;
+    // Preload a workout completed earlier today with no runtime marker — as if
+    // it was finished on the watch or in a previous app launch / build.
+    store.saved = base.copyWith(
+      logs: [
+        WorkoutLog(
+          id: 'log-prev-launch',
+          workoutId: workout.id,
+          title: workout.title,
+          startedAt: DateTime.now().subtract(const Duration(minutes: 40)),
+          completedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          readiness: 3,
+          soreness: 2,
+          notes: '',
+          sets: const [],
+          healthWriteStatus: 'not_synced',
+        ),
+      ],
+    );
+
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: store,
+      health: _TimerHealthSync(),
+      watchSync: watch,
+    );
+    await controller.load();
+    await Future<void>.delayed(Duration.zero);
+
+    // Today surfaces it, the marker is re-established, and the watch is told the
+    // session is done (a completedLog), not re-opened with the next workout.
+    expect(controller.todaysCompletedWorkout, isNotNull);
+    expect(controller.justCompletedLog, isNotNull);
+    expect(watch.sentPayloads, isNotEmpty);
+    expect(watch.sentPayloads.last, contains('completedLog'));
+  });
+
   test('iPhone completion can finish workout without active log', () async {
     final watch = _FakeWatchSync();
     final controller = FitnessController(
@@ -882,7 +953,47 @@ void main() {
     expect(log.exerciseTimings.single.exerciseId, exercise.exerciseId);
     expect(log.exerciseTimings.single.completedAt, isNull);
     expect(controller.debugActiveWatchSessionWorkoutId, workout.id);
-    expect(watch.sentPayloads.last['activeLog'], isNotNull);
+    // The watch owns the live session here, so the phone mirrors the progress
+    // into its active log but does not echo the watch's own state back to it
+    // (the two devices never drive the session in parallel).
+    expect(controller.isWatchControllingSession, isTrue);
+    expect(watch.sentPayloads, isEmpty);
+  });
+
+  test('phone defers exercise control to an active watch session', () async {
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: _MemoryStore(),
+      watchSync: watch,
+    );
+    await controller.load();
+    final workout = controller.nextWorkout!;
+    final exercise = workout.exercises.first;
+
+    // The watch starts and streams progress, so it now owns the live session.
+    await controller.handleWatchWorkoutProgress(
+      _watchProgressPayload(workout, exercise, revision: 1),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.isWatchControllingSession, isTrue);
+
+    final timingsBefore = controller.activeWorkoutLog!.exerciseTimings.length;
+    watch.sentPayloads.clear();
+
+    // Phone-side controls defer to the watch instead of competing with it:
+    // no new timing is created, the running one is not stopped, and nothing is
+    // pushed back to the watch.
+    await controller.startExerciseTimer(
+      exerciseId: 'phone_only_exercise',
+      exerciseName: 'Phone Only',
+    );
+    await controller.stopExerciseTimer(exercise.exerciseId);
+    await controller.pauseCurrentWorkout();
+
+    expect(controller.activeWorkoutLog!.exerciseTimings.length, timingsBefore);
+    expect(controller.activeWorkoutLog!.exerciseTimings.single.completedAt,
+        isNull);
+    expect(watch.sentPayloads, isEmpty);
   });
 
   test('imports completed watch workout into logs', () async {
@@ -985,8 +1096,10 @@ void main() {
     );
 
     expect(controller.activeWorkoutLog, isNull);
-    expect(controller.justCompletedLog?.sets, hasLength(2));
     expect(controller.data.logs, hasLength(1));
+    // The watch completion merged into the single active log (now completed).
+    expect(controller.data.logs.single.completedAt, isNotNull);
+    expect(controller.data.logs.single.sets, hasLength(2));
   });
 }
 

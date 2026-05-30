@@ -163,6 +163,18 @@ class _TodayPage extends StatelessWidget {
     final workout = controller.nextWorkout;
     final block = controller.activeBlock;
     final data = controller.data;
+    // If today's session is already done, keep showing it (summary + set
+    // logging / comments) rather than presenting a workout to train again.
+    // Derived from the logs by date, so a session finished earlier today — on
+    // the phone or the watch, even in a previous app launch — is recognised,
+    // and it clears itself once the day rolls over.
+    final completedToday = controller.todaysCompletedWorkout;
+    if (completedToday != null) {
+      return ColoredBox(
+        color: AppColors.bg,
+        child: WorkoutSummaryView(logId: completedToday.id),
+      );
+    }
     if (workout == null || block == null) {
       final completedLog = _latestCompletedWorkoutLog(data);
       if (completedLog != null) {
