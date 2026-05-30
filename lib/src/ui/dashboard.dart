@@ -11,6 +11,7 @@ import '../l10n/app_localizations.dart';
 import '../models/fitness_models.dart';
 import '../state/fitness_controller.dart';
 import '../util/haptics.dart';
+import 'chat_screen.dart';
 import 'set_log_modal.dart';
 import 'today_hero_card.dart';
 import 'workout_summary_screen.dart';
@@ -23,6 +24,19 @@ const _agentInstructionsRepo =
     'https://github.com/BigSlikTobi/t4l-agent-instructions';
 const _bridgeInstallCommand = 'pipx install t4l-server';
 const _bridgeServeCommand = 't4l-server serve --data-dir ~/T4LServerData';
+
+/// Opens the in-app coach chat as a full-screen route, re-providing the
+/// controller so the chat surface (and anything it pushes) keeps app state.
+void _openCoachChat(BuildContext context, FitnessController controller) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => FitnessScope(
+        controller: controller,
+        child: ChatScreen(controller: controller),
+      ),
+    ),
+  );
+}
 
 class CoachDashboard extends StatefulWidget {
   const CoachDashboard({super.key});
@@ -74,6 +88,11 @@ class _CoachDashboardState extends State<CoachDashboard> {
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
+          IconButton(
+            tooltip: l.chatOpenTooltip,
+            onPressed: () => _openCoachChat(context, controller),
+            icon: const Icon(CupertinoIcons.chat_bubble_2),
+          ),
           IconButton(
             tooltip: l.tooltipSettings,
             onPressed: () => Navigator.of(context).push(

@@ -136,6 +136,40 @@ class LocalBridgeService {
     _ensureOk(response);
   }
 
+  /// Posts an athlete chat turn to the broker and returns the created message
+  /// (camelCase `summary()` shape) so the caller can confirm its assigned seq.
+  Future<Map<String, dynamic>> postChatMessage(
+    LocalBridgeConfig config,
+    String content,
+  ) async {
+    final response = await _client
+        .post(
+          _uri(config, '/v1/chat/messages'),
+          headers: {
+            ..._headers(config),
+            'content-type': 'application/json; charset=utf-8',
+          },
+          body: jsonEncode({'content': content}),
+        )
+        .timeout(const Duration(seconds: 12));
+    return _decodeJsonResponse(response);
+  }
+
+  /// Long-poll cursor read: returns `{messages: [...], latestSeq: int}` for all
+  /// chat turns with `seq > since`.
+  Future<Map<String, dynamic>> fetchChatMessages(
+    LocalBridgeConfig config,
+    int since,
+  ) async {
+    final response = await _client
+        .get(
+          _uri(config, '/v1/chat/messages?since=$since'),
+          headers: _headers(config),
+        )
+        .timeout(const Duration(seconds: 8));
+    return _decodeJsonResponse(response);
+  }
+
   Future<void> _putJson(
     LocalBridgeConfig config,
     String path,

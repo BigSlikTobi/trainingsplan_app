@@ -56,6 +56,7 @@ class FitnessController extends ChangeNotifier {
   Timer? _uiTicker;
   String _status = 'Loading local training data...';
   LocalBridgeConfig _bridgeConfig = const LocalBridgeConfig();
+  bool _chatVoiceEnabled = true;
 
   /// The workout just completed this session, surfaced on Today (summary + set
   /// logging) instead of advancing to the next workout. Backed by the
@@ -163,6 +164,15 @@ class FitnessController extends ChangeNotifier {
   List<FuelDiaryEntry> get fuelDiary => _data.fuelDiary;
   DateTime? get fuelDiarySentAt => _data.fuelDiarySentAt;
   LocalBridgeConfig get bridgeConfig => _bridgeConfig;
+  bool get chatVoiceEnabled => _chatVoiceEnabled;
+
+  /// Persisted preference for reading coach chat replies aloud (TTS).
+  Future<void> setChatVoiceEnabled(bool value) async {
+    if (_chatVoiceEnabled == value) return;
+    _chatVoiceEnabled = value;
+    notifyListeners();
+    await _store.saveChatVoiceEnabled(value);
+  }
 
   Future<void> syncWorkoutToWatch() async {
     // Priority:
@@ -473,6 +483,7 @@ class FitnessController extends ChangeNotifier {
     notifyListeners();
     _data = await _store.load();
     _bridgeConfig = await _store.loadBridgeConfig();
+    _chatVoiceEnabled = await _store.loadChatVoiceEnabled();
     _isLoading = false;
     _status = 'Local-first coaching data loaded';
     _restoreCompletedSessionMarker();

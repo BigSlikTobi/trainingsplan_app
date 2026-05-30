@@ -350,6 +350,8 @@ class _CoachPlanTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
+        _ChatEntryCard(onTap: () => _openCoachChat(context, controller)),
+        const SizedBox(height: 8),
         if (data.coachingGoals != null)
           _GoalsCard(goals: data.coachingGoals!),
         if (data.yesterdaySummary != null) ...[
@@ -440,6 +442,80 @@ class _CoachPlanTab extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ─── Chat Entry Card ──────────────────────────────────────────────────────
+
+class _ChatEntryCard extends StatelessWidget {
+  const _ChatEntryCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.sage.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.sage.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.sage.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.chat_bubble_2_fill,
+                  size: 20,
+                  color: AppColors.paper,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l.chatCardTitle,
+                      style: const TextStyle(
+                        fontSize: AppType.callout,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.paper,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l.chatCardSubtitle,
+                      style: TextStyle(
+                        fontSize: AppType.footnote,
+                        color: AppColors.paper.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 16,
+                color: AppColors.paper.withValues(alpha: 0.4),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

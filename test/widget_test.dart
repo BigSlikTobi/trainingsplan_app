@@ -375,6 +375,12 @@ class _WidgetStore extends LocalFitnessStore {
   Future<void> saveBridgeConfig(LocalBridgeConfig config) async {
     bridgeConfig = config;
   }
+
+  @override
+  Future<bool> loadChatVoiceEnabled() async => true;
+
+  @override
+  Future<void> saveChatVoiceEnabled(bool enabled) async {}
 }
 
 class _FakeHealthSync extends HealthSyncService {

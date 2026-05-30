@@ -138,6 +138,46 @@ class LocalFitnessStore {
     }
   }
 
+  Future<bool> loadChatVoiceEnabled() async {
+    try {
+      final db = await _openDatabase();
+      try {
+        final rows = db.select(
+          'SELECT value FROM app_state WHERE key = ? LIMIT 1',
+          ['chat_voice_enabled'],
+        );
+        if (rows.isEmpty) return true; // default: speak coach replies aloud
+        return (rows.first['value'] as String) == 'true';
+      } finally {
+        db.close();
+      }
+    } on Object {
+      return true;
+    }
+  }
+
+  Future<void> saveChatVoiceEnabled(bool enabled) async {
+    final db = await _openDatabase();
+    try {
+      db.execute(
+        '''
+        INSERT INTO app_state(key, value, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+          value = excluded.value,
+          updated_at = excluded.updated_at
+        ''',
+        [
+          'chat_voice_enabled',
+          enabled ? 'true' : 'false',
+          DateTime.now().toIso8601String(),
+        ],
+      );
+    } finally {
+      db.close();
+    }
+  }
+
   Future<Database> _openDatabase() async {
     final file = await _sqliteFile;
     final db = sqlite3.open(file.path);

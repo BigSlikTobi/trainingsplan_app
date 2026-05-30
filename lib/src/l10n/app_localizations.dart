@@ -128,6 +128,114 @@ abstract class AppLocalizations {
   /// **'Progress'**
   String get navProgress;
 
+  /// Chat screen app bar title
+  ///
+  /// In de, this message translates to:
+  /// **'Coach-Chat'**
+  String get chatTitle;
+
+  /// AppBar chat icon tooltip
+  ///
+  /// In de, this message translates to:
+  /// **'Coach-Chat öffnen'**
+  String get chatOpenTooltip;
+
+  /// Chat composer text field hint
+  ///
+  /// In de, this message translates to:
+  /// **'Schreib deinem Coach …'**
+  String get chatInputHint;
+
+  /// Chat send button tooltip
+  ///
+  /// In de, this message translates to:
+  /// **'Senden'**
+  String get chatSend;
+
+  /// Chat empty-state title
+  ///
+  /// In de, this message translates to:
+  /// **'Sag Hallo 👋'**
+  String get chatEmptyTitle;
+
+  /// Chat empty-state body
+  ///
+  /// In de, this message translates to:
+  /// **'Frag deinen Coach alles – mitten im Workout oder jederzeit.'**
+  String get chatEmptyBody;
+
+  /// Chat not-connected title
+  ///
+  /// In de, this message translates to:
+  /// **'Kein Server verbunden'**
+  String get chatNotConnectedTitle;
+
+  /// Chat not-connected body
+  ///
+  /// In de, this message translates to:
+  /// **'Verbinde in den Einstellungen einen T4L-Server, um zu chatten.'**
+  String get chatNotConnectedBody;
+
+  /// Failed outgoing message retry hint
+  ///
+  /// In de, this message translates to:
+  /// **'Senden fehlgeschlagen. Tippen zum Wiederholen'**
+  String get chatFailedRetry;
+
+  /// Chat day divider: today
+  ///
+  /// In de, this message translates to:
+  /// **'Heute'**
+  String get chatToday;
+
+  /// Chat day divider: yesterday
+  ///
+  /// In de, this message translates to:
+  /// **'Gestern'**
+  String get chatYesterday;
+
+  /// Coach tab chat entry card title
+  ///
+  /// In de, this message translates to:
+  /// **'Chat mit deinem Coach'**
+  String get chatCardTitle;
+
+  /// Coach tab chat entry card subtitle
+  ///
+  /// In de, this message translates to:
+  /// **'Fragen, Check-ins, Motivation'**
+  String get chatCardSubtitle;
+
+  /// Chat app bar: toggle reading replies aloud
+  ///
+  /// In de, this message translates to:
+  /// **'Antworten vorlesen'**
+  String get chatVoiceTooltip;
+
+  /// Per-message speaker button tooltip
+  ///
+  /// In de, this message translates to:
+  /// **'Vorlesen'**
+  String get chatSpeak;
+
+  /// Composer mic (speech-to-text) tooltip
+  ///
+  /// In de, this message translates to:
+  /// **'Diktieren'**
+  String get chatMicTooltip;
+
+  /// Composer hint while dictating
+  ///
+  /// In de, this message translates to:
+  /// **'Höre zu …'**
+  String get chatListening;
+
+  /// Snackbar shown when dictation cannot start
+  ///
+  /// In de, this message translates to:
+  /// **'Spracheingabe nicht verfügbar. Erlaube Mikrofon und Spracherkennung in den Einstellungen.'**
+  String get sttUnavailable;
+
   /// Bottom nav: setup tab
   ///
   /// In de, this message translates to:
