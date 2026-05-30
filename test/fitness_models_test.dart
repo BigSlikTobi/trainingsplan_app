@@ -512,13 +512,13 @@ void main() {
       createdAt: DateTime(2026, 5, 25, 20, 30),
     );
     final data = sampleFitnessData().copyWith(latestFuelCheckIn: checkIn);
-    final activity = DayActivityReport(
-      summary: const DayActivitySummary(
+    const activity = DayActivityReport(
+      summary: DayActivitySummary(
         readStatus: 'ok',
         missingPermissions: [],
         sampleCount: 0,
       ),
-      sessions: const [],
+      sessions: [],
     );
 
     final snapshot = service.buildDailySnapshot(data);

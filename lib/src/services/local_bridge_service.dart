@@ -112,7 +112,7 @@ class LocalBridgeService {
     final raw = payload['results'];
     if (raw is! List) return const [];
     return raw
-        .whereType<Map>()
+        .whereType<Map<dynamic, dynamic>>()
         .map((item) => item['kind'] as String?)
         .whereType<String>()
         .toList();

@@ -32,6 +32,30 @@ abstract final class AppBorder {
 abstract final class AppRadii {
   static const xsmall = 6.0;
   static const small = 8.0;
+  static const medium = 12.0;
+  static const large = 16.0;
+  static const pill = 999.0;
+}
+
+/// A small, consistent type scale. Prefer these over inline `fontSize:` literals
+/// so text sizing stays coherent and is easy to tune in one place.
+abstract final class AppType {
+  static const caption = 11.0;
+  static const footnote = 12.0;
+  static const body = 14.0;
+  static const callout = 15.0;
+  static const headline = 17.0;
+  static const title = 20.0;
+  static const largeTitle = 24.0;
+  static const display = 28.0;
+}
+
+/// Standard motion durations. Keeping these aligned gives the UI a coherent
+/// rhythm and makes it easy to honour reduced-motion preferences in one place.
+abstract final class AppMotion {
+  static const fast = Duration(milliseconds: 150);
+  static const medium = Duration(milliseconds: 220);
+  static const slow = Duration(milliseconds: 320);
 }
 
 abstract final class AppSpacing {

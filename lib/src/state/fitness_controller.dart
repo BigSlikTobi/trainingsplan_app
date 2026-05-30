@@ -12,6 +12,16 @@ import '../services/health_sync_service.dart';
 import '../services/local_bridge_service.dart';
 import '../services/media_capture_service.dart';
 import '../services/watch_sync_service.dart';
+import '../util/app_log.dart';
+
+/// Outcome of attempting to apply a single coach result pulled from the server.
+///
+/// The distinction drives whether the artifact is consumed on the server:
+/// [applied] and [rejected] are both terminal (consume so they never re-appear),
+/// while [awaitingUser] and [unknownKind] deliberately leave the artifact
+/// pending. [rejected] specifically prevents a malformed payload from wedging
+/// the pull loop by re-downloading and re-failing forever.
+enum _ResultImport { applied, awaitingUser, rejected, unknownKind }
 
 class FitnessController extends ChangeNotifier {
   FitnessController({
@@ -37,6 +47,7 @@ class FitnessController extends ChangeNotifier {
 
   FitnessData _data = createEmptyFitnessData();
   bool _isLoading = true;
+  bool _disposed = false;
   bool _hasPendingCoachBlock = false;
   bool _hasPendingNutritionAnalysis = false;
   bool _isHealthTracking = false;
@@ -44,8 +55,29 @@ class FitnessController extends ChangeNotifier {
   Timer? _healthPoller;
   Timer? _uiTicker;
   String _status = 'Loading local training data...';
-  WorkoutLog? _justCompletedLog;
   LocalBridgeConfig _bridgeConfig = const LocalBridgeConfig();
+
+  /// The workout just completed this session, surfaced on Today (summary + set
+  /// logging) instead of advancing to the next workout. Backed by the
+  /// persisted [FitnessData.justCompletedLogId] so it survives an app relaunch
+  /// and the watch→phone background hand-off, and bounded to *today* so a stale
+  /// marker expires (the next day's workout then shows). Cleared on
+  /// acknowledge / start-next / plan-import via the setter.
+  WorkoutLog? get _justCompletedLog {
+    final id = _data.justCompletedLogId;
+    if (id == null) return null;
+    for (final log in _data.logs) {
+      if (log.id != id) continue;
+      final completedAt = log.completedAt;
+      if (completedAt == null) return null;
+      return dateKey(completedAt) == dateKey(DateTime.now()) ? log : null;
+    }
+    return null;
+  }
+
+  set _justCompletedLog(WorkoutLog? log) {
+    _data = _data.copyWith(justCompletedLogId: log?.id);
+  }
   Map<String, dynamic>? _pendingTrainingBlockPlanPayload;
   CoachingGoals? _pendingTrainingBlockGoals;
   StreamSubscription<Map<String, dynamic>>? _watchEvents;
@@ -54,6 +86,23 @@ class FitnessController extends ChangeNotifier {
 
   @visibleForTesting
   String? get debugActiveWatchSessionWorkoutId => _activeWatchSessionWorkoutId;
+
+  /// True while an Apple Watch session owns the active workout's exercise
+  /// lifecycle. In this state the phone mirrors the watch and suppresses its
+  /// own start/stop controls so the two devices never drive the session in
+  /// parallel. When no watch session is active this is false and the phone
+  /// owns the workout (e.g. training without a watch).
+  bool get isWatchControllingSession => _activeWatchSessionWorkoutId != null;
+
+  /// Guards a phone-initiated workout/exercise mutation: while the watch owns
+  /// the live session the phone defers to it (single source of truth) and the
+  /// caller bails out. Returns true if the action was blocked.
+  bool _deferToWatchSession() {
+    if (_activeWatchSessionWorkoutId == null) return false;
+    _status = 'Exercise control is active on your Apple Watch';
+    notifyListeners();
+    return true;
+  }
 
   FitnessData get data => _data;
   bool get isLoading => _isLoading;
@@ -67,6 +116,46 @@ class FitnessController extends ChangeNotifier {
   bool get hasActiveWorkout => _data.hasActiveWorkout;
   WorkoutLog? get activeWorkoutLog => _activeWorkoutLog();
   WorkoutLog? get justCompletedLog => _justCompletedLog;
+
+  /// The workout completed for *today's* session — what the Today screen shows
+  /// (summary + set logging) instead of presenting a workout to train again.
+  ///
+  /// Derived directly from the persisted logs by date, so it's robust across
+  /// app relaunches and regardless of how the workout was finished (phone or
+  /// watch) — unlike [justCompletedLog], it doesn't depend on a runtime marker
+  /// being set, so a session finished earlier (or in a previous build) is still
+  /// recognised. Null while a workout is active, or once the day rolls over
+  /// (the next session then shows).
+  WorkoutLog? get todaysCompletedWorkout {
+    if (hasActiveWorkout) return null;
+    final block = _data.activeBlock;
+    if (block == null) return null;
+    final todayKey = dateKey(DateTime.now());
+    final blockWorkoutIds = block.workouts.map((w) => w.id).toSet();
+    WorkoutLog? best;
+    for (final log in _data.logs) {
+      final completedAt = log.completedAt;
+      if (completedAt == null) continue;
+      if (dateKey(completedAt) != todayKey) continue;
+      if (!blockWorkoutIds.contains(log.workoutId)) continue;
+      if (best == null || completedAt.isAfter(best.completedAt!)) best = log;
+    }
+    return best;
+  }
+
+  /// Re-establishes the "just completed" marker on launch when today's session
+  /// is already done but the persisted marker is missing (e.g. it was finished
+  /// on the watch, or in a previous app launch / build), and pushes the done
+  /// state to the watch so it stays consistent with the phone instead of
+  /// re-opening the workout. Within a session, import / start-next clear the
+  /// marker as usual, so this never fights the advance flow.
+  void _restoreCompletedSessionMarker() {
+    if (_data.justCompletedLogId != null) return;
+    final completed = todaysCompletedWorkout;
+    if (completed == null) return;
+    _data = _data.copyWith(justCompletedLogId: completed.id);
+    unawaited(syncWorkoutToWatch());
+  }
   MealAnalysisRequest? get pendingMealRequest => _data.pendingMealRequest;
   MealAnalysisResult? get pendingMealResult => _data.pendingMealResult;
   FuelGuidance? get fuelGuidance => _data.fuelGuidance;
@@ -185,11 +274,12 @@ class FitnessController extends ChangeNotifier {
     _stopHealthPolling();
     _stopUiTicker();
     _data = _data.copyWith(logs: logs);
-    _justCompletedLog = logs.firstWhere(
+    final justCompleted = logs.firstWhere(
       (log) => log.workoutId == completion.workoutId && log.completedAt != null,
       orElse: () => completion,
     );
-    _captureWorkoutMemory(_justCompletedLog!);
+    _justCompletedLog = justCompleted;
+    _captureWorkoutMemory(justCompleted);
     await _persist('Imported Apple Watch workout');
     await _exportDayContext(notify: false);
     // Push the completion back to the watch so its UI flips from "Start"
@@ -238,8 +328,10 @@ class FitnessController extends ChangeNotifier {
     }
 
     _data = _data.copyWith(logs: logs);
+    // The watch owns the live session while it streams progress, so don't echo
+    // its own state back to it (it ignores echoes of its active session, and
+    // the phone defers to it — see _deferToWatchSession).
     await _persist('Imported Apple Watch progress');
-    unawaited(syncWorkoutToWatch());
   }
 
   void _markWatchCompletionHandled(Map<String, dynamic> payload) {
@@ -383,6 +475,7 @@ class FitnessController extends ChangeNotifier {
     _bridgeConfig = await _store.loadBridgeConfig();
     _isLoading = false;
     _status = 'Local-first coaching data loaded';
+    _restoreCompletedSessionMarker();
     try {
       _watchEvents ??= _watchSync.events.listen((event) {
         switch (event['type']) {
@@ -420,7 +513,10 @@ class FitnessController extends ChangeNotifier {
       notifyListeners();
       return '';
     }
-    final dayContext = await _exportDayContext(notify: false);
+    final dayContext = await _exportDayContext(
+      notify: false,
+      includeSnapshot: false,
+    );
     final dailySnapshot = _coach.buildDailySnapshot(_data);
     await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
     _status = 'Pushed T4L Gym Bro day context and daily snapshot';
@@ -494,7 +590,12 @@ class FitnessController extends ChangeNotifier {
     try {
       await _bridge.health(_bridgeConfig);
       _status = 'Self-hosted server connected';
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.warn(
+        'Self-hosted server connection failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Self-hosted server connection failed: $error';
     }
     notifyListeners();
@@ -507,7 +608,10 @@ class FitnessController extends ChangeNotifier {
       return;
     }
     try {
-      final dayContext = await _exportDayContext(notify: false);
+      final dayContext = await _exportDayContext(
+        notify: false,
+        includeSnapshot: false,
+      );
       final dailySnapshot = _coach.buildDailySnapshot(_data);
       await _bridge.uploadDailySnapshot(_bridgeConfig, dailySnapshot);
       await _bridge.uploadAppSnapshot(_bridgeConfig, {
@@ -521,7 +625,12 @@ class FitnessController extends ChangeNotifier {
       await _store.saveBridgeConfig(_bridgeConfig);
       _status =
           'Migrated local training snapshot to self-hosted server. Phone data unchanged.';
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.error(
+        'Server migration failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Server migration failed: $error';
     }
     notifyListeners();
@@ -534,7 +643,7 @@ class FitnessController extends ChangeNotifier {
       return;
     }
     try {
-      await _exportDayContext(notify: false);
+      await _exportDayContext(notify: false, includeSnapshot: false);
       final dailySnapshot = _coach.buildDailySnapshot(_data);
       await _bridge.uploadProfile(_bridgeConfig, {
         'schema': 'athlete_profile.v1',
@@ -550,7 +659,8 @@ class FitnessController extends ChangeNotifier {
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
       _status = 'Pushed ${uploaded.join(', ')} to self-hosted server';
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.error('Server push failed', error: error, stackTrace: stackTrace);
       _status = 'Server push failed: $error';
     }
     notifyListeners();
@@ -562,31 +672,76 @@ class FitnessController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    final downloaded = <String>[];
+    final applied = <String>[];
+    final rejected = <String>[];
+    var awaitingBlock = false;
     try {
       final pendingKinds = await _bridge.pendingResultKinds(_bridgeConfig);
       for (final kind in pendingKinds) {
         final payload = await _bridge.downloadResult(_bridgeConfig, kind);
         if (payload == null) continue;
-        final imported = await _importBridgeResult(kind, payload);
-        if (imported == null) continue;
-        if (imported.consume) {
-          await _bridge.markResultConsumed(_bridgeConfig, kind);
+        final outcome = await _importBridgeResult(kind, payload);
+        switch (outcome) {
+          case _ResultImport.applied:
+            await _bridge.markResultConsumed(_bridgeConfig, kind);
+            applied.add(kind);
+          case _ResultImport.rejected:
+            // A malformed payload will never parse, so consume it to stop it
+            // re-appearing on every pull and wedging the loop forever. The
+            // failure is surfaced below and logged via parse error reporting.
+            await _bridge.markResultConsumed(_bridgeConfig, kind);
+            rejected.add(kind);
+          case _ResultImport.awaitingUser:
+            // Training blocks require explicit user import; leave them pending.
+            awaitingBlock = true;
+          case _ResultImport.unknownKind:
+            // A result this app version does not understand: leave it pending
+            // so a future version can apply it. Forward compatibility.
+            break;
         }
-        downloaded.add(imported.label);
       }
       _bridgeConfig = _bridgeConfig.copyWith(lastSyncAt: DateTime.now());
       await _store.saveBridgeConfig(_bridgeConfig);
-      _status = downloaded.isEmpty
-          ? ''
-          : 'Pulled ${downloaded.join(', ')} from self-hosted server';
-    } on Object catch (error) {
+      _status = _composePullStatus(
+        applied: applied,
+        rejected: rejected,
+        awaitingBlock: awaitingBlock,
+      );
+    } on Object catch (error, stackTrace) {
+      // Transport/server errors are transient: do not consume anything, so the
+      // next pull retries cleanly.
+      AppLog.warn(
+        'Server result check failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Server result check failed: $error';
     }
     notifyListeners();
   }
 
-  Future<({String label, bool consume})?> _importBridgeResult(
+  String _composePullStatus({
+    required List<String> applied,
+    required List<String> rejected,
+    required bool awaitingBlock,
+  }) {
+    final parts = <String>[];
+    if (applied.isNotEmpty) {
+      parts.add('Pulled ${applied.join(', ')} from self-hosted server');
+    }
+    if (awaitingBlock) {
+      parts.add('New T4L Gym Bro training block available');
+    }
+    if (rejected.isNotEmpty) {
+      parts.add(
+        'Discarded unreadable ${rejected.join(', ')} from the coach; '
+        'ask it to resend.',
+      );
+    }
+    return parts.join(' · ');
+  }
+
+  Future<_ResultImport> _importBridgeResult(
     String kind,
     Map<String, dynamic> payload,
   ) async {
@@ -601,32 +756,35 @@ class FitnessController extends ChangeNotifier {
             coachingGoals: parsed.goals ?? _data.coachingGoals,
           );
           await _store.save(_data);
-          return (label: 'next_day_plan', consume: true);
+          return _ResultImport.applied;
         case 'training_block_plan':
           final parsed = _coach.parseTrainingBlockPlanWithContext(payload);
           _pendingTrainingBlockPlanPayload = payload;
           _pendingTrainingBlockGoals = parsed.goals;
           _hasPendingCoachBlock = true;
-          _status = 'New T4L Gym Bro training block available';
-          return (label: 'training_block_plan', consume: false);
+          return _ResultImport.awaitingUser;
         case 'nutrition_analysis_result':
           final result = _coach.parseNutritionAnalysisResult(payload);
           _data = _data.copyWith(pendingMealResult: result);
           _hasPendingNutritionAnalysis = true;
           await _store.save(_data);
-          return (label: 'nutrition_analysis_result', consume: true);
+          return _ResultImport.applied;
         case 'fuel_guidance':
           final guidance = _coach.parseFuelGuidance(payload);
           _data = _data.copyWith(fuelGuidance: guidance);
           await _store.save(_data);
-          return (label: 'fuel_guidance', consume: true);
+          return _ResultImport.applied;
+        default:
+          return _ResultImport.unknownKind;
       }
-    } on FormatException catch (e) {
-      _status = 'Invalid $kind payload from server: $e';
-      notifyListeners();
-      return null;
+    } on FormatException catch (error, stackTrace) {
+      AppLog.warn(
+        'Rejected unreadable $kind payload from server',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return _ResultImport.rejected;
     }
-    return null;
   }
 
   Future<void> importNextDayWorkout(
@@ -746,6 +904,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> startCurrentWorkout() async {
+    if (_deferToWatchSession()) return;
     // Starting a new session means the user has moved past the previous
     // completion — release the watch from the "Done" parked state so it
     // syncs the new active workout.
@@ -804,6 +963,7 @@ class FitnessController extends ChangeNotifier {
     required String exerciseId,
     required String exerciseName,
   }) async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) {
       _status = 'Start the workout before timing an exercise';
@@ -831,6 +991,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> pauseExerciseTimer(String exerciseId) async {
+    if (_deferToWatchSession()) return;
     final mutated = _mutateActiveExerciseTiming(
       exerciseId,
       (t) => t.isRunning ? t.copyWith(pausedAt: DateTime.now()) : null,
@@ -842,6 +1003,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> resumeExerciseTimer(String exerciseId) async {
+    if (_deferToWatchSession()) return;
     final mutated = _mutateActiveExerciseTiming(exerciseId, (t) {
       if (!t.isPaused) return null;
       final added = DateTime.now().difference(t.pausedAt!).inSeconds;
@@ -860,6 +1022,7 @@ class FitnessController extends ChangeNotifier {
     String exerciseId, {
     bool autoCloseWorkout = true,
   }) async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) return;
     final log = _data.logs[index];
@@ -901,6 +1064,7 @@ class FitnessController extends ChangeNotifier {
   Future<void> tryAutoCloseWorkout() => _maybeAutoCloseWorkout();
 
   Future<void> pauseCurrentWorkout() async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) return;
     final log = _data.logs[index];
@@ -914,6 +1078,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   Future<void> resumeCurrentWorkout() async {
+    if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) return;
     final log = _data.logs[index];
@@ -1394,13 +1559,23 @@ class FitnessController extends ChangeNotifier {
       if (_bridgeConfig.isConfigured) {
         await _exportDayContext(notify: false);
         _status = 'Sent Fuel diary to T4L Gym Bro';
-        Future.delayed(const Duration(seconds: 5), () {
-          if (_bridgeConfig.isConfigured) checkForCoachUpdates();
-        });
+        unawaited(
+          Future.delayed(const Duration(seconds: 5), () {
+            if (_disposed) return;
+            if (_bridgeConfig.isConfigured) {
+              unawaited(checkForCoachUpdates());
+            }
+          }),
+        );
       } else {
         _status = 'Saved Fuel diary locally';
       }
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.warn(
+        'Fuel diary saved locally, server push failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'Fuel diary saved locally, server push failed: $error';
     }
     notifyListeners();
@@ -1518,15 +1693,30 @@ class FitnessController extends ChangeNotifier {
   Future<void> connectHealth() async {
     try {
       _status = await _health.requestPermissions();
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      AppLog.warn(
+        'HealthKit setup failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _status = 'HealthKit setup failed: $error';
     }
     notifyListeners();
   }
 
   @override
+  void notifyListeners() {
+    // Timers and delayed callbacks can fire after the controller is disposed
+    // (e.g. the app is torn down mid-workout). Guarding here prevents the
+    // "notifyListeners after dispose" assertion from any of the many call sites.
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
+  @override
   void dispose() {
-    _watchEvents?.cancel();
+    _disposed = true;
+    unawaited(_watchEvents?.cancel());
     _healthPoller?.cancel();
     _uiTicker?.cancel();
     super.dispose();
@@ -1594,7 +1784,10 @@ class FitnessController extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> _exportDayContext({bool notify = true}) async {
+  Future<Map<String, dynamic>> _exportDayContext({
+    bool notify = true,
+    bool includeSnapshot = true,
+  }) async {
     final now = DateTime.now();
     final activityReport = await _health.readDayActivityReport(now);
     final payload = _coach.buildDayContext(
@@ -1604,6 +1797,25 @@ class FitnessController extends ChangeNotifier {
     );
     if (_bridgeConfig.isConfigured) {
       await _bridge.uploadDayContext(_bridgeConfig, payload);
+      // Refresh the daily snapshot alongside the day context so the coach's
+      // recent-history view (recentLogs) stays current after every workout or
+      // fuel event, without waiting for a manual Context Push. Best-effort: a
+      // snapshot failure must not break the flow that triggered it. Callers
+      // that upload the snapshot themselves pass includeSnapshot: false.
+      if (includeSnapshot) {
+        try {
+          await _bridge.uploadDailySnapshot(
+            _bridgeConfig,
+            _coach.buildDailySnapshot(_data),
+          );
+        } on Object catch (error, stackTrace) {
+          AppLog.warn(
+            'Daily snapshot refresh failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
     }
     if (notify) {
       _status = _bridgeConfig.isConfigured
@@ -1862,7 +2074,7 @@ List<T> _payloadObjects<T>(
 ) {
   if (value is! List) return const [];
   return value
-      .whereType<Map>()
+      .whereType<Map<dynamic, dynamic>>()
       .map((item) => fromJson(item.cast<String, dynamic>()))
       .toList();
 }

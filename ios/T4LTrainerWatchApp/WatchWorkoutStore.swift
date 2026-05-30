@@ -1,72 +1,70 @@
 import Foundation
-import SwiftUI
+import Observation
 import WatchKit
 
-@MainActor
-final class WatchWorkoutStore: ObservableObject {
-  @Published private(set) var workout: WatchPlannedWorkout?
-  @Published private(set) var startedAt: Date?
-  @Published private(set) var activeExerciseStartedAt: Date?
-  @Published private(set) var isPaused = false
-  @Published private(set) var completedPendingSync = false
-  @Published private(set) var summary: WatchWorkoutSummary?
-  /// When true the summary view takes over the screen. Cleared once the user
-  /// dismisses it (or starts a new exercise / receives a new workout), at
-  /// which point the Today view shows the "done" card instead.
-  @Published var showSummaryOverlay = false
-  @Published var exerciseIndex = 0
+/// Coarse UI phase derived from the store's state, used to drive the watch
+/// surface and animate transitions between screens.
+enum WatchPhase {
+  case idle, ready, countdown, active, resting, completed
+}
 
-  /// Reflects whether the workout currently sent from the phone is already
-  /// completed. Used to render the "done" card on the Today screen instead
-  /// of a Start button.
-  var isWorkoutCompleted: Bool { summary != nil }
+/// View-model for the watch workout experience. Owns the connectivity link and
+/// the HealthKit session manager, and drives the phased UI:
+///
+///   ready → active (exercise) → resting → active → … → completed
+///
+/// A single workout session is kept alive across every exercise *and* every
+/// rest period, so the app never suspends mid-workout and the athlete never
+/// has to reopen it.
+@MainActor
+@Observable
+final class WatchWorkoutStore {
+  // Source-of-truth state for the sync payloads.
+  private(set) var workout: WatchPlannedWorkout?
+  private(set) var startedAt: Date?
+  private(set) var activeExerciseStartedAt: Date?
+  private(set) var isPaused = false
+  private(set) var completedPendingSync = false
+  private(set) var summary: WatchWorkoutSummary?
+  private(set) var exerciseIndex = 0
+
+  // Rest period — watch-only UI state, not part of the wire contract.
+  private(set) var restStartedAt: Date?
+  private(set) var restEndsAt: Date?
+
+  // Pre-exercise 3-2-1 countdown — watch-only UI state.
+  private(set) var countdownEndsAt: Date?
+
+  /// Drives whether the summary screen is shown. Cleared when the user
+  /// dismisses it or a new workout / exercise begins.
+  var showSummaryOverlay = false
 
   let connectivity = WatchConnectivityManager()
   let workoutManager = WatchWorkoutManager()
 
-  private var sets: [WatchLoggedSet] = []
-  private var timings: [WatchExerciseTiming] = []
-  private var pausedAt: Date?
-  private var pausedSeconds = 0
-  private var activeExercisePausedSeconds = 0
-  private var progressRevision = 0
+  @ObservationIgnored private var sets: [WatchLoggedSet] = []
+  @ObservationIgnored private var timings: [WatchExerciseTiming] = []
+  @ObservationIgnored private var pausedAt: Date?
+  @ObservationIgnored private var pausedSeconds = 0
+  @ObservationIgnored private var activeExercisePausedSeconds = 0
+  @ObservationIgnored private var progressRevision = 0
+  @ObservationIgnored private var restTask: Task<Void, Never>?
+  @ObservationIgnored private var countdownTask: Task<Void, Never>?
+  /// True only when this watch *started* the live HK session (vs. mirroring a
+  /// phone-driven session). While true the watch is the session owner and
+  /// ignores inbound active-log echoes for the same workout.
+  @ObservationIgnored private var startedOnWatch = false
 
-  init() {
-    if let cached = UserDefaults.standard.data(forKey: "cachedWatchWorkout"),
-       let envelope = try? JSONDecoder().decode(WatchWorkoutEnvelope.self, from: cached) {
-      workout = envelope.workout
-      if !applyCompletedLog(envelope.completedLog, workout: envelope.workout) {
-        applyActiveLog(envelope.activeLog)
-      }
-    }
-    connectivity.observeWorkouts { [weak self] envelope in
-      Task { @MainActor in
-        self?.receive(envelope)
-      }
-    }
-    connectivity.observeEndWorkout { [weak self] workoutId in
-      Task { @MainActor in
-        guard let self else { return }
-        guard self.isActive else { return }
-        if let workoutId, let current = self.workout?.id, workoutId != current { return }
-        self.finish()
-      }
-    }
-  }
+  // MARK: - Derived state
+
+  var isWorkoutCompleted: Bool { summary != nil }
+  var isActive: Bool { startedAt != nil }
+  var isExerciseRunning: Bool { activeExerciseStartedAt != nil }
+  var isResting: Bool { restEndsAt != nil }
 
   var currentExercise: WatchExercise? {
-    guard let workout, workout.exercises.indices.contains(exerciseIndex) else {
-      return nil
-    }
+    guard let workout, workout.exercises.indices.contains(exerciseIndex) else { return nil }
     return workout.exercises[exerciseIndex]
-  }
-
-  var isActive: Bool {
-    startedAt != nil
-  }
-
-  var isExerciseRunning: Bool {
-    activeExerciseStartedAt != nil
   }
 
   var hasRemainingExercises: Bool {
@@ -74,22 +72,93 @@ final class WatchWorkoutStore: ObservableObject {
     return exerciseIndex < workout.exercises.count
   }
 
+  var isCountingDown: Bool { countdownEndsAt != nil }
+
+  /// Exercises after the current one, for the "Up Next" page.
+  var upcomingExercises: [WatchExercise] {
+    guard let workout else { return [] }
+    let next = exerciseIndex + 1
+    guard next < workout.exercises.count else { return [] }
+    return Array(workout.exercises[next...])
+  }
+
+  /// True when the current exercise is the final one in the workout.
+  var isOnLastExercise: Bool {
+    guard let workout, !workout.exercises.isEmpty else { return false }
+    return exerciseIndex >= workout.exercises.count - 1
+  }
+
+  /// Coarse phase for the UI layer to branch and animate on.
+  var phase: WatchPhase {
+    if isCountingDown { return .countdown }
+    if isExerciseRunning { return .active }
+    if isResting { return .resting }
+    if showSummaryOverlay, summary != nil { return .completed }
+    if workout != nil { return .ready }
+    return .idle
+  }
+
+  // MARK: - Init
+
+  init() {
+    if let cached = UserDefaults.standard.data(forKey: WatchStorageKey.cachedWorkout),
+       let envelope = try? JSONDecoder().decode(WatchWorkoutEnvelope.self, from: cached) {
+      workout = envelope.workout
+      if !applyCompletedLog(envelope.completedLog, workout: envelope.workout) {
+        applyActiveLog(envelope.activeLog)
+      }
+    }
+
+    connectivity.observeWorkouts { [weak self] envelope in
+      Task { @MainActor in self?.receive(envelope) }
+    }
+    connectivity.observeEndWorkout { [weak self] workoutId in
+      Task { @MainActor in
+        guard let self, self.isActive else { return }
+        if let workoutId, let current = self.workout?.id, workoutId != current { return }
+        self.finish()
+      }
+    }
+
+    // Resolve Health permissions up front so tapping Start begins the
+    // keep-alive session instantly instead of popping a sheet mid-workout.
+    Task { await workoutManager.requestAuthorization() }
+  }
+
+  // MARK: - Inbound workout
+
   func receive(_ envelope: WatchWorkoutEnvelope) {
+    let isSameWorkout = (workout?.id == envelope.workout.id)
+    // Ownership guard: while this watch is running the session it started, an
+    // inbound active/completed log for the same workout is just the phone
+    // echoing our own progress back. Keep our live state authoritative so the
+    // echo can't reset the timer or exercise index. (Mirror of the phone's
+    // revision dedup for watch→phone progress.) A different workout — or any
+    // update while we are only mirroring a phone session — is still applied.
+    let watchOwnsLiveSession = isSameWorkout && startedOnWatch
+
     let previousSummaryWorkoutId = isWorkoutCompleted ? workout?.id : nil
-    if workout?.id != envelope.workout.id {
+    if !isSameWorkout {
       summary = nil
       showSummaryOverlay = false
       exerciseIndex = 0
+      startedOnWatch = false
+      clearCountdown()
+      clearRest()
     }
     workout = envelope.workout
     if let data = try? JSONEncoder().encode(envelope) {
-      UserDefaults.standard.set(data, forKey: "cachedWatchWorkout")
+      UserDefaults.standard.set(data, forKey: WatchStorageKey.cachedWorkout)
     }
+
+    // Plan content is refreshed above; ignore echoed live state while we own
+    // the session.
+    guard !watchOwnsLiveSession else { return }
+
     if applyCompletedLog(envelope.completedLog, workout: envelope.workout) {
       completedPendingSync = false
-      // Only auto-open the summary if this is a *new* completion (different
-      // workout, or no summary previously). Phone-triggered re-syncs of the
-      // same completed workout shouldn't pop the user back into Summary.
+      // Only auto-open the summary for a *new* completion; a phone re-sync of
+      // the same completed workout shouldn't pop the user back into Summary.
       if previousSummaryWorkoutId != envelope.workout.id {
         showSummaryOverlay = true
       }
@@ -99,17 +168,55 @@ final class WatchWorkoutStore: ObservableObject {
     completedPendingSync = false
   }
 
-  func dismissSummaryOverlay() {
-    showSummaryOverlay = false
-  }
+  // MARK: - Summary overlay
+
+  func dismissSummaryOverlay() { showSummaryOverlay = false }
 
   func openSummaryOverlay() {
     guard summary != nil else { return }
     showSummaryOverlay = true
   }
 
-  func start() {
+  // MARK: - Workout control
+
+  func start() { beginExercise() }
+
+  /// Start button entry point: runs a 3-2-1 countdown, then begins the next
+  /// exercise. The session / keep-alive logic in `startNextExercise` is
+  /// unchanged — this only adds a pre-roll with tick haptics.
+  func beginExercise() {
+    guard workout != nil, hasRemainingExercises, !isExerciseRunning, !isCountingDown
+    else { return }
+    clearRest()
+    countdownEndsAt = Date().addingTimeInterval(3)
+    WatchHaptics.tap()
+    countdownTask?.cancel()
+    countdownTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(1))
+      guard let self, !Task.isCancelled, self.isCountingDown else { return }
+      WatchHaptics.tap()
+      try? await Task.sleep(for: .seconds(1))
+      guard !Task.isCancelled, self.isCountingDown else { return }
+      WatchHaptics.tap()
+      try? await Task.sleep(for: .seconds(1))
+      guard !Task.isCancelled, self.isCountingDown else { return }
+      self.countdownEndsAt = nil
+      self.countdownTask = nil
+      self.startNextExercise()
+    }
+  }
+
+  /// Skips the remaining countdown and starts immediately (tap-to-start).
+  func skipCountdown() {
+    guard isCountingDown else { return }
+    clearCountdown()
     startNextExercise()
+  }
+
+  private func clearCountdown() {
+    countdownTask?.cancel()
+    countdownTask = nil
+    countdownEndsAt = nil
   }
 
   func pause() {
@@ -127,7 +234,7 @@ final class WatchWorkoutStore: ObservableObject {
       pausedSeconds += added
       activeExercisePausedSeconds += added
     }
-    self.pausedAt = nil
+    pausedAt = nil
     isPaused = false
     workoutManager.resume()
     sendProgress()
@@ -135,6 +242,8 @@ final class WatchWorkoutStore: ObservableObject {
 
   func startNextExercise() {
     guard let workout, hasRemainingExercises, !isExerciseRunning else { return }
+    clearCountdown()
+    clearRest()
     summary = nil
     showSummaryOverlay = false
     completedPendingSync = false
@@ -142,37 +251,35 @@ final class WatchWorkoutStore: ObservableObject {
     activeExerciseStartedAt = now
     activeExercisePausedSeconds = 0
     isPaused = false
+    WatchHaptics.exerciseStart()
 
     if startedAt != nil {
-      // HK session is already running from the first exercise. Defensively
-      // resume it in case a prior pause/stop sequence left it paused — an
-      // HKWorkoutSession that stays paused stops counting toward both the
-      // Apple Fitness duration and active energy.
+      // The session is already running from the first exercise. Defensively
+      // resume it in case a prior pause/stop left it paused — a paused
+      // HKWorkoutSession stops counting toward Apple Fitness duration/energy.
       workoutManager.resume()
       sendProgress()
       return
     }
     pausedAt = nil
     startedAt = now
+    startedOnWatch = true
     sets = []
     timings = []
     pausedSeconds = 0
     let workoutId = workout.id
     Task {
       await workoutManager.start(at: now)
-      await MainActor.run {
-        connectivity.notifySessionActive(workoutId: workoutId)
-        self.sendProgress()
-      }
+      connectivity.notifySessionActive(workoutId: workoutId)
+      sendProgress()
     }
   }
 
   func stopCurrentExercise() {
     guard isExerciseRunning else { return }
-    // If the exercise was paused, make sure the underlying HK session is
-    // resumed before we record the timing — otherwise the session stays
-    // paused across the rest period and the next exercise won't accrue
-    // duration or calories in Apple Fitness.
+    // If paused, resume the HK session before recording the timing so it does
+    // not stay paused across the rest period and stall the next exercise's
+    // duration / energy accrual.
     if isPaused {
       if let pausedAt {
         let added = max(0, Int(Date().timeIntervalSince(pausedAt)))
@@ -183,6 +290,8 @@ final class WatchWorkoutStore: ObservableObject {
       isPaused = false
       workoutManager.resume()
     }
+
+    let restSeconds = currentExercise?.restSeconds ?? 0
     finishCurrentExercise()
     if hasRemainingExercises {
       exerciseIndex += 1
@@ -190,27 +299,28 @@ final class WatchWorkoutStore: ObservableObject {
     if !hasRemainingExercises {
       finish()
     } else {
+      beginRest(seconds: restSeconds)
       sendProgress()
     }
   }
 
   func finish() {
+    clearCountdown()
     guard let workout, let startedAt else { return }
+    clearRest()
     if let pausedAt {
       pausedSeconds += max(0, Int(Date().timeIntervalSince(pausedAt)))
       self.pausedAt = nil
     }
     if isPaused {
-      // Resume before ending so HK closes the workout cleanly rather than
-      // capturing the duration up to the last pause.
+      // Resume before ending so HK closes the workout at the true end rather
+      // than at the last pause.
       isPaused = false
       workoutManager.resume()
     }
     if isExerciseRunning {
       finishCurrentExercise()
-      if hasRemainingExercises {
-        exerciseIndex += 1
-      }
+      if hasRemainingExercises { exerciseIndex += 1 }
     }
 
     let completedAt = Date()
@@ -221,8 +331,8 @@ final class WatchWorkoutStore: ObservableObject {
         completionId: UUID().uuidString,
         workoutId: workout.id,
         title: workout.title,
-        startedAt: iso(startedAt),
-        completedAt: iso(completedAt),
+        startedAt: WatchClock.string(from: startedAt),
+        completedAt: WatchClock.string(from: completedAt),
         pausedSeconds: pausedSeconds,
         sets: sets,
         exerciseTimings: timings,
@@ -240,19 +350,76 @@ final class WatchWorkoutStore: ObservableObject {
       connectivity.notifySessionEnded(workoutId: workout.id)
       completedPendingSync = true
       resetSession(summary: summary)
-      // Auto-open the Summary overlay so the user sees their stats immediately
-      // after finishing. They can dismiss to fall back to the Done card.
+      WatchHaptics.workoutComplete()
+      // Auto-open Summary so stats are visible immediately; dismiss falls back
+      // to the Done card.
       showSummaryOverlay = true
     }
   }
 
   func cancel() {
     let workoutId = workout?.id
+    clearCountdown()
+    clearRest()
     workoutManager.discard()
     if let workoutId { connectivity.notifySessionEnded(workoutId: workoutId) }
     resetSession(summary: nil)
     showSummaryOverlay = false
   }
+
+  // MARK: - Rest period
+
+  /// Skips the remaining rest and returns to the ready card for the next set.
+  func skipRest() {
+    guard isResting else { return }
+    WatchHaptics.tap()
+    completeRest(playHaptic: false)
+  }
+
+  private func beginRest(seconds: Int) {
+    guard seconds > 0 else { return }
+    let now = Date()
+    restStartedAt = now
+    let end = now.addingTimeInterval(TimeInterval(seconds))
+    restEndsAt = end
+    scheduleRestCompletion(at: end)
+  }
+
+  /// Adjusts the running rest timer (Digital Crown, ±15 s detents).
+  func addRestSeconds(_ delta: Int) {
+    guard isResting, let end = restEndsAt else { return }
+    let newEnd = max(Date().addingTimeInterval(1), end.addingTimeInterval(TimeInterval(delta)))
+    restEndsAt = newEnd
+    scheduleRestCompletion(at: newEnd)
+  }
+
+  private func scheduleRestCompletion(at end: Date) {
+    restTask?.cancel()
+    let remaining = max(0, end.timeIntervalSinceNow)
+    restTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(remaining))
+      guard let self, !Task.isCancelled else { return }
+      self.completeRest(playHaptic: true)
+    }
+  }
+
+  private func completeRest(playHaptic: Bool) {
+    guard isResting else { return }
+    restTask?.cancel()
+    restTask = nil
+    restStartedAt = nil
+    restEndsAt = nil
+    if playHaptic { WatchHaptics.restEnding() }
+  }
+
+  private func clearRest() {
+    restTask?.cancel()
+    restTask = nil
+    restStartedAt = nil
+    restEndsAt = nil
+  }
+
+  // MARK: - Internals
 
   private func finishCurrentExercise() {
     guard let exercise = currentExercise, let activeExerciseStartedAt else { return }
@@ -261,8 +428,8 @@ final class WatchWorkoutStore: ObservableObject {
       WatchExerciseTiming(
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.name,
-        startedAt: iso(activeExerciseStartedAt),
-        completedAt: iso(completed),
+        startedAt: WatchClock.string(from: activeExerciseStartedAt),
+        completedAt: WatchClock.string(from: completed),
         pausedAt: nil,
         pausedSeconds: activeExercisePausedSeconds
       )
@@ -271,7 +438,7 @@ final class WatchWorkoutStore: ObservableObject {
     activeExercisePausedSeconds = 0
     isPaused = false
     pausedAt = nil
-    WKInterfaceDevice.current().play(.success)
+    WatchHaptics.exerciseComplete()
   }
 
   private func resetSession(summary: WatchWorkoutSummary?) {
@@ -281,12 +448,15 @@ final class WatchWorkoutStore: ObservableObject {
     pausedAt = nil
     pausedSeconds = 0
     activeExercisePausedSeconds = 0
+    startedOnWatch = false
+    clearCountdown()
+    clearRest()
     self.summary = summary
   }
 
   private func applyActiveLog(_ activeLog: WatchActiveLog?) {
     guard let activeLog else { return }
-    startedAt = parseDate(activeLog.startedAt)
+    startedAt = WatchClock.date(from: activeLog.startedAt)
     pausedSeconds = activeLog.pausedSeconds ?? 0
     if let incomingSets = activeLog.sets {
       sets = incomingSets
@@ -296,20 +466,22 @@ final class WatchWorkoutStore: ObservableObject {
       applyExerciseProgress(incomingTimings, workout: workout)
     } else {
       isPaused = activeLog.pausedAt != nil
-      pausedAt = parseDate(activeLog.pausedAt)
+      pausedAt = WatchClock.date(from: activeLog.pausedAt)
     }
   }
 
-  private func applyExerciseProgress(_ exerciseTimings: [WatchExerciseTiming], workout: WatchPlannedWorkout?) {
+  private func applyExerciseProgress(
+    _ exerciseTimings: [WatchExerciseTiming], workout: WatchPlannedWorkout?
+  ) {
     guard let workout else { return }
     if let running = exerciseTimings.first(where: { $0.completedAt == nil }) {
       if let index = workout.exercises.firstIndex(where: { $0.exerciseId == running.exerciseId }) {
         exerciseIndex = index
       }
-      activeExerciseStartedAt = parseDate(running.startedAt)
+      activeExerciseStartedAt = WatchClock.date(from: running.startedAt)
       activeExercisePausedSeconds = running.pausedSeconds
       isPaused = running.pausedAt != nil
-      pausedAt = parseDate(running.pausedAt)
+      pausedAt = WatchClock.date(from: running.pausedAt)
       return
     }
 
@@ -317,21 +489,21 @@ final class WatchWorkoutStore: ObservableObject {
     activeExercisePausedSeconds = 0
     isPaused = false
     pausedAt = nil
-    let stoppedIds = Set(exerciseTimings.compactMap { timing in
-      timing.completedAt == nil ? nil : timing.exerciseId
-    })
+    let stoppedIds = Set(exerciseTimings.compactMap { $0.completedAt == nil ? nil : $0.exerciseId })
     exerciseIndex = min(stoppedIds.count, workout.exercises.count)
   }
 
-  private func applyCompletedLog(_ completedLog: WatchCompletedLog?, workout: WatchPlannedWorkout) -> Bool {
+  private func applyCompletedLog(
+    _ completedLog: WatchCompletedLog?, workout: WatchPlannedWorkout
+  ) -> Bool {
     guard let completedLog,
           completedLog.workoutId == workout.id,
           let completedAtValue = completedLog.completedAt,
-          let completedAt = parseDate(completedAtValue) else {
+          let completedAt = WatchClock.date(from: completedAtValue) else {
       return false
     }
 
-    let started = parseDate(completedLog.startedAt)
+    let started = WatchClock.date(from: completedLog.startedAt)
     let duration = completedLog.totalDurationSeconds.map(TimeInterval.init)
       ?? started.map { completedAt.timeIntervalSince($0) }
       ?? 0
@@ -353,6 +525,8 @@ final class WatchWorkoutStore: ObservableObject {
     return true
   }
 
+  // MARK: - Progress sync
+
   private func sendProgress() {
     guard let payload = progressPayload() else { return }
     connectivity.sendProgress(payload)
@@ -361,16 +535,15 @@ final class WatchWorkoutStore: ObservableObject {
   private func progressPayload() -> WatchProgressPayload? {
     guard let workout, let startedAt else { return nil }
     progressRevision += 1
-    let now = Date()
     var progressTimings = timings
     if let exercise = currentExercise, let activeExerciseStartedAt {
       progressTimings.append(
         WatchExerciseTiming(
           exerciseId: exercise.exerciseId,
           exerciseName: exercise.name,
-          startedAt: iso(activeExerciseStartedAt),
+          startedAt: WatchClock.string(from: activeExerciseStartedAt),
           completedAt: nil,
-          pausedAt: pausedAt.map { iso($0) },
+          pausedAt: pausedAt.map { WatchClock.string(from: $0) },
           pausedSeconds: activeExercisePausedSeconds
         )
       )
@@ -378,11 +551,11 @@ final class WatchWorkoutStore: ObservableObject {
     return WatchProgressPayload(
       schemaVersion: 1,
       revision: progressRevision,
-      sentAt: iso(now),
+      sentAt: WatchClock.string(from: Date()),
       workoutId: workout.id,
       title: workout.title,
-      startedAt: iso(startedAt),
-      pausedAt: pausedAt.map { iso($0) },
+      startedAt: WatchClock.string(from: startedAt),
+      pausedAt: pausedAt.map { WatchClock.string(from: $0) },
       pausedSeconds: pausedSeconds,
       activeExerciseId: currentExercise?.exerciseId,
       exerciseIndex: exerciseIndex,
@@ -392,44 +565,4 @@ final class WatchWorkoutStore: ObservableObject {
       healthWriteStatus: workoutManager.healthStatus
     )
   }
-
-  private func iso(_ date: Date) -> String {
-    ISO8601DateFormatter().string(from: date)
-  }
-
-  private func parseDate(_ value: String?) -> Date? {
-    guard let value else { return nil }
-    if let date = Self.fractionalIsoFormatter.date(from: value) {
-      return date
-    }
-    if let date = Self.isoFormatter.date(from: value) {
-      return date
-    }
-    if let date = Self.localFractionalIsoFormatter.date(from: value) {
-      return date
-    }
-    return Self.localIsoFormatter.date(from: value)
-  }
-
-  private static let fractionalIsoFormatter: ISO8601DateFormatter = {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter
-  }()
-
-  private static let isoFormatter = ISO8601DateFormatter()
-
-  private static let localFractionalIsoFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
-    return formatter
-  }()
-
-  private static let localIsoFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-    return formatter
-  }()
 }

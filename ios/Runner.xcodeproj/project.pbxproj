@@ -21,6 +21,7 @@
 		C0D300000000000000000018 /* WatchWorkoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D30000000000000000000F /* WatchWorkoutManager.swift */; };
 		C0D300000000000000000019 /* WatchWorkoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000010 /* WatchWorkoutStore.swift */; };
 		C0D30000000000000000001A /* DictionaryCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000011 /* DictionaryCoding.swift */; };
+		C0D300000000000000000030 /* WatchContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000031 /* WatchContract.swift */; };
 		C0D300000000000000000026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000027 /* Assets.xcassets */; };
 		C0D300000000000000000021 /* WatchSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000020 /* WatchSyncCoordinator.swift */; };
 		C0D300000000000000000022 /* T4LTrainerWatchApp.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = C0D300000000000000000001 /* T4LTrainerWatchApp.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -99,6 +100,7 @@
 		C0D30000000000000000000F /* WatchWorkoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkoutManager.swift; sourceTree = "<group>"; };
 		C0D300000000000000000010 /* WatchWorkoutStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchWorkoutStore.swift; sourceTree = "<group>"; };
 		C0D300000000000000000011 /* DictionaryCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryCoding.swift; sourceTree = "<group>"; };
+		C0D300000000000000000031 /* WatchContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchContract.swift; sourceTree = "<group>"; };
 		C0D300000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C0D300000000000000000013 /* T4LTrainerWatchApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = T4LTrainerWatchApp.entitlements; sourceTree = "<group>"; };
 		C0D300000000000000000020 /* WatchSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSyncCoordinator.swift; sourceTree = "<group>"; };
@@ -213,6 +215,7 @@
 				C0D30000000000000000000F /* WatchWorkoutManager.swift */,
 				C0D300000000000000000010 /* WatchWorkoutStore.swift */,
 				C0D300000000000000000011 /* DictionaryCoding.swift */,
+				C0D300000000000000000031 /* WatchContract.swift */,
 				C0D300000000000000000027 /* Assets.xcassets */,
 				C0D300000000000000000012 /* Info.plist */,
 				C0D300000000000000000013 /* T4LTrainerWatchApp.entitlements */,
@@ -494,6 +497,7 @@
 				C0D300000000000000000018 /* WatchWorkoutManager.swift in Sources */,
 				C0D300000000000000000019 /* WatchWorkoutStore.swift in Sources */,
 				C0D30000000000000000001A /* DictionaryCoding.swift in Sources */,
+				C0D300000000000000000030 /* WatchContract.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -30,7 +30,7 @@ class _T4LTrainerAppState extends State<T4LTrainerApp>
     unawaited(controller.load().then((_) => controller.syncWorkoutToWatch()));
     _serverPoller = Timer.periodic(const Duration(seconds: 30), (_) {
       if (controller.bridgeConfig.isConfigured) {
-        controller.checkForCoachUpdates();
+        unawaited(controller.checkForCoachUpdates());
       }
     });
   }
@@ -49,9 +49,9 @@ class _T4LTrainerAppState extends State<T4LTrainerApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (controller.bridgeConfig.isConfigured) {
-        controller.checkForCoachUpdates();
+        unawaited(controller.checkForCoachUpdates());
       }
-      controller.syncWorkoutToWatch();
+      unawaited(controller.syncWorkoutToWatch());
       _syncWorkoutWakelock(force: true);
     }
   }
@@ -95,7 +95,7 @@ class _T4LTrainerAppState extends State<T4LTrainerApp>
           bodyColor: AppColors.paper,
           displayColor: AppColors.paper,
         ),
-        appBarTheme: AppBarTheme(
+        appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.bg,
           foregroundColor: AppColors.paper,
           surfaceTintColor: AppColors.transparent,
@@ -161,7 +161,7 @@ class _T4LTrainerAppState extends State<T4LTrainerApp>
           backgroundColor: AppColors.surface2,
           selectedColor: AppColors.sage.withValues(alpha: 0.22),
           side: BorderSide(color: AppColors.paper.withValues(alpha: 0.10)),
-          labelStyle: TextStyle(color: AppColors.paper),
+          labelStyle: const TextStyle(color: AppColors.paper),
         ),
       ),
       home: FitnessScope(controller: controller, child: const CoachDashboard()),

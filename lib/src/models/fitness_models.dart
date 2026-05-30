@@ -1530,6 +1530,7 @@ class FitnessData {
     this.dailyMotto,
     this.yesterdaySummary,
     this.coachingGoals,
+    this.justCompletedLogId,
   });
 
   final AthleteProfile profile;
@@ -1549,6 +1550,12 @@ class FitnessData {
   final String? dailyMotto;
   final YesterdaySummary? yesterdaySummary;
   final CoachingGoals? coachingGoals;
+
+  /// Id of the workout log just completed in the current session. Persisted so
+  /// the Today screen keeps showing the finished-workout summary across an app
+  /// relaunch / the watch→phone background hand-off (the controller bounds it
+  /// to "today" so a stale marker expires). Null once acknowledged / advanced.
+  final String? justCompletedLogId;
 
   TrainingBlock? get activeBlock {
     for (final block in blocks) {
@@ -1596,6 +1603,7 @@ class FitnessData {
     Object? dailyMotto = _sentinel,
     Object? yesterdaySummary = _sentinel,
     Object? coachingGoals = _sentinel,
+    Object? justCompletedLogId = _sentinel,
   }) {
     return FitnessData(
       profile: profile ?? this.profile,
@@ -1631,6 +1639,9 @@ class FitnessData {
       coachingGoals: coachingGoals == _sentinel
           ? this.coachingGoals
           : coachingGoals as CoachingGoals?,
+      justCompletedLogId: justCompletedLogId == _sentinel
+          ? this.justCompletedLogId
+          : justCompletedLogId as String?,
     );
   }
 
@@ -1656,6 +1667,7 @@ class FitnessData {
     if (yesterdaySummary != null)
       'yesterdaySummary': yesterdaySummary!.toJson(),
     if (coachingGoals != null) 'coachingGoals': coachingGoals!.toJson(),
+    if (justCompletedLogId != null) 'justCompletedLogId': justCompletedLogId,
   };
 
   factory FitnessData.fromJson(Map<String, dynamic> json) {
@@ -1684,6 +1696,7 @@ class FitnessData {
       dailyMotto: json['dailyMotto'] as String?,
       yesterdaySummary: _yesterdaySummaryValue(json['yesterdaySummary']),
       coachingGoals: _coachingGoalsValue(json['coachingGoals']),
+      justCompletedLogId: json['justCompletedLogId'] as String?,
     );
   }
 }
@@ -1798,7 +1811,7 @@ List<T> _objectList<T>(
 ) {
   if (value is! List) return const [];
   return value
-      .whereType<Map>()
+      .whereType<Map<dynamic, dynamic>>()
       .map((item) => fromJson(item.cast<String, dynamic>()))
       .toList();
 }

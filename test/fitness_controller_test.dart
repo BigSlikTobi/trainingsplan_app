@@ -323,6 +323,63 @@ void main() {
   });
 
   test(
+    'malformed result is consumed once so it cannot wedge the pull loop',
+    () async {
+      final store = _MemoryStore()
+        ..bridgeConfig = const LocalBridgeConfig(
+          baseUrl: 'http://127.0.0.1:8787',
+          token: '123-456',
+        );
+      final bridge = _ResultBridgeService(
+        pendingKinds: const ['nutrition_analysis_result'],
+        results: {
+          // calories <= 0 makes the parser throw FormatException; before the
+          // fix this skipped without consuming and re-failed on every pull.
+          'nutrition_analysis_result': {
+            'schema': 'nutrition_analysis_result.v1',
+            'result': {'requestId': 'x', 'calories': 0},
+          },
+        },
+      );
+      final controller = FitnessController(store: store, bridge: bridge);
+      // load() performs the first pull: the bad result is consumed (not applied)
+      // and the failure is surfaced.
+      await controller.load();
+      expect(bridge.consumedKinds, ['nutrition_analysis_result']);
+      expect(controller.pendingMealResult, isNull);
+      expect(controller.status, contains('Discarded unreadable'));
+
+      await controller.pullBridgeResults();
+      // Second pull: the bad artifact no longer re-appears (no wedge), so it is
+      // not consumed again and the loop is quiet.
+      expect(bridge.consumedKinds, ['nutrition_analysis_result']);
+      expect(controller.pendingMealResult, isNull);
+    },
+  );
+
+  test('unknown result kind is left pending for forward compatibility', () async {
+    final store = _MemoryStore()
+      ..bridgeConfig = const LocalBridgeConfig(
+        baseUrl: 'http://127.0.0.1:8787',
+        token: '123-456',
+      );
+    final bridge = _ResultBridgeService(
+      pendingKinds: const ['some_future_result'],
+      results: {
+        'some_future_result': {'schema': 'some_future_result.v1'},
+      },
+    );
+    final controller = FitnessController(store: store, bridge: bridge);
+    await controller.load();
+
+    await controller.pullBridgeResults();
+
+    // Not consumed: a newer app version may know how to apply it.
+    expect(bridge.consumedKinds, isEmpty);
+    expect(controller.status, isEmpty);
+  });
+
+  test(
     'server migration uploads full snapshot without mutating phone data',
     () async {
       final store = _MemoryStore();
@@ -693,6 +750,77 @@ void main() {
     expect(completedJson['completedAt'], isNotNull);
   });
 
+  test('a finished workout still surfaces after relaunch', () async {
+    final store = _MemoryStore();
+    final first = FitnessController(
+      store: store,
+      health: _TimerHealthSync(),
+      watchSync: _FakeWatchSync(),
+    );
+    await first.load();
+    final workout = first.nextWorkout!;
+    final exercise = workout.exercises.first;
+    await first.logSet(exercise, 20, 8, 6);
+    await first.completeCurrentWorkout();
+    await Future<void>.delayed(Duration.zero);
+    expect(first.justCompletedLog, isNotNull);
+
+    // Simulate the watch→phone background hand-off / app relaunch: a fresh
+    // controller loading the persisted data must still surface the finished
+    // workout (so Today shows its summary, not the next workout as "open").
+    final relaunched = FitnessController(
+      store: store,
+      health: _TimerHealthSync(),
+      watchSync: _FakeWatchSync(),
+    );
+    await relaunched.load();
+    expect(relaunched.activeWorkoutLog, isNull);
+    // The Today screen surfaces it (date-based, so it survives the relaunch).
+    expect(relaunched.todaysCompletedWorkout, isNotNull);
+    expect(relaunched.todaysCompletedWorkout!.workoutId, workout.id);
+    expect(relaunched.justCompletedLog, isNotNull);
+  });
+
+  test('a session finished before launch (no marker) syncs done to the watch', () async {
+    final store = _MemoryStore();
+    final base = sampleFitnessData();
+    final workout = base.activeBlock!.workouts.first;
+    // Preload a workout completed earlier today with no runtime marker — as if
+    // it was finished on the watch or in a previous app launch / build.
+    store.saved = base.copyWith(
+      logs: [
+        WorkoutLog(
+          id: 'log-prev-launch',
+          workoutId: workout.id,
+          title: workout.title,
+          startedAt: DateTime.now().subtract(const Duration(minutes: 40)),
+          completedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          readiness: 3,
+          soreness: 2,
+          notes: '',
+          sets: const [],
+          healthWriteStatus: 'not_synced',
+        ),
+      ],
+    );
+
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: store,
+      health: _TimerHealthSync(),
+      watchSync: watch,
+    );
+    await controller.load();
+    await Future<void>.delayed(Duration.zero);
+
+    // Today surfaces it, the marker is re-established, and the watch is told the
+    // session is done (a completedLog), not re-opened with the next workout.
+    expect(controller.todaysCompletedWorkout, isNotNull);
+    expect(controller.justCompletedLog, isNotNull);
+    expect(watch.sentPayloads, isNotEmpty);
+    expect(watch.sentPayloads.last, contains('completedLog'));
+  });
+
   test('iPhone completion can finish workout without active log', () async {
     final watch = _FakeWatchSync();
     final controller = FitnessController(
@@ -825,7 +953,47 @@ void main() {
     expect(log.exerciseTimings.single.exerciseId, exercise.exerciseId);
     expect(log.exerciseTimings.single.completedAt, isNull);
     expect(controller.debugActiveWatchSessionWorkoutId, workout.id);
-    expect(watch.sentPayloads.last['activeLog'], isNotNull);
+    // The watch owns the live session here, so the phone mirrors the progress
+    // into its active log but does not echo the watch's own state back to it
+    // (the two devices never drive the session in parallel).
+    expect(controller.isWatchControllingSession, isTrue);
+    expect(watch.sentPayloads, isEmpty);
+  });
+
+  test('phone defers exercise control to an active watch session', () async {
+    final watch = _FakeWatchSync();
+    final controller = FitnessController(
+      store: _MemoryStore(),
+      watchSync: watch,
+    );
+    await controller.load();
+    final workout = controller.nextWorkout!;
+    final exercise = workout.exercises.first;
+
+    // The watch starts and streams progress, so it now owns the live session.
+    await controller.handleWatchWorkoutProgress(
+      _watchProgressPayload(workout, exercise, revision: 1),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.isWatchControllingSession, isTrue);
+
+    final timingsBefore = controller.activeWorkoutLog!.exerciseTimings.length;
+    watch.sentPayloads.clear();
+
+    // Phone-side controls defer to the watch instead of competing with it:
+    // no new timing is created, the running one is not stopped, and nothing is
+    // pushed back to the watch.
+    await controller.startExerciseTimer(
+      exerciseId: 'phone_only_exercise',
+      exerciseName: 'Phone Only',
+    );
+    await controller.stopExerciseTimer(exercise.exerciseId);
+    await controller.pauseCurrentWorkout();
+
+    expect(controller.activeWorkoutLog!.exerciseTimings.length, timingsBefore);
+    expect(controller.activeWorkoutLog!.exerciseTimings.single.completedAt,
+        isNull);
+    expect(watch.sentPayloads, isEmpty);
   });
 
   test('imports completed watch workout into logs', () async {
@@ -928,8 +1096,10 @@ void main() {
     );
 
     expect(controller.activeWorkoutLog, isNull);
-    expect(controller.justCompletedLog?.sets, hasLength(2));
     expect(controller.data.logs, hasLength(1));
+    // The watch completion merged into the single active log (now completed).
+    expect(controller.data.logs.single.completedAt, isNotNull);
+    expect(controller.data.logs.single.sets, hasLength(2));
   });
 }
 
@@ -1018,6 +1188,9 @@ class _ResultBridgeService extends LocalBridgeService {
 class _FakeWatchSync extends WatchSyncService {
   final sentPayloads = <Map<String, dynamic>>[];
   final endedWorkoutIds = <String>[];
+  // Test double: this broadcast controller lives for the test process and is
+  // intentionally not closed.
+  // ignore: close_sinks
   final eventsController = StreamController<Map<String, dynamic>>.broadcast();
 
   @override
@@ -1178,13 +1351,13 @@ class _TimerHealthSync extends HealthSyncService {
 
   @override
   Future<DayActivityReport> readDayActivityReport(DateTime day) async {
-    return DayActivityReport(
-      summary: const DayActivitySummary(
+    return const DayActivityReport(
+      summary: DayActivitySummary(
         readStatus: 'ok',
         missingPermissions: [],
         sampleCount: 0,
       ),
-      sessions: const [],
+      sessions: [],
     );
   }
 }
