@@ -24,6 +24,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navProgress => 'Progress';
 
   @override
+  String get chatTitle => 'Coach chat';
+
+  @override
+  String get chatOpenTooltip => 'Open coach chat';
+
+  @override
+  String get chatInputHint => 'Message your coach …';
+
+  @override
+  String get chatSend => 'Send';
+
+  @override
+  String get chatEmptyTitle => 'Say hi 👋';
+
+  @override
+  String get chatEmptyBody =>
+      'Ask your coach anything — mid-workout or anytime.';
+
+  @override
+  String get chatNotConnectedTitle => 'No server connected';
+
+  @override
+  String get chatNotConnectedBody =>
+      'Connect a T4L server in Settings to start chatting.';
+
+  @override
+  String get chatFailedRetry => 'Failed to send. Tap to retry';
+
+  @override
+  String get chatToday => 'Today';
+
+  @override
+  String get chatYesterday => 'Yesterday';
+
+  @override
+  String get chatCardTitle => 'Chat with your coach';
+
+  @override
+  String get chatCardSubtitle => 'Questions, check-ins, motivation';
+
+  @override
+  String get chatVoiceTooltip => 'Read replies aloud';
+
+  @override
+  String get chatSpeak => 'Read aloud';
+
+  @override
+  String get chatMicTooltip => 'Dictate';
+
+  @override
+  String get chatListening => 'Listening …';
+
+  @override
+  String get sttUnavailable =>
+      'Speech input unavailable. Allow microphone and speech recognition in Settings.';
+
+  @override
   String get navSetup => 'Setup';
 
   @override

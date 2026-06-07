@@ -2164,6 +2164,60 @@ ExerciseMedia? _exerciseMediaValue(Map<String, dynamic> json) {
   });
 }
 
+/// One turn in the in-app coach chat, mirroring the `t4l-server` wire shape
+/// (camelCase keys). The app only ever sends `content`; everything else is
+/// assigned by the broker and rendered as-is.
+class ChatMessage {
+  const ChatMessage({
+    required this.seq,
+    required this.role,
+    required this.content,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.conversationId = 'default',
+  });
+
+  final int seq;
+  final String conversationId;
+  final String role; // 'user' | 'assistant'
+  final String content;
+  final String status; // user: pending|answered · assistant: streaming|complete
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool get isUser => role == 'user';
+  bool get isAssistant => !isUser;
+  bool get isPending => status == 'pending';
+
+  Map<String, dynamic> toJson() => {
+    'seq': seq,
+    'conversationId': conversationId,
+    'role': role,
+    'content': content,
+    'status': status,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final created =
+        DateTime.tryParse((json['createdAt'] as String?) ?? '') ??
+        DateTime.now();
+    final updated =
+        DateTime.tryParse((json['updatedAt'] as String?) ?? '') ?? created;
+    return ChatMessage(
+      seq: _intValue(json['seq'], 0),
+      conversationId: (json['conversationId'] as String?) ?? 'default',
+      role: (json['role'] as String?) ?? 'assistant',
+      content: (json['content'] as String?) ?? '',
+      status: (json['status'] as String?) ?? 'complete',
+      createdAt: created,
+      updatedAt: updated,
+    );
+  }
+}
+
 int _intValue(Object? value, int fallback) {
   if (value is int) return value;
   if (value is num) return value.round();

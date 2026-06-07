@@ -21,6 +21,10 @@
 	<string>T4L Trainer</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Meal photos can be captured privately and sent to your T4L Gym Bro server for nutrition analysis.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The microphone lets you dictate chat messages to your T4L coach instead of typing.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition turns your dictated chat messages into text on device.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Meal photos can be selected privately and sent to your T4L Gym Bro server for nutrition analysis.</string>
 	<key>NSHealthShareUsageDescription</key>

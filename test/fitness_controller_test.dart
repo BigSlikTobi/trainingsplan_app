@@ -1194,6 +1194,12 @@ class _MemoryStore extends LocalFitnessStore {
   Future<void> saveBridgeConfig(LocalBridgeConfig config) async {
     bridgeConfig = config;
   }
+
+  @override
+  Future<bool> loadChatVoiceEnabled() async => true;
+
+  @override
+  Future<void> saveChatVoiceEnabled(bool enabled) async {}
 }
 
 FitnessData _groupedFitnessData() {
