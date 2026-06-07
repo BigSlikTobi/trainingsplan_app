@@ -31,6 +31,7 @@ final class WatchWorkoutManager: NSObject {
 
   /// Legacy status string sent to the phone in progress / completion payloads.
   var healthStatus: String { authState.rawValue }
+  var hasSession: Bool { session != nil }
 
   @ObservationIgnored private let healthStore = HKHealthStore()
   @ObservationIgnored private var session: HKWorkoutSession?
@@ -84,6 +85,10 @@ final class WatchWorkoutManager: NSObject {
   func start(at date: Date) async {
     guard HKHealthStore.isHealthDataAvailable() else {
       authState = .unavailable
+      return
+    }
+    if session != nil {
+      resume()
       return
     }
     if authState == .unavailable {

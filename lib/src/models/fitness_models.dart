@@ -30,6 +30,16 @@ enum TrainingStyle {
 
 enum TrackingMode { weightAndReps, repsOnly, timeOnly }
 
+enum WorkoutItemKind {
+  exercise('Exercise'),
+  superset('Superset'),
+  circuit('Zirkel');
+
+  const WorkoutItemKind(this.label);
+
+  final String label;
+}
+
 enum MemoryCategory {
   training('Training'),
   form('Form'),
@@ -302,6 +312,50 @@ class ExercisePrescription {
   final String? warningCue;
   final ExerciseMedia? media;
 
+  ExercisePrescription copyWith({
+    String? exerciseId,
+    String? name,
+    int? sets,
+    String? reps,
+    String? targetLoad,
+    double? targetRpe,
+    int? restSeconds,
+    String? coachCue,
+    TrackingMode? trackingMode,
+    Object? targetDurationSeconds = _sentinel,
+    Object? loadLabel = _sentinel,
+    Object? primaryCue = _sentinel,
+    Object? detailNote = _sentinel,
+    Object? warningCue = _sentinel,
+    Object? media = _sentinel,
+  }) {
+    return ExercisePrescription(
+      exerciseId: exerciseId ?? this.exerciseId,
+      name: name ?? this.name,
+      sets: sets ?? this.sets,
+      reps: reps ?? this.reps,
+      targetLoad: targetLoad ?? this.targetLoad,
+      targetRpe: targetRpe ?? this.targetRpe,
+      restSeconds: restSeconds ?? this.restSeconds,
+      coachCue: coachCue ?? this.coachCue,
+      trackingMode: trackingMode ?? this.trackingMode,
+      targetDurationSeconds: targetDurationSeconds == _sentinel
+          ? this.targetDurationSeconds
+          : targetDurationSeconds as int?,
+      loadLabel: loadLabel == _sentinel ? this.loadLabel : loadLabel as String?,
+      primaryCue: primaryCue == _sentinel
+          ? this.primaryCue
+          : primaryCue as String?,
+      detailNote: detailNote == _sentinel
+          ? this.detailNote
+          : detailNote as String?,
+      warningCue: warningCue == _sentinel
+          ? this.warningCue
+          : warningCue as String?,
+      media: media == _sentinel ? this.media : media as ExerciseMedia?,
+    );
+  }
+
   String get displayLoadLabel {
     final compact = loadLabel?.trim();
     if (compact != null && compact.isNotEmpty) return compact;
@@ -363,6 +417,167 @@ class ExercisePrescription {
   }
 }
 
+class ExerciseGroup {
+  const ExerciseGroup({
+    required this.groupId,
+    required this.kind,
+    required this.title,
+    required this.rounds,
+    required this.exercises,
+    this.restSeconds,
+  });
+
+  final String groupId;
+  final WorkoutItemKind kind;
+  final String title;
+  final int rounds;
+  final int? restSeconds;
+  final List<ExercisePrescription> exercises;
+
+  String get displayTitle {
+    final compact = title.trim();
+    if (compact.isNotEmpty) return compact;
+    return kind.label;
+  }
+
+  Map<String, dynamic> toJson() => {
+    'type': kind.name,
+    'groupId': groupId,
+    if (title.trim().isNotEmpty) 'title': title,
+    'rounds': rounds,
+    if (restSeconds != null) 'restSeconds': restSeconds,
+    'exercises': exercises.map((item) => item.toJson()).toList(),
+  };
+
+  factory ExerciseGroup.fromJson(Map<String, dynamic> json) {
+    final kind = _workoutGroupKind(json['type']);
+    final rounds = _intValue(json['rounds'], 1);
+    final exercises = _objectList(
+      json['exercises'],
+      ExercisePrescription.fromJson,
+    );
+    if (rounds < 1) {
+      throw const FormatException('Exercise group rounds must be at least 1.');
+    }
+    switch (kind) {
+      case WorkoutItemKind.superset:
+        if (exercises.length != 2) {
+          throw const FormatException(
+            'Supersets must contain exactly 2 exercises.',
+          );
+        }
+      case WorkoutItemKind.circuit:
+        if (exercises.length < 3) {
+          throw const FormatException(
+            'Circuits must contain at least 3 exercises.',
+          );
+        }
+      case WorkoutItemKind.exercise:
+        throw const FormatException(
+          'Exercise groups cannot have type exercise.',
+        );
+    }
+    return ExerciseGroup(
+      groupId: json['groupId'] as String? ?? _id('${kind.name}_group'),
+      kind: kind,
+      title: json['title'] as String? ?? kind.label,
+      rounds: rounds,
+      restSeconds: _nullableIntValue(json['restSeconds']),
+      exercises: exercises,
+    );
+  }
+}
+
+class WorkoutPlanItem {
+  const WorkoutPlanItem.exercise(ExercisePrescription this.exercise)
+    : group = null;
+
+  const WorkoutPlanItem.group(ExerciseGroup this.group) : exercise = null;
+
+  final ExercisePrescription? exercise;
+  final ExerciseGroup? group;
+
+  WorkoutItemKind get kind {
+    final exercise = this.exercise;
+    if (exercise != null) return WorkoutItemKind.exercise;
+    return group!.kind;
+  }
+
+  Map<String, dynamic> toJson() {
+    final exercise = this.exercise;
+    if (exercise != null) {
+      return {'type': WorkoutItemKind.exercise.name, ...exercise.toJson()};
+    }
+    return group!.toJson();
+  }
+
+  factory WorkoutPlanItem.fromJson(Map<String, dynamic> json) {
+    final type = json['type']?.toString().trim();
+    if (type == null || type.isEmpty || type == WorkoutItemKind.exercise.name) {
+      final exerciseJson =
+          (json['exercise'] as Map?)?.cast<String, dynamic>() ?? json;
+      return WorkoutPlanItem.exercise(
+        ExercisePrescription.fromJson(exerciseJson),
+      );
+    }
+    return WorkoutPlanItem.group(ExerciseGroup.fromJson(json));
+  }
+}
+
+class WorkoutExecutionStep {
+  const WorkoutExecutionStep({
+    required this.stepId,
+    required this.exercise,
+    required this.stepIndex,
+    required this.totalSteps,
+    required this.restSeconds,
+    this.groupId,
+    this.groupKind,
+    this.groupTitle,
+    this.round,
+    this.roundCount,
+  });
+
+  final String stepId;
+  final ExercisePrescription exercise;
+  final int stepIndex;
+  final int totalSteps;
+  final int restSeconds;
+  final String? groupId;
+  final WorkoutItemKind? groupKind;
+  final String? groupTitle;
+  final int? round;
+  final int? roundCount;
+
+  bool get isGrouped => groupId != null;
+
+  String get displayGroupTitle {
+    final compact = groupTitle?.trim();
+    if (compact != null && compact.isNotEmpty) return compact;
+    return groupKind?.label ?? '';
+  }
+
+  String get roundLabel {
+    if (round == null || roundCount == null) return '';
+    return 'Runde $round/$roundCount';
+  }
+
+  Map<String, dynamic> toJson() => {
+    'stepId': stepId,
+    'stepIndex': stepIndex,
+    'totalSteps': totalSteps,
+    'exerciseId': exercise.exerciseId,
+    'exerciseName': exercise.name,
+    'restSeconds': restSeconds,
+    if (groupId != null) 'groupId': groupId,
+    if (groupKind != null) 'groupType': groupKind!.name,
+    if (groupTitle?.trim().isNotEmpty ?? false) 'groupTitle': groupTitle,
+    if (round != null) 'round': round,
+    if (roundCount != null) 'roundCount': roundCount,
+    'exercise': exercise.toJson(),
+  };
+}
+
 class PlannedWorkout {
   const PlannedWorkout({
     required this.id,
@@ -371,9 +586,11 @@ class PlannedWorkout {
     required this.title,
     required this.focus,
     required this.rationale,
-    required this.exercises,
     required this.conditioning,
-  });
+    List<WorkoutPlanItem> items = const [],
+    List<ExercisePrescription> exercises = const [],
+  }) : _items = items,
+       _legacyExercises = exercises;
 
   final String id;
   final int week;
@@ -381,8 +598,110 @@ class PlannedWorkout {
   final String title;
   final String focus;
   final String rationale;
-  final List<ExercisePrescription> exercises;
   final String conditioning;
+  final List<WorkoutPlanItem> _items;
+  final List<ExercisePrescription> _legacyExercises;
+
+  List<WorkoutPlanItem> get items {
+    if (_items.isNotEmpty) return _items;
+    return _legacyExercises.map(WorkoutPlanItem.exercise).toList();
+  }
+
+  List<ExercisePrescription> get exercises => flatExercises;
+
+  List<ExercisePrescription> get flatExercises {
+    final result = <ExercisePrescription>[];
+    for (final item in items) {
+      final exercise = item.exercise;
+      if (exercise != null) {
+        result.add(exercise);
+        continue;
+      }
+      result.addAll(
+        item.group!.exercises.map((exercise) {
+          return exercise.copyWith(sets: item.group!.rounds);
+        }),
+      );
+    }
+    return result;
+  }
+
+  int get totalPlannedSets {
+    if (_items.isEmpty) {
+      return _legacyExercises.fold<int>(0, (sum, ex) => sum + ex.sets);
+    }
+    var total = 0;
+    for (final item in _items) {
+      final exercise = item.exercise;
+      if (exercise != null) {
+        total += exercise.sets;
+      } else {
+        final group = item.group!;
+        total += group.rounds * group.exercises.length;
+      }
+    }
+    return total;
+  }
+
+  List<WorkoutExecutionStep> get executionSteps {
+    final steps = <WorkoutExecutionStep>[];
+    final planItems = items;
+    for (final item in planItems) {
+      final exercise = item.exercise;
+      if (exercise != null) {
+        steps.add(
+          WorkoutExecutionStep(
+            stepId: exercise.exerciseId,
+            exercise: exercise,
+            stepIndex: steps.length,
+            totalSteps: 0,
+            restSeconds: exercise.restSeconds,
+          ),
+        );
+        continue;
+      }
+
+      final group = item.group!;
+      for (var round = 1; round <= group.rounds; round++) {
+        for (var i = 0; i < group.exercises.length; i++) {
+          final exercise = group.exercises[i].copyWith(sets: group.rounds);
+          final isLastInRound = i == group.exercises.length - 1;
+          steps.add(
+            WorkoutExecutionStep(
+              stepId: '${group.groupId}_r${round}_${exercise.exerciseId}',
+              exercise: exercise,
+              stepIndex: steps.length,
+              totalSteps: 0,
+              restSeconds: isLastInRound
+                  ? (group.restSeconds ?? exercise.restSeconds)
+                  : exercise.restSeconds,
+              groupId: group.groupId,
+              groupKind: group.kind,
+              groupTitle: group.displayTitle,
+              round: round,
+              roundCount: group.rounds,
+            ),
+          );
+        }
+      }
+    }
+    final total = steps.length;
+    return [
+      for (final step in steps)
+        WorkoutExecutionStep(
+          stepId: step.stepId,
+          exercise: step.exercise,
+          stepIndex: step.stepIndex,
+          totalSteps: total,
+          restSeconds: step.restSeconds,
+          groupId: step.groupId,
+          groupKind: step.groupKind,
+          groupTitle: step.groupTitle,
+          round: step.round,
+          roundCount: step.roundCount,
+        ),
+    ];
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -391,11 +710,26 @@ class PlannedWorkout {
     'title': title,
     'focus': focus,
     'rationale': rationale,
-    'exercises': exercises.map((item) => item.toJson()).toList(),
+    if (_items.isNotEmpty) ...{
+      'items': _items.map((item) => item.toJson()).toList(),
+    } else ...{
+      'exercises': _legacyExercises.map((item) => item.toJson()).toList(),
+    },
     'conditioning': conditioning,
   };
 
+  Map<String, dynamic> toWatchJson() => {
+    ...toJson(),
+    'exercises': flatExercises.map((item) => item.toJson()).toList(),
+    'executionSteps': executionSteps.map((item) => item.toJson()).toList(),
+  };
+
   factory PlannedWorkout.fromJson(Map<String, dynamic> json) {
+    final items = _objectList(json['items'], WorkoutPlanItem.fromJson);
+    final exercises = _objectList(
+      json['exercises'],
+      ExercisePrescription.fromJson,
+    );
     return PlannedWorkout(
       id: json['id'] as String? ?? _id('workout'),
       week: _intValue(json['week'], 1),
@@ -403,8 +737,9 @@ class PlannedWorkout {
       title: json['title'] as String? ?? 'Training',
       focus: json['focus'] as String? ?? '',
       rationale: json['rationale'] as String? ?? '',
-      exercises: _objectList(json['exercises'], ExercisePrescription.fromJson),
       conditioning: json['conditioning'] as String? ?? '',
+      items: items,
+      exercises: exercises,
     );
   }
 }
@@ -539,13 +874,20 @@ class ExerciseTiming {
     required this.exerciseId,
     required this.exerciseName,
     required this.startedAt,
+    String? stepId,
     this.completedAt,
     this.pausedAt,
     this.pausedSeconds = 0,
     this.healthSnapshot,
     this.notes = '',
-  });
+    this.groupId,
+    this.groupType,
+    this.groupTitle,
+    this.round,
+    this.roundCount,
+  }) : stepId = stepId ?? exerciseId;
 
+  final String stepId;
   final String exerciseId;
   final String exerciseName;
   final DateTime startedAt;
@@ -554,6 +896,11 @@ class ExerciseTiming {
   final int pausedSeconds;
   final LiveHealthMetrics? healthSnapshot;
   final String notes;
+  final String? groupId;
+  final String? groupType;
+  final String? groupTitle;
+  final int? round;
+  final int? roundCount;
 
   bool get isStopped => completedAt != null;
   bool get isPaused => pausedAt != null && !isStopped;
@@ -575,8 +922,14 @@ class ExerciseTiming {
     int? pausedSeconds,
     LiveHealthMetrics? healthSnapshot,
     String? notes,
+    String? groupId,
+    Object? groupType = _sentinel,
+    Object? groupTitle = _sentinel,
+    Object? round = _sentinel,
+    Object? roundCount = _sentinel,
   }) {
     return ExerciseTiming(
+      stepId: stepId,
       exerciseId: exerciseId,
       exerciseName: exerciseName,
       startedAt: startedAt,
@@ -585,10 +938,20 @@ class ExerciseTiming {
       pausedSeconds: pausedSeconds ?? this.pausedSeconds,
       healthSnapshot: healthSnapshot ?? this.healthSnapshot,
       notes: notes ?? this.notes,
+      groupId: groupId ?? this.groupId,
+      groupType: groupType == _sentinel ? this.groupType : groupType as String?,
+      groupTitle: groupTitle == _sentinel
+          ? this.groupTitle
+          : groupTitle as String?,
+      round: round == _sentinel ? this.round : round as int?,
+      roundCount: roundCount == _sentinel
+          ? this.roundCount
+          : roundCount as int?,
     );
   }
 
   Map<String, dynamic> toJson() => {
+    'stepId': stepId,
     'exerciseId': exerciseId,
     'exerciseName': exerciseName,
     'startedAt': startedAt.toIso8601String(),
@@ -598,11 +961,18 @@ class ExerciseTiming {
     if (durationSeconds != null) 'durationSeconds': durationSeconds,
     if (healthSnapshot != null) 'healthSnapshot': healthSnapshot!.toJson(),
     if (notes.isNotEmpty) 'notes': notes,
+    if (groupId != null) 'groupId': groupId,
+    if (groupType != null) 'groupType': groupType,
+    if (groupTitle != null) 'groupTitle': groupTitle,
+    if (round != null) 'round': round,
+    if (roundCount != null) 'roundCount': roundCount,
   };
 
   factory ExerciseTiming.fromJson(Map<String, dynamic> json) {
+    final exerciseId = json['exerciseId'] as String? ?? '';
     return ExerciseTiming(
-      exerciseId: json['exerciseId'] as String? ?? '',
+      stepId: json['stepId'] as String? ?? exerciseId,
+      exerciseId: exerciseId,
       exerciseName: json['exerciseName'] as String? ?? '',
       startedAt:
           DateTime.tryParse(json['startedAt'] as String? ?? '') ??
@@ -612,6 +982,11 @@ class ExerciseTiming {
       pausedSeconds: _intValue(json['pausedSeconds'], 0),
       healthSnapshot: _healthMetricsValue(json['healthSnapshot']),
       notes: json['notes'] as String? ?? '',
+      groupId: json['groupId'] as String?,
+      groupType: json['groupType'] as String?,
+      groupTitle: json['groupTitle'] as String?,
+      round: _nullableIntValue(json['round']),
+      roundCount: _nullableIntValue(json['roundCount']),
     );
   }
 }
@@ -1692,7 +2067,10 @@ class FitnessData {
       fuelDiarySentAt: DateTime.tryParse(
         json['fuelDiarySentAt'] as String? ?? '',
       ),
-      personalRecords: _objectList(json['personalRecords'], PersonalRecord.fromJson),
+      personalRecords: _objectList(
+        json['personalRecords'],
+        PersonalRecord.fromJson,
+      ),
       dailyMotto: json['dailyMotto'] as String?,
       yesterdaySummary: _yesterdaySummaryValue(json['yesterdaySummary']),
       coachingGoals: _coachingGoalsValue(json['coachingGoals']),
@@ -1722,6 +2100,20 @@ T _enumValue<T extends Enum>(Object? value, List<T> values, T fallback) {
     if (item.name == text) return item;
   }
   return fallback;
+}
+
+WorkoutItemKind _workoutGroupKind(Object? value) {
+  final text = value?.toString().trim();
+  return switch (text) {
+    'superset' => WorkoutItemKind.superset,
+    'circuit' => WorkoutItemKind.circuit,
+    'circle' => throw const FormatException(
+      'Use "circuit", not "circle", for circuit groups.',
+    ),
+    _ => throw const FormatException(
+      'Exercise group type must be superset or circuit.',
+    ),
+  };
 }
 
 int _fuelCheckInScoreValue(Object? value) {

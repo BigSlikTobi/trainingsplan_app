@@ -142,8 +142,8 @@ private struct TodayWorkoutView: View {
           healthPermissionRow.listRowBackground(Color.clear)
         }
         heroRow.listRowBackground(Color.clear)
-        ForEach(Array(workout.exercises.enumerated()), id: \.element.exerciseId) { index, exercise in
-          exerciseRow(exercise, isCurrent: index == store.exerciseIndex)
+        ForEach(Array(workout.orderedSteps.enumerated()), id: \.element.stepId) { index, step in
+          exerciseRow(step, isCurrent: index == store.stepIndex)
         }
       }
       .listStyle(.carousel)
@@ -156,6 +156,12 @@ private struct TodayWorkoutView: View {
       statusPill("● BEREIT", color: T.gold)
 
       if let exercise = store.currentExercise {
+        if let context = store.currentStep?.contextLabel {
+          Text(context.uppercased())
+            .font(.system(size: 11, weight: .heavy)).tracking(0.8)
+            .foregroundStyle(T.sage.opacity(0.7))
+            .lineLimit(1).minimumScaleFactor(0.7)
+        }
         Text(exercise.name)
           .font(.system(size: 22, weight: .heavy))
           .foregroundStyle(T.sage)
@@ -218,8 +224,9 @@ private struct TodayWorkoutView: View {
     )
   }
 
-  private func exerciseRow(_ exercise: WatchExercise, isCurrent: Bool) -> some View {
-    HStack(spacing: 10) {
+  private func exerciseRow(_ step: WatchExecutionStep, isCurrent: Bool) -> some View {
+    let exercise = step.exercise
+    return HStack(spacing: 10) {
       Circle()
         .fill(isCurrent ? T.sage : T.paper.opacity(0.2))
         .frame(width: 8, height: 8)
@@ -228,6 +235,12 @@ private struct TodayWorkoutView: View {
           .font(.system(size: 16, weight: isCurrent ? .heavy : .semibold))
           .foregroundStyle(isCurrent ? T.paper : T.paper.opacity(0.65))
           .lineLimit(1).minimumScaleFactor(0.7)
+        if let context = step.contextLabel {
+          Text(context.uppercased())
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(T.sage.opacity(isCurrent ? 0.72 : 0.42))
+            .lineLimit(1).minimumScaleFactor(0.7)
+        }
         Text("\(exercise.sets) × \(exercise.reps)")
           .font(.system(size: 13, weight: .medium))
           .foregroundStyle(T.paper.opacity(0.45))
@@ -314,6 +327,12 @@ private struct MetricsPage: View {
   var body: some View {
     VStack(spacing: 6) {
       if let exercise = store.currentExercise {
+        if let context = store.currentStep?.contextLabel {
+          Text(context.uppercased())
+            .font(.system(size: 11, weight: .heavy)).tracking(0.7)
+            .foregroundStyle(T.sage.opacity(0.72))
+            .lineLimit(1).minimumScaleFactor(0.7)
+        }
         Text(exercise.name.uppercased())
           .font(.system(size: 14, weight: .heavy)).tracking(0.3)
           .foregroundStyle(store.isPaused ? T.gold : T.coral)
@@ -443,7 +462,7 @@ private struct UpNextPage: View {
         .font(.system(size: 12, weight: .heavy)).tracking(1.0)
         .foregroundStyle(T.paper.opacity(0.4))
 
-      let upcoming = store.upcomingExercises
+      let upcoming = store.upcomingSteps
       if upcoming.isEmpty {
         Spacer()
         HStack {
@@ -455,13 +474,22 @@ private struct UpNextPage: View {
         }
         Spacer()
       } else {
-        ForEach(upcoming.prefix(4)) { exercise in
+        ForEach(upcoming.prefix(4)) { step in
+          let exercise = step.exercise
           HStack(spacing: 10) {
             Circle().fill(T.paper.opacity(0.2)).frame(width: 7, height: 7)
-            Text(exercise.name)
-              .font(.system(size: 16, weight: .semibold))
-              .foregroundStyle(T.paper.opacity(0.75))
-              .lineLimit(1).minimumScaleFactor(0.7)
+            VStack(alignment: .leading, spacing: 1) {
+              Text(exercise.name)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(T.paper.opacity(0.75))
+                .lineLimit(1).minimumScaleFactor(0.7)
+              if let context = step.contextLabel {
+                Text(context.uppercased())
+                  .font(.system(size: 9, weight: .bold))
+                  .foregroundStyle(T.sage.opacity(0.52))
+                  .lineLimit(1).minimumScaleFactor(0.7)
+              }
+            }
             Spacer(minLength: 6)
             Text("\(exercise.sets)×\(exercise.reps)")
               .font(.system(size: 13, weight: .semibold))
@@ -493,6 +521,13 @@ private struct RestView: View {
       Spacer(minLength: 0)
 
       if let next = store.currentExercise {
+        if let context = store.currentStep?.contextLabel {
+          Text(context.uppercased())
+            .font(.system(size: 10, weight: .heavy)).tracking(0.6)
+            .foregroundStyle(T.paper.opacity(0.44))
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .multilineTextAlignment(.center)
+        }
         Text(next.name)
           .font(.system(size: 18, weight: .bold))
           .foregroundStyle(T.sage)

@@ -16,6 +16,49 @@ source of truth for accepted training state.
 
 There is no supported folder-based sync or helper script flow.
 
+## Plan Shape: Supersets And Circuits
+
+Training plans may be flat or grouped. For new grouped plans, prefer
+`items` on each workout; keep `exercises` only for simple flat workouts.
+
+- A flat item has `type: "exercise"` plus the normal exercise prescription
+  fields (`exerciseId`, `name`, `sets`, `reps`, `targetLoad`, `targetRpe`,
+  `restSeconds`, `coachCue`, etc.).
+- A superset has `type: "superset"`, exactly 2 child exercises, and `rounds`.
+  Execution alternates the children by round: A1, B1, A2, B2. Do not prescribe
+  all sets of A before B.
+- A circuit has `type: "circuit"`, 3 or more child exercises, and `rounds`.
+  Use the technical JSON term `circuit`, not `circle`; German UI may label it
+  `Zirkel`.
+- Do not nest groups inside groups in v1. A workout contains exercises or
+  groups; a group contains exercises only.
+- In grouped items, `rounds` is the source of truth for repeated execution.
+  Child exercise `sets` may be `1` or omitted by the coach; the app displays and
+  logs those child exercises against the group round count.
+- `group.restSeconds` applies after the last child of each round. Child
+  `restSeconds` applies between child steps and can be `0` for classic
+  supersets/circuits.
+
+Example:
+
+```json
+{
+  "items": [
+    {
+      "type": "superset",
+      "groupId": "ss_1",
+      "title": "Superset 1",
+      "rounds": 3,
+      "restSeconds": 90,
+      "exercises": [
+        { "exerciseId": "push_up", "name": "Push-Up", "sets": 1, "reps": "10", "targetLoad": "bodyweight", "targetRpe": 7, "restSeconds": 0, "coachCue": "Brace." },
+        { "exerciseId": "row", "name": "Row", "sets": 1, "reps": "12", "targetLoad": "moderate", "targetRpe": 7, "restSeconds": 0, "coachCue": "Pull elbows back." }
+      ]
+    }
+  ]
+}
+```
+
 ## Code Map
 
 - `lib/src/state/fitness_controller.dart`: app state and server sync workflow.

@@ -175,7 +175,8 @@ class CoachPayloadService {
     String? dailyMotto,
     YesterdaySummary? yesterdaySummary,
     CoachingGoals? goals,
-  }) parseNextDayPlanWithContext(Map<String, dynamic> json) {
+  })
+  parseNextDayPlanWithContext(Map<String, dynamic> json) {
     final workout = parseNextDayPlan(json);
     return (
       workout: workout,
@@ -185,9 +186,8 @@ class CoachPayloadService {
     );
   }
 
-  ({TrainingBlock block, CoachingGoals? goals}) parseTrainingBlockPlanWithContext(
-    Map<String, dynamic> json,
-  ) {
+  ({TrainingBlock block, CoachingGoals? goals})
+  parseTrainingBlockPlanWithContext(Map<String, dynamic> json) {
     final block = parseTrainingBlockPlan(json);
     return (block: block, goals: _parseGoals(json['goals']));
   }
@@ -320,14 +320,14 @@ Map<String, dynamic> _workoutPayloadObject(Map<String, dynamic> payload) {
   if (plan != null) {
     final planWorkout = (plan['workout'] as Map?)?.cast<String, dynamic>();
     if (planWorkout != null) return planWorkout;
-    if (plan['exercises'] is List) return plan;
+    if (plan['items'] is List || plan['exercises'] is List) return plan;
   }
 
   final result = (payload['result'] as Map?)?.cast<String, dynamic>();
   if (result != null) {
     final resultWorkout = (result['workout'] as Map?)?.cast<String, dynamic>();
     if (resultWorkout != null) return resultWorkout;
-    if (result['exercises'] is List) return result;
+    if (result['items'] is List || result['exercises'] is List) return result;
   }
 
   return payload;

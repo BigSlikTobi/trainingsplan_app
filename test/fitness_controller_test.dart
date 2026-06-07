@@ -357,27 +357,30 @@ void main() {
     },
   );
 
-  test('unknown result kind is left pending for forward compatibility', () async {
-    final store = _MemoryStore()
-      ..bridgeConfig = const LocalBridgeConfig(
-        baseUrl: 'http://127.0.0.1:8787',
-        token: '123-456',
+  test(
+    'unknown result kind is left pending for forward compatibility',
+    () async {
+      final store = _MemoryStore()
+        ..bridgeConfig = const LocalBridgeConfig(
+          baseUrl: 'http://127.0.0.1:8787',
+          token: '123-456',
+        );
+      final bridge = _ResultBridgeService(
+        pendingKinds: const ['some_future_result'],
+        results: {
+          'some_future_result': {'schema': 'some_future_result.v1'},
+        },
       );
-    final bridge = _ResultBridgeService(
-      pendingKinds: const ['some_future_result'],
-      results: {
-        'some_future_result': {'schema': 'some_future_result.v1'},
-      },
-    );
-    final controller = FitnessController(store: store, bridge: bridge);
-    await controller.load();
+      final controller = FitnessController(store: store, bridge: bridge);
+      await controller.load();
 
-    await controller.pullBridgeResults();
+      await controller.pullBridgeResults();
 
-    // Not consumed: a newer app version may know how to apply it.
-    expect(bridge.consumedKinds, isEmpty);
-    expect(controller.status, isEmpty);
-  });
+      // Not consumed: a newer app version may know how to apply it.
+      expect(bridge.consumedKinds, isEmpty);
+      expect(controller.status, isEmpty);
+    },
+  );
 
   test(
     'server migration uploads full snapshot without mutating phone data',
@@ -781,45 +784,48 @@ void main() {
     expect(relaunched.justCompletedLog, isNotNull);
   });
 
-  test('a session finished before launch (no marker) syncs done to the watch', () async {
-    final store = _MemoryStore();
-    final base = sampleFitnessData();
-    final workout = base.activeBlock!.workouts.first;
-    // Preload a workout completed earlier today with no runtime marker — as if
-    // it was finished on the watch or in a previous app launch / build.
-    store.saved = base.copyWith(
-      logs: [
-        WorkoutLog(
-          id: 'log-prev-launch',
-          workoutId: workout.id,
-          title: workout.title,
-          startedAt: DateTime.now().subtract(const Duration(minutes: 40)),
-          completedAt: DateTime.now().subtract(const Duration(minutes: 5)),
-          readiness: 3,
-          soreness: 2,
-          notes: '',
-          sets: const [],
-          healthWriteStatus: 'not_synced',
-        ),
-      ],
-    );
+  test(
+    'a session finished before launch (no marker) syncs done to the watch',
+    () async {
+      final store = _MemoryStore();
+      final base = sampleFitnessData();
+      final workout = base.activeBlock!.workouts.first;
+      // Preload a workout completed earlier today with no runtime marker — as if
+      // it was finished on the watch or in a previous app launch / build.
+      store.saved = base.copyWith(
+        logs: [
+          WorkoutLog(
+            id: 'log-prev-launch',
+            workoutId: workout.id,
+            title: workout.title,
+            startedAt: DateTime.now().subtract(const Duration(minutes: 40)),
+            completedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+            readiness: 3,
+            soreness: 2,
+            notes: '',
+            sets: const [],
+            healthWriteStatus: 'not_synced',
+          ),
+        ],
+      );
 
-    final watch = _FakeWatchSync();
-    final controller = FitnessController(
-      store: store,
-      health: _TimerHealthSync(),
-      watchSync: watch,
-    );
-    await controller.load();
-    await Future<void>.delayed(Duration.zero);
+      final watch = _FakeWatchSync();
+      final controller = FitnessController(
+        store: store,
+        health: _TimerHealthSync(),
+        watchSync: watch,
+      );
+      await controller.load();
+      await Future<void>.delayed(Duration.zero);
 
-    // Today surfaces it, the marker is re-established, and the watch is told the
-    // session is done (a completedLog), not re-opened with the next workout.
-    expect(controller.todaysCompletedWorkout, isNotNull);
-    expect(controller.justCompletedLog, isNotNull);
-    expect(watch.sentPayloads, isNotEmpty);
-    expect(watch.sentPayloads.last, contains('completedLog'));
-  });
+      // Today surfaces it, the marker is re-established, and the watch is told the
+      // session is done (a completedLog), not re-opened with the next workout.
+      expect(controller.todaysCompletedWorkout, isNotNull);
+      expect(controller.justCompletedLog, isNotNull);
+      expect(watch.sentPayloads, isNotEmpty);
+      expect(watch.sentPayloads.last, contains('completedLog'));
+    },
+  );
 
   test('iPhone completion can finish workout without active log', () async {
     final watch = _FakeWatchSync();
@@ -931,6 +937,70 @@ void main() {
     expect(payload, isNot(contains('completedLog')));
   });
 
+  test('grouped workout steps auto-close by stepId', () async {
+    final store = _MemoryStore()..saved = _groupedFitnessData();
+    final controller = FitnessController(
+      store: store,
+      health: _TimerHealthSync(),
+      watchSync: _FakeWatchSync(),
+    );
+    await controller.load();
+    final workout = controller.nextWorkout!;
+    final steps = workout.executionSteps;
+
+    expect(steps.map((step) => step.exercise.exerciseId), [
+      'push_up',
+      'row',
+      'push_up',
+      'row',
+      'push_up',
+      'row',
+    ]);
+
+    await controller.logSet(steps[0].exercise, 0, 10, 7);
+    await controller.logSet(steps[2].exercise, 0, 11, 7);
+    expect(
+      controller.activeWorkoutLog!.sets
+          .where((set) => set.exerciseId == 'push_up')
+          .map((set) => set.setNumber),
+      [1, 2],
+    );
+
+    await controller.startCurrentWorkout();
+    for (final step in steps) {
+      await controller.startExerciseTimer(
+        exerciseId: step.exercise.exerciseId,
+        exerciseName: step.exercise.name,
+        stepId: step.stepId,
+        groupId: step.groupId,
+        groupType: step.groupKind?.name,
+        groupTitle: step.groupTitle,
+        round: step.round,
+        roundCount: step.roundCount,
+      );
+      expect(
+        controller.isExerciseRunning(
+          step.exercise.exerciseId,
+          stepId: step.stepId,
+        ),
+        isTrue,
+      );
+      await controller.stopExerciseTimer(
+        step.exercise.exerciseId,
+        stepId: step.stepId,
+      );
+    }
+
+    expect(controller.activeWorkoutLog, isNull);
+    final completed = controller.justCompletedLog!;
+    expect(completed.completedAt, isNotNull);
+    expect(completed.exerciseTimings.map((timing) => timing.stepId), [
+      for (final step in steps) step.stepId,
+    ]);
+    expect(completed.exerciseTimings.first.groupId, 'ss_1');
+    expect(completed.exerciseTimings.first.round, 1);
+  });
+
   test('imports Apple Watch progress before workout completion', () async {
     final watch = _FakeWatchSync();
     final controller = FitnessController(
@@ -991,8 +1061,10 @@ void main() {
     await controller.pauseCurrentWorkout();
 
     expect(controller.activeWorkoutLog!.exerciseTimings.length, timingsBefore);
-    expect(controller.activeWorkoutLog!.exerciseTimings.single.completedAt,
-        isNull);
+    expect(
+      controller.activeWorkoutLog!.exerciseTimings.single.completedAt,
+      isNull,
+    );
     expect(watch.sentPayloads, isEmpty);
   });
 
@@ -1122,6 +1194,69 @@ class _MemoryStore extends LocalFitnessStore {
   Future<void> saveBridgeConfig(LocalBridgeConfig config) async {
     bridgeConfig = config;
   }
+}
+
+FitnessData _groupedFitnessData() {
+  final base = sampleFitnessData();
+  final block = base.activeBlock!;
+  const pushUp = ExercisePrescription(
+    exerciseId: 'push_up',
+    name: 'Push-Up',
+    sets: 1,
+    reps: '10',
+    targetLoad: 'bodyweight',
+    targetRpe: 7,
+    restSeconds: 0,
+    coachCue: 'Brace.',
+  );
+  const row = ExercisePrescription(
+    exerciseId: 'row',
+    name: 'Row',
+    sets: 1,
+    reps: '12',
+    targetLoad: 'moderate',
+    targetRpe: 7,
+    restSeconds: 0,
+    coachCue: 'Pull.',
+  );
+  const workout = PlannedWorkout(
+    id: 'grouped_w1_d1',
+    week: 1,
+    day: 1,
+    title: 'Grouped Day',
+    focus: 'Density',
+    rationale: 'Alternate paired lifts.',
+    conditioning: '',
+    items: [
+      WorkoutPlanItem.group(
+        ExerciseGroup(
+          groupId: 'ss_1',
+          kind: WorkoutItemKind.superset,
+          title: 'Superset 1',
+          rounds: 3,
+          restSeconds: 90,
+          exercises: [pushUp, row],
+        ),
+      ),
+    ],
+  );
+  final groupedBlock = TrainingBlock(
+    id: 'grouped_block',
+    style: block.style,
+    title: 'Grouped Block',
+    durationWeeks: block.durationWeeks,
+    currentWeek: block.currentWeek,
+    weeklyFocus: block.weeklyFocus,
+    measurableTargets: block.measurableTargets,
+    workouts: const [workout],
+    createdBy: 'test',
+    createdAt: block.createdAt,
+  );
+  return base.copyWith(
+    blocks: [groupedBlock],
+    activeBlockId: groupedBlock.id,
+    logs: const [],
+  );
 }
 
 class _CapturingBridgeService extends LocalBridgeService {

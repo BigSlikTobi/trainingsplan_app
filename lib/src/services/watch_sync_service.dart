@@ -11,7 +11,8 @@ class WatchSyncService {
       _eventChannel =
           eventChannel ?? const EventChannel('t4l_trainer/watch_events');
 
-  static const int schemaVersion = 1;
+  static const int legacySchemaVersion = 1;
+  static const int schemaVersion = 2;
 
   final MethodChannel _methodChannel;
   final EventChannel _eventChannel;
@@ -34,7 +35,7 @@ class WatchSyncService {
     return {
       'schemaVersion': schemaVersion,
       'sentAt': (sentAt ?? DateTime.now()).toIso8601String(),
-      'workout': workout.toJson(),
+      'workout': workout.toWatchJson(),
       if (activeLog != null) 'activeLog': activeLog.toJson(),
       if (completedLog != null) 'completedLog': completedLog.toJson(),
     };

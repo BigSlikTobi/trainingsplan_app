@@ -21,6 +21,7 @@ class TodayHeroCard extends StatelessWidget {
     required this.sessionElapsed,
     required this.avgRpe,
     required this.focusedExercise,
+    required this.focusedStepContext,
     required this.focusedExerciseIndex,
     required this.focusedExerciseElapsed,
     required this.focusedExerciseIsPaused,
@@ -51,6 +52,7 @@ class TodayHeroCard extends StatelessWidget {
   final double? avgRpe;
 
   final ExercisePrescription? focusedExercise;
+  final String? focusedStepContext;
   final int focusedExerciseIndex;
   final Duration? focusedExerciseElapsed;
   final bool focusedExerciseIsPaused;
@@ -130,6 +132,7 @@ class TodayHeroCard extends StatelessWidget {
                     ? _HeroExercise(
                         key: const ValueKey('hero-exercise'),
                         exercise: focusedExercise!,
+                        stepContext: focusedStepContext,
                         exerciseIndex: focusedExerciseIndex,
                         totalExercises: totalExercises,
                         elapsed: focusedExerciseElapsed,
@@ -674,7 +677,10 @@ class _OverviewActiveControls extends StatelessWidget {
               icon: const Icon(Icons.check_circle_outline, size: 18),
               label: Text(
                 l.btnFertig,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ),
@@ -690,6 +696,7 @@ class _HeroExercise extends StatelessWidget {
   const _HeroExercise({
     super.key,
     required this.exercise,
+    required this.stepContext,
     required this.exerciseIndex,
     required this.totalExercises,
     required this.elapsed,
@@ -702,6 +709,7 @@ class _HeroExercise extends StatelessWidget {
   });
 
   final ExercisePrescription exercise;
+  final String? stepContext;
   final int exerciseIndex;
   final int totalExercises;
   final Duration? elapsed;
@@ -777,6 +785,18 @@ class _HeroExercise extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+        if (stepContext?.trim().isNotEmpty ?? false) ...[
+          Text(
+            stepContext!.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.4,
+              color: AppColors.sage.withValues(alpha: 0.68),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         for (final word in words)
           Text(
             word.toUpperCase(),

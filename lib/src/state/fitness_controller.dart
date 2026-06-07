@@ -78,6 +78,7 @@ class FitnessController extends ChangeNotifier {
   set _justCompletedLog(WorkoutLog? log) {
     _data = _data.copyWith(justCompletedLogId: log?.id);
   }
+
   Map<String, dynamic>? _pendingTrainingBlockPlanPayload;
   CoachingGoals? _pendingTrainingBlockGoals;
   StreamSubscription<Map<String, dynamic>>? _watchEvents;
@@ -156,6 +157,7 @@ class FitnessController extends ChangeNotifier {
     _data = _data.copyWith(justCompletedLogId: completed.id);
     unawaited(syncWorkoutToWatch());
   }
+
   MealAnalysisRequest? get pendingMealRequest => _data.pendingMealRequest;
   MealAnalysisResult? get pendingMealResult => _data.pendingMealResult;
   FuelGuidance? get fuelGuidance => _data.fuelGuidance;
@@ -962,6 +964,12 @@ class FitnessController extends ChangeNotifier {
   Future<void> startExerciseTimer({
     required String exerciseId,
     required String exerciseName,
+    String? stepId,
+    String? groupId,
+    String? groupType,
+    String? groupTitle,
+    int? round,
+    int? roundCount,
   }) async {
     if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
@@ -971,15 +979,22 @@ class FitnessController extends ChangeNotifier {
       return;
     }
     final log = _data.logs[index];
+    final effectiveStepId = stepId ?? exerciseId;
     final hasTiming = log.exerciseTimings.any(
-      (t) => t.exerciseId == exerciseId,
+      (t) => t.stepId == effectiveStepId,
     );
     if (hasTiming) return;
 
     final timing = ExerciseTiming(
+      stepId: effectiveStepId,
       exerciseId: exerciseId,
       exerciseName: exerciseName,
       startedAt: DateTime.now(),
+      groupId: groupId,
+      groupType: groupType,
+      groupTitle: groupTitle,
+      round: round,
+      roundCount: roundCount,
     );
     final updated = log.copyWith(
       exerciseTimings: [...log.exerciseTimings, timing],
@@ -990,11 +1005,12 @@ class FitnessController extends ChangeNotifier {
     unawaited(syncWorkoutToWatch());
   }
 
-  Future<void> pauseExerciseTimer(String exerciseId) async {
+  Future<void> pauseExerciseTimer(String exerciseId, {String? stepId}) async {
     if (_deferToWatchSession()) return;
     final mutated = _mutateActiveExerciseTiming(
       exerciseId,
       (t) => t.isRunning ? t.copyWith(pausedAt: DateTime.now()) : null,
+      stepId: stepId,
     );
     if (mutated != null) {
       await _persist('Paused timer: ${mutated.exerciseName}');
@@ -1002,7 +1018,7 @@ class FitnessController extends ChangeNotifier {
     }
   }
 
-  Future<void> resumeExerciseTimer(String exerciseId) async {
+  Future<void> resumeExerciseTimer(String exerciseId, {String? stepId}) async {
     if (_deferToWatchSession()) return;
     final mutated = _mutateActiveExerciseTiming(exerciseId, (t) {
       if (!t.isPaused) return null;
@@ -1011,7 +1027,7 @@ class FitnessController extends ChangeNotifier {
         clearPausedAt: true,
         pausedSeconds: t.pausedSeconds + (added < 0 ? 0 : added),
       );
-    });
+    }, stepId: stepId);
     if (mutated != null) {
       await _persist('Resumed timer: ${mutated.exerciseName}');
       unawaited(syncWorkoutToWatch());
@@ -1020,14 +1036,16 @@ class FitnessController extends ChangeNotifier {
 
   Future<void> stopExerciseTimer(
     String exerciseId, {
+    String? stepId,
     bool autoCloseWorkout = true,
   }) async {
     if (_deferToWatchSession()) return;
     final index = _activeWorkoutLogIndex();
     if (index < 0) return;
     final log = _data.logs[index];
+    final effectiveStepId = stepId ?? exerciseId;
     final timingIndex = log.exerciseTimings.indexWhere(
-      (t) => t.exerciseId == exerciseId && !t.isStopped,
+      (t) => t.stepId == effectiveStepId && !t.isStopped,
     );
     if (timingIndex < 0) return;
     final current = log.exerciseTimings[timingIndex];
@@ -1110,11 +1128,12 @@ class FitnessController extends ChangeNotifier {
     return Duration(seconds: active < 0 ? 0 : active);
   }
 
-  Duration? elapsedForExercise(String exerciseId) {
+  Duration? elapsedForExercise(String exerciseId, {String? stepId}) {
     final log = _activeWorkoutLog();
     if (log == null) return null;
+    final effectiveStepId = stepId ?? exerciseId;
     final i = log.exerciseTimings.indexWhere(
-      (t) => t.exerciseId == exerciseId && !t.isStopped,
+      (t) => t.stepId == effectiveStepId && !t.isStopped,
     );
     if (i < 0) return null;
     final t = log.exerciseTimings[i];
@@ -1129,22 +1148,26 @@ class FitnessController extends ChangeNotifier {
     return Duration(seconds: active < 0 ? 0 : active);
   }
 
-  ExerciseTiming? timingForExercise(String exerciseId) {
+  ExerciseTiming? timingForExercise(String exerciseId, {String? stepId}) {
     final log = _activeWorkoutLog() ?? _justCompletedLog;
     if (log == null) return null;
-    final i = log.exerciseTimings.indexWhere((t) => t.exerciseId == exerciseId);
+    final effectiveStepId = stepId ?? exerciseId;
+    final i = log.exerciseTimings.indexWhere(
+      (t) => t.stepId == effectiveStepId,
+    );
     return i < 0 ? null : log.exerciseTimings[i];
   }
 
-  bool isExerciseRunning(String exerciseId) =>
-      timingForExercise(exerciseId)?.isRunning ?? false;
-  bool isExercisePaused(String exerciseId) =>
-      timingForExercise(exerciseId)?.isPaused ?? false;
-  bool isExerciseStopped(String exerciseId) {
+  bool isExerciseRunning(String exerciseId, {String? stepId}) =>
+      timingForExercise(exerciseId, stepId: stepId)?.isRunning ?? false;
+  bool isExercisePaused(String exerciseId, {String? stepId}) =>
+      timingForExercise(exerciseId, stepId: stepId)?.isPaused ?? false;
+  bool isExerciseStopped(String exerciseId, {String? stepId}) {
     final log = _activeWorkoutLog() ?? _justCompletedLog;
     if (log == null) return false;
+    final effectiveStepId = stepId ?? exerciseId;
     return log.exerciseTimings.any(
-      (t) => t.exerciseId == exerciseId && t.isStopped,
+      (t) => t.stepId == effectiveStepId && t.isStopped,
     );
   }
 
@@ -1153,13 +1176,15 @@ class FitnessController extends ChangeNotifier {
 
   ExerciseTiming? _mutateActiveExerciseTiming(
     String exerciseId,
-    ExerciseTiming? Function(ExerciseTiming) transform,
-  ) {
+    ExerciseTiming? Function(ExerciseTiming) transform, {
+    String? stepId,
+  }) {
     final index = _activeWorkoutLogIndex();
     if (index < 0) return null;
     final log = _data.logs[index];
+    final effectiveStepId = stepId ?? exerciseId;
     final timingIndex = log.exerciseTimings.indexWhere(
-      (t) => t.exerciseId == exerciseId && !t.isStopped,
+      (t) => t.stepId == effectiveStepId && !t.isStopped,
     );
     if (timingIndex < 0) return null;
     final updatedTiming = transform(log.exerciseTimings[timingIndex]);
@@ -1175,12 +1200,12 @@ class FitnessController extends ChangeNotifier {
     final workout = nextWorkout;
     final log = _activeWorkoutLog();
     if (workout == null || log == null) return;
-    final stoppedIds = log.exerciseTimings
+    final stoppedStepIds = log.exerciseTimings
         .where((t) => t.isStopped)
-        .map((t) => t.exerciseId)
+        .map((t) => t.stepId)
         .toSet();
-    final allDone = workout.exercises.every(
-      (e) => stoppedIds.contains(e.exerciseId),
+    final allDone = workout.executionSteps.every(
+      (step) => stoppedStepIds.contains(step.stepId),
     );
     if (!allDone) return;
     await stopCurrentWorkout();
@@ -1843,7 +1868,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   WorkoutLog? _watchCompletionLog(Map<String, dynamic> payload) {
-    if (payload['schemaVersion'] != WatchSyncService.schemaVersion) {
+    if (!_isSupportedWatchSchema(payload['schemaVersion'])) {
       return null;
     }
     final workoutId = payload['workoutId'] as String? ?? '';
@@ -1881,7 +1906,7 @@ class FitnessController extends ChangeNotifier {
   }
 
   WorkoutLog? _watchProgressLog(Map<String, dynamic> payload) {
-    if (payload['schemaVersion'] != WatchSyncService.schemaVersion) {
+    if (!_isSupportedWatchSchema(payload['schemaVersion'])) {
       return null;
     }
     final workoutId = payload['workoutId'] as String? ?? '';
@@ -1914,6 +1939,11 @@ class FitnessController extends ChangeNotifier {
       ),
       pausedSeconds: _payloadInt(payload['pausedSeconds'], 0),
     );
+  }
+
+  bool _isSupportedWatchSchema(Object? value) {
+    return value == WatchSyncService.schemaVersion ||
+        value == WatchSyncService.legacySchemaVersion;
   }
 
   WorkoutLog _mergeWatchCompletion({

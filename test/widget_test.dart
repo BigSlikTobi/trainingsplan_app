@@ -133,6 +133,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('today workout renders superset rounds', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final controller = FitnessController(
+      store: _WidgetStore(_groupedCoachData()),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('de'),
+        home: FitnessScope(
+          controller: controller,
+          child: const CoachDashboard(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('Superset 1'), findsWidgets);
+    expect(find.textContaining('Runde 1/3'), findsWidgets);
+    expect(find.text('Push-Up'), findsWidgets);
+    expect(find.text('Row'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('today workout rows show exercise Apple Health metrics', (
     tester,
   ) async {
@@ -465,6 +492,65 @@ FitnessData _longCoachData() {
     weeklyFocus: block.weeklyFocus,
     measurableTargets: block.measurableTargets,
     workouts: [updatedWorkout, ...block.workouts.skip(1)],
+    createdBy: block.createdBy,
+    createdAt: block.createdAt,
+  );
+  return base.copyWith(blocks: [updatedBlock], activeBlockId: updatedBlock.id);
+}
+
+FitnessData _groupedCoachData() {
+  final base = sampleFitnessData();
+  final block = base.activeBlock!;
+  const pushUp = ExercisePrescription(
+    exerciseId: 'push_up',
+    name: 'Push-Up',
+    sets: 1,
+    reps: '10',
+    targetLoad: 'bodyweight',
+    targetRpe: 7,
+    restSeconds: 0,
+    coachCue: 'Brace.',
+  );
+  const row = ExercisePrescription(
+    exerciseId: 'row',
+    name: 'Row',
+    sets: 1,
+    reps: '12',
+    targetLoad: 'moderate',
+    targetRpe: 7,
+    restSeconds: 0,
+    coachCue: 'Pull.',
+  );
+  const updatedWorkout = PlannedWorkout(
+    id: 'grouped_widget',
+    week: 1,
+    day: 1,
+    title: 'Grouped Strength',
+    focus: 'Alternating upper body work.',
+    rationale: 'Use a superset to keep the session dense.',
+    conditioning: '',
+    items: [
+      WorkoutPlanItem.group(
+        ExerciseGroup(
+          groupId: 'ss_1',
+          kind: WorkoutItemKind.superset,
+          title: 'Superset 1',
+          rounds: 3,
+          restSeconds: 90,
+          exercises: [pushUp, row],
+        ),
+      ),
+    ],
+  );
+  final updatedBlock = TrainingBlock(
+    id: 'grouped_widget_block',
+    style: block.style,
+    title: block.title,
+    durationWeeks: block.durationWeeks,
+    currentWeek: block.currentWeek,
+    weeklyFocus: block.weeklyFocus,
+    measurableTargets: block.measurableTargets,
+    workouts: [updatedWorkout],
     createdBy: block.createdBy,
     createdAt: block.createdAt,
   );

@@ -37,7 +37,28 @@ struct WatchPlannedWorkout: Codable, Identifiable {
   let focus: String
   let rationale: String
   let exercises: [WatchExercise]
+  let executionSteps: [WatchExecutionStep]?
   let conditioning: String
+
+  var orderedSteps: [WatchExecutionStep] {
+    if let executionSteps, !executionSteps.isEmpty { return executionSteps }
+    return exercises.enumerated().map { index, exercise in
+      WatchExecutionStep(
+        stepId: exercise.exerciseId,
+        stepIndex: index,
+        totalSteps: exercises.count,
+        exerciseId: exercise.exerciseId,
+        exerciseName: exercise.name,
+        restSeconds: exercise.restSeconds,
+        groupId: nil,
+        groupType: nil,
+        groupTitle: nil,
+        round: nil,
+        roundCount: nil,
+        exercise: exercise
+      )
+    }
+  }
 }
 
 struct WatchExercise: Codable, Identifiable {
@@ -53,6 +74,32 @@ struct WatchExercise: Codable, Identifiable {
   let coachCue: String
 }
 
+struct WatchExecutionStep: Codable, Identifiable {
+  var id: String { stepId }
+
+  let stepId: String
+  let stepIndex: Int
+  let totalSteps: Int
+  let exerciseId: String
+  let exerciseName: String
+  let restSeconds: Int
+  let groupId: String?
+  let groupType: String?
+  let groupTitle: String?
+  let round: Int?
+  let roundCount: Int?
+  let exercise: WatchExercise
+
+  var isGrouped: Bool { groupId != nil }
+
+  var contextLabel: String? {
+    var parts: [String] = []
+    if let groupTitle, !groupTitle.isEmpty { parts.append(groupTitle) }
+    if let round, let roundCount { parts.append("Runde \(round)/\(roundCount)") }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
+  }
+}
+
 struct WatchLoggedSet: Codable, Identifiable {
   var id: String { "\(exerciseId)-\(setNumber)" }
 
@@ -65,6 +112,7 @@ struct WatchLoggedSet: Codable, Identifiable {
 }
 
 struct WatchExerciseTiming: Codable {
+  let stepId: String?
   let exerciseId: String
   let exerciseName: String
   let startedAt: String

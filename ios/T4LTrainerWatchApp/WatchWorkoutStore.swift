@@ -26,7 +26,7 @@ final class WatchWorkoutStore {
   private(set) var isPaused = false
   private(set) var completedPendingSync = false
   private(set) var summary: WatchWorkoutSummary?
-  private(set) var exerciseIndex = 0
+  private(set) var stepIndex = 0
 
   // Rest period — watch-only UI state, not part of the wire contract.
   private(set) var restStartedAt: Date?
@@ -50,9 +50,10 @@ final class WatchWorkoutStore {
   @ObservationIgnored private var progressRevision = 0
   @ObservationIgnored private var restTask: Task<Void, Never>?
   @ObservationIgnored private var countdownTask: Task<Void, Never>?
-  /// True only when this watch *started* the live HK session (vs. mirroring a
-  /// phone-driven session). While true the watch is the session owner and
-  /// ignores inbound active-log echoes for the same workout.
+  @ObservationIgnored private var isStartingWatchSession = false
+  /// True when this watch owns the live HK session. That includes workouts
+  /// originally created on the phone once the athlete starts controlling
+  /// exercises from the watch.
   @ObservationIgnored private var startedOnWatch = false
 
   // MARK: - Derived state
@@ -61,31 +62,40 @@ final class WatchWorkoutStore {
   var isActive: Bool { startedAt != nil }
   var isExerciseRunning: Bool { activeExerciseStartedAt != nil }
   var isResting: Bool { restEndsAt != nil }
+  var exerciseIndex: Int { stepIndex }
+
+  var currentStep: WatchExecutionStep? {
+    guard let workout, workout.orderedSteps.indices.contains(stepIndex) else { return nil }
+    return workout.orderedSteps[stepIndex]
+  }
 
   var currentExercise: WatchExercise? {
-    guard let workout, workout.exercises.indices.contains(exerciseIndex) else { return nil }
-    return workout.exercises[exerciseIndex]
+    currentStep?.exercise
   }
 
   var hasRemainingExercises: Bool {
     guard let workout else { return false }
-    return exerciseIndex < workout.exercises.count
+    return stepIndex < workout.orderedSteps.count
   }
 
   var isCountingDown: Bool { countdownEndsAt != nil }
 
   /// Exercises after the current one, for the "Up Next" page.
-  var upcomingExercises: [WatchExercise] {
+  var upcomingSteps: [WatchExecutionStep] {
     guard let workout else { return [] }
-    let next = exerciseIndex + 1
-    guard next < workout.exercises.count else { return [] }
-    return Array(workout.exercises[next...])
+    let next = stepIndex + 1
+    guard next < workout.orderedSteps.count else { return [] }
+    return Array(workout.orderedSteps[next...])
+  }
+
+  var upcomingExercises: [WatchExercise] {
+    upcomingSteps.map(\.exercise)
   }
 
   /// True when the current exercise is the final one in the workout.
   var isOnLastExercise: Bool {
-    guard let workout, !workout.exercises.isEmpty else { return false }
-    return exerciseIndex >= workout.exercises.count - 1
+    guard let workout, !workout.orderedSteps.isEmpty else { return false }
+    return stepIndex >= workout.orderedSteps.count - 1
   }
 
   /// Coarse phase for the UI layer to branch and animate on.
@@ -141,7 +151,7 @@ final class WatchWorkoutStore {
     if !isSameWorkout {
       summary = nil
       showSummaryOverlay = false
-      exerciseIndex = 0
+      stepIndex = 0
       startedOnWatch = false
       clearCountdown()
       clearRest()
@@ -241,7 +251,7 @@ final class WatchWorkoutStore {
   }
 
   func startNextExercise() {
-    guard let workout, hasRemainingExercises, !isExerciseRunning else { return }
+    guard workout != nil, hasRemainingExercises, !isExerciseRunning else { return }
     clearCountdown()
     clearRest()
     summary = nil
@@ -251,28 +261,17 @@ final class WatchWorkoutStore {
     activeExerciseStartedAt = now
     activeExercisePausedSeconds = 0
     isPaused = false
+    pausedAt = nil
     WatchHaptics.exerciseStart()
 
-    if startedAt != nil {
-      // The session is already running from the first exercise. Defensively
-      // resume it in case a prior pause/stop left it paused — a paused
-      // HKWorkoutSession stops counting toward Apple Fitness duration/energy.
-      workoutManager.resume()
-      sendProgress()
-      return
+    let sessionStart = startedAt ?? now
+    if startedAt == nil {
+      startedAt = now
+      sets = []
+      timings = []
+      pausedSeconds = 0
     }
-    pausedAt = nil
-    startedAt = now
-    startedOnWatch = true
-    sets = []
-    timings = []
-    pausedSeconds = 0
-    let workoutId = workout.id
-    Task {
-      await workoutManager.start(at: now)
-      connectivity.notifySessionActive(workoutId: workoutId)
-      sendProgress()
-    }
+    takeOwnershipIfNeeded(startDate: sessionStart)
   }
 
   func stopCurrentExercise() {
@@ -291,10 +290,10 @@ final class WatchWorkoutStore {
       workoutManager.resume()
     }
 
-    let restSeconds = currentExercise?.restSeconds ?? 0
+    let restSeconds = currentStep?.restSeconds ?? currentExercise?.restSeconds ?? 0
     finishCurrentExercise()
     if hasRemainingExercises {
-      exerciseIndex += 1
+      stepIndex += 1
     }
     if !hasRemainingExercises {
       finish()
@@ -320,14 +319,14 @@ final class WatchWorkoutStore {
     }
     if isExerciseRunning {
       finishCurrentExercise()
-      if hasRemainingExercises { exerciseIndex += 1 }
+      if hasRemainingExercises { stepIndex += 1 }
     }
 
     let completedAt = Date()
     Task {
       await workoutManager.finish(at: completedAt)
       let completion = WatchCompletionPayload(
-        schemaVersion: 1,
+        schemaVersion: 2,
         completionId: UUID().uuidString,
         workoutId: workout.id,
         title: workout.title,
@@ -423,9 +422,11 @@ final class WatchWorkoutStore {
 
   private func finishCurrentExercise() {
     guard let exercise = currentExercise, let activeExerciseStartedAt else { return }
+    let step = currentStep
     let completed = Date()
     timings.append(
       WatchExerciseTiming(
+        stepId: step?.stepId,
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.name,
         startedAt: WatchClock.string(from: activeExerciseStartedAt),
@@ -454,6 +455,33 @@ final class WatchWorkoutStore {
     self.summary = summary
   }
 
+  private func takeOwnershipIfNeeded(startDate: Date?) {
+    guard let workout else { return }
+    let shouldNotifyPhone = !startedOnWatch
+    startedOnWatch = true
+    if workoutManager.hasSession {
+      isStartingWatchSession = false
+      // The session may be paused from a prior exercise or pause control; make
+      // sure Apple Fitness duration and energy resume before sending progress.
+      workoutManager.resume()
+      if shouldNotifyPhone { connectivity.notifySessionActive(workoutId: workout.id) }
+      sendProgress()
+      return
+    }
+    guard !isStartingWatchSession else { return }
+
+    let workoutId = workout.id
+    let sessionStart = startDate ?? startedAt ?? activeExerciseStartedAt ?? Date()
+    isStartingWatchSession = true
+    Task {
+      await workoutManager.start(at: sessionStart)
+      isStartingWatchSession = false
+      if isPaused { workoutManager.pause() }
+      connectivity.notifySessionActive(workoutId: workoutId)
+      sendProgress()
+    }
+  }
+
   private func applyActiveLog(_ activeLog: WatchActiveLog?) {
     guard let activeLog else { return }
     startedAt = WatchClock.date(from: activeLog.startedAt)
@@ -475,13 +503,17 @@ final class WatchWorkoutStore {
   ) {
     guard let workout else { return }
     if let running = exerciseTimings.first(where: { $0.completedAt == nil }) {
-      if let index = workout.exercises.firstIndex(where: { $0.exerciseId == running.exerciseId }) {
-        exerciseIndex = index
+      let runningStepId = running.stepId ?? running.exerciseId
+      if let index = workout.orderedSteps.firstIndex(where: { $0.stepId == runningStepId }) {
+        stepIndex = index
+      } else if let index = workout.orderedSteps.firstIndex(where: { $0.exerciseId == running.exerciseId }) {
+        stepIndex = index
       }
       activeExerciseStartedAt = WatchClock.date(from: running.startedAt)
       activeExercisePausedSeconds = running.pausedSeconds
       isPaused = running.pausedAt != nil
       pausedAt = WatchClock.date(from: running.pausedAt)
+      takeOwnershipIfNeeded(startDate: startedAt ?? activeExerciseStartedAt)
       return
     }
 
@@ -489,8 +521,12 @@ final class WatchWorkoutStore {
     activeExercisePausedSeconds = 0
     isPaused = false
     pausedAt = nil
-    let stoppedIds = Set(exerciseTimings.compactMap { $0.completedAt == nil ? nil : $0.exerciseId })
-    exerciseIndex = min(stoppedIds.count, workout.exercises.count)
+    let stoppedStepIds = Set(
+      exerciseTimings.compactMap { timing in
+        timing.completedAt == nil ? nil : (timing.stepId ?? timing.exerciseId)
+      }
+    )
+    stepIndex = min(stoppedStepIds.count, workout.orderedSteps.count)
   }
 
   private func applyCompletedLog(
@@ -507,7 +543,7 @@ final class WatchWorkoutStore {
     let duration = completedLog.totalDurationSeconds.map(TimeInterval.init)
       ?? started.map { completedAt.timeIntervalSince($0) }
       ?? 0
-    exerciseIndex = workout.exercises.count
+    stepIndex = workout.orderedSteps.count
     sets = []
     timings = []
     startedAt = nil
@@ -537,8 +573,10 @@ final class WatchWorkoutStore {
     progressRevision += 1
     var progressTimings = timings
     if let exercise = currentExercise, let activeExerciseStartedAt {
+      let step = currentStep
       progressTimings.append(
         WatchExerciseTiming(
+          stepId: step?.stepId,
           exerciseId: exercise.exerciseId,
           exerciseName: exercise.name,
           startedAt: WatchClock.string(from: activeExerciseStartedAt),
@@ -549,7 +587,7 @@ final class WatchWorkoutStore {
       )
     }
     return WatchProgressPayload(
-      schemaVersion: 1,
+      schemaVersion: 2,
       revision: progressRevision,
       sentAt: WatchClock.string(from: Date()),
       workoutId: workout.id,
@@ -558,7 +596,7 @@ final class WatchWorkoutStore {
       pausedAt: pausedAt.map { WatchClock.string(from: $0) },
       pausedSeconds: pausedSeconds,
       activeExerciseId: currentExercise?.exerciseId,
-      exerciseIndex: exerciseIndex,
+      exerciseIndex: stepIndex,
       sets: sets,
       exerciseTimings: progressTimings,
       healthMetrics: workoutManager.metrics,

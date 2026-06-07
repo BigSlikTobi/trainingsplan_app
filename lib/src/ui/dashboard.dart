@@ -201,10 +201,8 @@ class _TodayPage extends StatelessWidget {
     final hasActiveWorkout = activeLog != null;
     final sessionIsPaused = controller.sessionIsPaused;
 
-    final totalSets = workout.exercises.fold<int>(
-      0,
-      (sum, ex) => sum + ex.sets,
-    );
+    final executionSteps = workout.executionSteps;
+    final totalSets = workout.totalPlannedSets;
     final completedSets = activeLog?.sets.length ?? 0;
     final avgRpe = activeLog == null || activeLog.sets.isEmpty
         ? null
@@ -214,22 +212,27 @@ class _TodayPage extends StatelessWidget {
     // Find which exercise the hero should focus on: prefer running,
     // otherwise the first paused one.
     ExercisePrescription? focusedExercise;
+    WorkoutExecutionStep? focusedStep;
     int focusedIndex = 0;
     bool focusedIsPaused = false;
-    for (var i = 0; i < workout.exercises.length; i++) {
-      final ex = workout.exercises[i];
-      if (controller.isExerciseRunning(ex.exerciseId)) {
+    for (var i = 0; i < executionSteps.length; i++) {
+      final step = executionSteps[i];
+      final ex = step.exercise;
+      if (controller.isExerciseRunning(ex.exerciseId, stepId: step.stepId)) {
         focusedExercise = ex;
+        focusedStep = step;
         focusedIndex = i + 1;
         focusedIsPaused = false;
         break;
       }
     }
     if (focusedExercise == null) {
-      for (var i = 0; i < workout.exercises.length; i++) {
-        final ex = workout.exercises[i];
-        if (controller.isExercisePaused(ex.exerciseId)) {
+      for (var i = 0; i < executionSteps.length; i++) {
+        final step = executionSteps[i];
+        final ex = step.exercise;
+        if (controller.isExercisePaused(ex.exerciseId, stepId: step.stepId)) {
           focusedExercise = ex;
+          focusedStep = step;
           focusedIndex = i + 1;
           focusedIsPaused = true;
           break;
@@ -265,13 +268,17 @@ class _TodayPage extends StatelessWidget {
             sessionElapsed: controller.activeSessionElapsed,
             avgRpe: avgRpe,
             focusedExercise: focusedExercise,
+            focusedStepContext: _stepContextLabel(focusedStep),
             focusedExerciseIndex: focusedIndex,
             focusedExerciseElapsed: focusedExercise == null
                 ? null
-                : controller.elapsedForExercise(focusedExercise.exerciseId),
+                : controller.elapsedForExercise(
+                    focusedExercise.exerciseId,
+                    stepId: focusedStep?.stepId,
+                  ),
             focusedExerciseIsPaused: focusedIsPaused,
             canDismissFocus: focusedIsPaused,
-            totalExercises: workout.exercises.length,
+            totalExercises: executionSteps.length,
             onStart: () {
               Haptics.action();
               controller.startCurrentWorkout();
@@ -287,11 +294,13 @@ class _TodayPage extends StatelessWidget {
                 ? () {}
                 : () => controller.pauseExerciseTimer(
                     focusedExercise!.exerciseId,
+                    stepId: focusedStep?.stepId,
                   ),
             onExerciseResume: focusedExercise == null
                 ? () {}
                 : () => controller.resumeExerciseTimer(
                     focusedExercise!.exerciseId,
+                    stepId: focusedStep?.stepId,
                   ),
             onExerciseStop: focusedExercise == null
                 ? () {}
@@ -299,6 +308,7 @@ class _TodayPage extends StatelessWidget {
                     context,
                     controller,
                     focusedExercise!,
+                    step: focusedStep,
                   ),
             dailyMotto: data.dailyMotto,
             onDismissExerciseFocus: () {
@@ -318,10 +328,10 @@ class _TodayPage extends StatelessWidget {
           const SizedBox(height: 8),
           _ExerciseListCard(
             workout: workout,
-            exercises: workout.exercises,
+            steps: executionSteps,
             controller: controller,
             hasActiveWorkout: hasActiveWorkout,
-            focusedExerciseId: focusedExercise?.exerciseId,
+            focusedStepId: focusedStep?.stepId,
           ),
           if (workout.conditioning.trim().isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -372,6 +382,15 @@ class _TodayDateLine extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _stepContextLabel(WorkoutExecutionStep? step) {
+  if (step == null || !step.isGrouped) return null;
+  final parts = [
+    step.displayGroupTitle,
+    step.roundLabel,
+  ].where((part) => part.trim().isNotEmpty).toList();
+  return parts.isEmpty ? null : parts.join(' · ');
 }
 
 class _RpeLegend extends StatelessWidget {
@@ -433,17 +452,17 @@ class _RpeLegendDot extends StatelessWidget {
 class _ExerciseListCard extends StatelessWidget {
   const _ExerciseListCard({
     required this.workout,
-    required this.exercises,
+    required this.steps,
     required this.controller,
     required this.hasActiveWorkout,
-    required this.focusedExerciseId,
+    required this.focusedStepId,
   });
 
   final PlannedWorkout workout;
-  final List<ExercisePrescription> exercises;
+  final List<WorkoutExecutionStep> steps;
   final FitnessController controller;
   final bool hasActiveWorkout;
-  final String? focusedExerciseId;
+  final String? focusedStepId;
 
   @override
   Widget build(BuildContext context) {
@@ -459,8 +478,10 @@ class _ExerciseListCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Column(
           children: [
-            for (var i = 0; i < exercises.length; i++)
+            for (var i = 0; i < steps.length; i++) ...[
+              if (_showsGroupHeader(i)) _ExerciseGroupHeader(step: steps[i]),
               _buildExerciseRow(context, i),
+            ],
           ],
         ),
       ),
@@ -468,16 +489,31 @@ class _ExerciseListCard extends StatelessWidget {
   }
 
   Widget _buildExerciseRow(BuildContext context, int i) {
-    final exercise = exercises[i];
-    final timing =
-        controller.timingForExercise(exercise.exerciseId);
-    final isRunning = controller.isExerciseRunning(exercise.exerciseId);
-    final isPaused = controller.isExercisePaused(exercise.exerciseId);
-    final isStopped = controller.isExerciseStopped(exercise.exerciseId);
+    final step = steps[i];
+    final exercise = step.exercise;
+    final timing = controller.timingForExercise(
+      exercise.exerciseId,
+      stepId: step.stepId,
+    );
+    final isRunning = controller.isExerciseRunning(
+      exercise.exerciseId,
+      stepId: step.stepId,
+    );
+    final isPaused = controller.isExercisePaused(
+      exercise.exerciseId,
+      stepId: step.stepId,
+    );
+    final isStopped = controller.isExerciseStopped(
+      exercise.exerciseId,
+      stepId: step.stepId,
+    );
     final durationSeconds = timing?.durationSeconds;
     final elapsed = isStopped && durationSeconds != null
         ? Duration(seconds: durationSeconds)
-        : controller.elapsedForExercise(exercise.exerciseId);
+        : controller.elapsedForExercise(
+            exercise.exerciseId,
+            stepId: step.stepId,
+          );
     final liveMetrics = controller.liveHealthMetrics;
     final healthMetrics = isStopped
         ? timing?.healthSnapshot
@@ -486,9 +522,10 @@ class _ExerciseListCard extends StatelessWidget {
     return _ExerciseRow(
       number: i + 1,
       exercise: exercise,
-      isLast: i == exercises.length - 1,
+      contextLabel: _stepContextLabel(step),
+      isLast: i == steps.length - 1,
       hasActiveWorkout: hasActiveWorkout,
-      isFocused: focusedExerciseId == exercise.exerciseId,
+      isFocused: focusedStepId == step.stepId,
       isRunning: isRunning,
       isPaused: isPaused,
       isStopped: isStopped,
@@ -497,12 +534,80 @@ class _ExerciseListCard extends StatelessWidget {
       onStart: () => controller.startExerciseTimer(
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.name,
+        stepId: step.stepId,
+        groupId: step.groupId,
+        groupType: step.groupKind?.name,
+        groupTitle: step.groupTitle,
+        round: step.round,
+        roundCount: step.roundCount,
       ),
-      onPause: () => controller.pauseExerciseTimer(exercise.exerciseId),
-      onResume: () => controller.resumeExerciseTimer(exercise.exerciseId),
-      onStop: () => _handleExerciseStop(context, controller, exercise),
+      onPause: () => controller.pauseExerciseTimer(
+        exercise.exerciseId,
+        stepId: step.stepId,
+      ),
+      onResume: () => controller.resumeExerciseTimer(
+        exercise.exerciseId,
+        stepId: step.stepId,
+      ),
+      onStop: () =>
+          _handleExerciseStop(context, controller, exercise, step: step),
       onTap: () =>
           _showExerciseDetailSheet(context, controller, workout, exercise),
+    );
+  }
+
+  bool _showsGroupHeader(int i) {
+    final step = steps[i];
+    if (!step.isGrouped) return false;
+    if (i == 0) return true;
+    final previous = steps[i - 1];
+    return previous.groupId != step.groupId || previous.round != step.round;
+  }
+}
+
+class _ExerciseGroupHeader extends StatelessWidget {
+  const _ExerciseGroupHeader({required this.step});
+
+  final WorkoutExecutionStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = step.groupKind == WorkoutItemKind.circuit
+        ? AppColors.gold
+        : AppColors.sage;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        border: Border(
+          bottom: BorderSide(color: color.withValues(alpha: 0.16)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            step.groupKind == WorkoutItemKind.circuit
+                ? Icons.sync_alt
+                : Icons.compare_arrows,
+            size: 15,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _stepContextLabel(step) ?? step.displayGroupTitle,
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.2,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.9,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -892,6 +997,7 @@ class _ExerciseRow extends StatelessWidget {
     required this.exercise,
     required this.isLast,
     required this.onTap,
+    this.contextLabel,
     this.hasActiveWorkout = false,
     this.isFocused = false,
     this.isRunning = false,
@@ -907,6 +1013,7 @@ class _ExerciseRow extends StatelessWidget {
 
   final int number;
   final ExercisePrescription exercise;
+  final String? contextLabel;
   final bool isLast;
   final VoidCallback onTap;
   final bool hasActiveWorkout;
@@ -981,6 +1088,19 @@ class _ExerciseRow extends StatelessWidget {
                       color: isFocused ? AppColors.sage : AppColors.paper,
                     ),
                   ),
+                  if (contextLabel?.trim().isNotEmpty ?? false) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      contextLabel!.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 9,
+                        height: 1.2,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.0,
+                        color: AppColors.paper.withValues(alpha: 0.32),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
@@ -1462,8 +1582,7 @@ class _TodayEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isConnected =
-        controller.bridgeConfig.isConfigured;
+    final isConnected = controller.bridgeConfig.isConfigured;
     final block = controller.activeBlock;
     final hasBlockPlans = block != null && block.workouts.isNotEmpty;
     return ColoredBox(
@@ -2493,13 +2612,15 @@ class _CoachBlockAvailableBanner extends StatelessWidget {
 Future<void> _handleExerciseStop(
   BuildContext context,
   FitnessController controller,
-  ExercisePrescription exercise,
-) async {
+  ExercisePrescription exercise, {
+  WorkoutExecutionStep? step,
+}) async {
   // Stop the timer first (so duration is final) but keep the workout
   // open so any "last exercise → summary" auto-close waits until the
   // user has logged the sets for this exercise.
   await controller.stopExerciseTimer(
     exercise.exerciseId,
+    stepId: step?.stepId,
     autoCloseWorkout: false,
   );
 
@@ -2527,17 +2648,24 @@ Future<void> _handleExerciseStop(
             20.0)
       : 20.0;
   final fallbackReps = int.tryParse(prescribedRepsMatch ?? '') ?? 8;
+  final targetLoggedSets = step?.isGrouped ?? false
+      ? (step?.round ?? 1)
+      : exercise.sets;
+  final totalDisplayedSets = step?.roundCount ?? exercise.sets;
 
   while (context.mounted) {
     final logged = history.length;
-    if (logged >= exercise.sets) break;
+    if (logged >= targetLoggedSets) break;
     final initWeight = history.isNotEmpty
         ? history.last.weightKg
         : fallbackWeight;
     final initReps = history.isNotEmpty ? history.last.reps : fallbackReps;
 
     if (!context.mounted) break;
-    final timing = controller.timingForExercise(exercise.exerciseId);
+    final timing = controller.timingForExercise(
+      exercise.exerciseId,
+      stepId: step?.stepId,
+    );
     final elapsedDuration = timing?.durationSeconds;
 
     // ignore: use_build_context_synchronously
@@ -2545,7 +2673,7 @@ Future<void> _handleExerciseStop(
       context,
       exerciseName: exercise.name,
       currentSetNumber: logged + 1,
-      totalSets: exercise.sets,
+      totalSets: totalDisplayedSets,
       initialWeightKg: initWeight,
       initialReps: initReps,
       initialRpe: exercise.targetRpe,

@@ -374,6 +374,106 @@ void main() {
     expect(mobile.toJson()['primaryCue'], 'Ribs down');
   });
 
+  test('workout items expand supersets by round', () {
+    final workout = PlannedWorkout.fromJson({
+      'id': 'grouped_day',
+      'week': 1,
+      'day': 1,
+      'title': 'Grouped Day',
+      'focus': 'Density',
+      'rationale': 'Alternate paired lifts.',
+      'conditioning': '',
+      'items': [
+        {
+          'type': 'superset',
+          'groupId': 'ss_1',
+          'title': 'Superset 1',
+          'rounds': 3,
+          'restSeconds': 90,
+          'exercises': [
+            {
+              'exerciseId': 'push_up',
+              'name': 'Push-Up',
+              'sets': 1,
+              'reps': '10',
+              'targetLoad': 'bodyweight',
+              'targetRpe': 7,
+              'restSeconds': 0,
+              'coachCue': 'Brace.',
+            },
+            {
+              'exerciseId': 'row',
+              'name': 'Row',
+              'sets': 1,
+              'reps': '12',
+              'targetLoad': 'moderate',
+              'targetRpe': 7,
+              'restSeconds': 0,
+              'coachCue': 'Pull elbows back.',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(workout.exercises.map((e) => e.exerciseId), ['push_up', 'row']);
+    expect(workout.exercises.first.sets, 3);
+    expect(workout.totalPlannedSets, 6);
+    expect(workout.executionSteps.map((s) => s.exercise.exerciseId), [
+      'push_up',
+      'row',
+      'push_up',
+      'row',
+      'push_up',
+      'row',
+    ]);
+    expect(workout.executionSteps[2].round, 2);
+    expect(workout.executionSteps[1].restSeconds, 90);
+    expect(workout.toJson(), contains('items'));
+    expect(workout.toJson(), isNot(contains('exercises')));
+    expect(workout.toWatchJson()['executionSteps'], hasLength(6));
+  });
+
+  test('workout item validation rejects malformed groups', () {
+    Map<String, dynamic> exercise(String id) => {
+      'exerciseId': id,
+      'name': id,
+      'sets': 1,
+      'reps': '10',
+      'targetLoad': 'bodyweight',
+      'targetRpe': 7,
+      'restSeconds': 0,
+      'coachCue': '',
+    };
+
+    expect(
+      () => PlannedWorkout.fromJson({
+        'items': [
+          {
+            'type': 'superset',
+            'groupId': 'bad_ss',
+            'rounds': 2,
+            'exercises': [exercise('a')],
+          },
+        ],
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => PlannedWorkout.fromJson({
+        'items': [
+          {
+            'type': 'circle',
+            'groupId': 'bad_circle',
+            'rounds': 2,
+            'exercises': [exercise('a'), exercise('b'), exercise('c')],
+          },
+        ],
+      }),
+      throwsFormatException,
+    );
+  });
+
   test('FuelGuidance round-trips through toJson / fromJson', () {
     final guidance = FuelGuidance(
       issuedAt: DateTime.utc(2026, 5, 20, 7),
